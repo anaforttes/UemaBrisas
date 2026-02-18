@@ -1,11 +1,38 @@
-<div align="center">
+# REURB-Doc Flow 🚀
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+Plataforma avançada para gestão e edição colaborativa de documentos de Regularização Fundiária Urbana (REURB), integrada com Inteligência Artificial (Gemini API).
 
-  <h1>Built with AI Studio</h2>
+## 🛠️ Tecnologias Utilizadas
+- **React 19** + **TypeScript**
+- **Vite** (Build Tool)
+- **Tailwind CSS** (Estilização)
+- **Lucide React** (Iconografia)
+- **Google Gemini API** (IA para análise jurídica e edição)
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+## 📦 Como Executar
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+1. **Instalar Dependências**:
+   ```bash
+   npm install
+   ```
 
-</div>
+2. **Configurar API Key**:
+   Crie um arquivo `.env` na raiz e adicione:
+   ```env
+   VITE_APP_API_KEY=sua_chave_aqui
+   ```
+
+3. **Rodar em Modo Desenvolvimento**:
+   ```bash
+   npm run dev
+   ```
+
+4. **Acessar**:
+   Abra o navegador em `http://localhost:5173`
+
+## 👤 Credenciais de Teste
+- **Login**: `admin@reurb.gov.br`
+- **Senha**: `Admin123!`
+
+---
+*Desenvolvido para fins de gestão pública e modernização de processos de regularização fundiária.*
