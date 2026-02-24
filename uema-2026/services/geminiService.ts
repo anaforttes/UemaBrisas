@@ -7,7 +7,7 @@ export const geminiService = {
   async checkUserQuota() {
     const user = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
     if (!user.id) return { allowed: false, error: "Usuário não autenticado." };
-    
+
     const usage = user.quota?.used || 0;
     const limit = user.quota?.limit || 0;
 
@@ -30,13 +30,13 @@ export const geminiService = {
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash',
         contents: prompt,
-        config: { 
+        config: {
           temperature: 0.2,
           maxOutputTokens: 800
         },
       });
 
-      dbService.users.updateQuota(quotaCheck.userId!, 500);
+      await dbService.users.updateQuota(quotaCheck.userId!, 500);
       return response.text;
     } catch (error: any) {
       return this.handleAiError(error);
@@ -61,7 +61,7 @@ export const geminiService = {
         config: { temperature: 0.1 },
       });
 
-      dbService.users.updateQuota(quotaCheck.userId!, 300);
+      await dbService.users.updateQuota(quotaCheck.userId!, 300);
 
       let cleanedHtml = response.text || "";
       cleanedHtml = cleanedHtml.replace(/```html/g, "").replace(/```/g, "").trim();

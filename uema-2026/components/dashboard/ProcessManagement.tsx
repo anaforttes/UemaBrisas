@@ -1,8 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, Filter, Plus, LayoutGrid, List, 
-  FileText, MapPin, Calendar, 
+import {
+  Search, Filter, Plus, LayoutGrid, List,
+  FileText, MapPin, Calendar,
   ChevronRight, MoreHorizontal, Activity,
   AlertCircle, CheckCircle2, Clock
 } from 'lucide-react';
@@ -22,13 +22,14 @@ export const ProcessManagement: React.FC = () => {
     fetchData();
   }, []);
 
-  const fetchData = () => {
-    setProcesses(dbService.processes.selectAll());
+  const fetchData = async () => {
+    const data = await dbService.processes.selectAll();
+    setProcesses(data);
   };
 
   const filteredProcesses = processes.filter(p => {
-    const matchesSearch = (p.applicant || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (p.protocol || '').includes(searchTerm);
+    const matchesSearch = (p.applicant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.protocol || '').includes(searchTerm);
     const matchesStatus = filterStatus === 'all' || p.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
@@ -48,20 +49,20 @@ export const ProcessManagement: React.FC = () => {
         </div>
         <div className="flex items-center gap-3">
           <div className="flex bg-white border border-slate-200 p-1 rounded-xl shadow-sm">
-            <button 
+            <button
               onClick={() => setViewMode('table')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'table' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <List size={18} />
             </button>
-            <button 
+            <button
               onClick={() => setViewMode('grid')}
               className={`p-2 rounded-lg transition-all ${viewMode === 'grid' ? 'bg-slate-100 text-slate-800' : 'text-slate-400 hover:text-slate-600'}`}
             >
               <LayoutGrid size={18} />
             </button>
           </div>
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-6 py-3.5 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all"
           >
@@ -89,8 +90,8 @@ export const ProcessManagement: React.FC = () => {
       <div className="bg-white border border-slate-100 p-4 rounded-[32px] shadow-sm mb-8 flex flex-col md:flex-row items-center gap-4">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
+          <input
+            type="text"
             placeholder="Buscar por requerente, núcleo ou protocolo..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -98,7 +99,7 @@ export const ProcessManagement: React.FC = () => {
           />
         </div>
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <select 
+          <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="flex-1 md:flex-none px-5 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-xs font-bold text-slate-600 outline-none focus:bg-white focus:border-blue-100 transition-all cursor-pointer"
@@ -126,9 +127,8 @@ export const ProcessManagement: React.FC = () => {
                   <FileText size={22} />
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
-                    proc.modality === 'REURB-S' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'
-                  }`}>
+                  <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${proc.modality === 'REURB-S' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'
+                    }`}>
                     {proc.modality}
                   </span>
                   <span className="text-[10px] font-bold text-slate-300">#{proc.protocol || 'S/P'}</span>
@@ -147,11 +147,10 @@ export const ProcessManagement: React.FC = () => {
                   <span className="text-slate-800">{proc.progress}%</span>
                 </div>
                 <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden shadow-inner p-0.5">
-                  <div 
-                    className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${
-                      proc.progress === 100 ? 'bg-green-500' : 'bg-blue-600'
-                    }`}
-                    style={{ width: `${proc.progress}%` }} 
+                  <div
+                    className={`h-full rounded-full transition-all duration-1000 ease-out shadow-sm ${proc.progress === 100 ? 'bg-green-500' : 'bg-blue-600'
+                      }`}
+                    style={{ width: `${proc.progress}%` }}
                   />
                 </div>
               </div>
@@ -181,22 +180,22 @@ export const ProcessManagement: React.FC = () => {
               </div>
             </div>
           ))}
-          
+
           {filteredProcesses.length === 0 && (
             <div className="col-span-full py-32 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100">
-               <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
-                 <Search size={48} />
-               </div>
-               <h3 className="text-slate-800 text-xl font-black">Nada por aqui...</h3>
-               <p className="text-slate-400 text-sm font-medium mt-1">Ajuste os filtros ou crie um novo protocolo.</p>
+              <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6 text-slate-200">
+                <Search size={48} />
+              </div>
+              <h3 className="text-slate-800 text-xl font-black">Nada por aqui...</h3>
+              <p className="text-slate-400 text-sm font-medium mt-1">Ajuste os filtros ou crie um novo protocolo.</p>
             </div>
           )}
         </div>
       )}
 
-      <NewProcessModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <NewProcessModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         onSuccess={fetchData}
         currentUser={JSON.parse(localStorage.getItem('reurb_current_user') || '{}')}
       />

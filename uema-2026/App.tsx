@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { 
+import {
   HashRouter as Router, Routes, Route, Navigate
 } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
@@ -34,6 +34,7 @@ const App: React.FC = () => {
   const handleLogout = () => {
     setUser(null);
     localStorage.removeItem('reurb_current_user');
+    localStorage.removeItem('reurb_token');
   };
 
   if (loading) return (
@@ -48,7 +49,7 @@ const App: React.FC = () => {
         <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={handleLogin} />} />
         <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
         <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
-        
+
         <Route path="/*" element={
           !user ? <Navigate to="/login" /> : (
             <div className="flex min-h-screen bg-slate-50 font-sans">
@@ -62,17 +63,17 @@ const App: React.FC = () => {
                   <Route path="/settings" element={<div className="p-10"><h2 className="text-2xl font-black text-slate-800">Configurações</h2></div>} />
                   <Route path="/edit/:docId" element={
                     <div className="h-full bg-slate-100 p-6">
-                      <Editor 
+                      <Editor
                         currentUser={user}
-                        title="Documento de Instauração" 
+                        title="Documento de Instauração"
                         status="Draft"
                         initialContent="<h1 style='text-align:center'>PORTARIA DE INSTAURAÇÃO REURB</h1><p>Considerando a Lei Federal 13.465/2017...</p>"
-                        onSave={(c, t, s) => {
-                          dbService.documents.upsert({ title: t, content: c, processId: 'PR-2024-001', status: s || 'Draft' });
+                        onSave={async (c, t, s) => {
+                          await dbService.documents.upsert({ title: t, content: c, processId: 'PR-2024-001', status: s || 'Draft' });
                           if (s === 'Signed') {
                             alert('Documento assinado digitalmente e salvo com sucesso!');
                           } else {
-                            alert('Documento salvo no banco de dados local!');
+                            alert('Documento salvo no banco de dados!');
                           }
                         }}
                       />

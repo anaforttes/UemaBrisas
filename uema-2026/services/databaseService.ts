@@ -1,162 +1,132 @@
 
 import { User, REURBProcess, REURBDocument, ProcessStatus } from '../types/index';
 
-class SQLDatabase {
-  private getStorage(table: string) {
-    const data = localStorage.getItem(`reurb_db_${table}`);
-    return data ? JSON.parse(data) : [];
-  }
+const API_URL = 'http://localhost:3001/api';
 
-  private setStorage(table: string, data: any) {
-    localStorage.setItem(`reurb_db_${table}`, JSON.stringify(data));
+function getToken(): string | null {
+  return localStorage.getItem('reurb_token');
+}
+
+function authHeaders(): Record<string, string> {
+  const token = getToken();
+  return token
+    ? { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+    : { 'Content-Type': 'application/json' };
+}
+
+async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: authHeaders(),
+    ...options,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error || `HTTP ${res.status}`);
   }
+  return res.json();
+}
+
+// ──────────────────────────────────────────────
+// Interface compatível com o frontend existente
+// ──────────────────────────────────────────────
+class APIDatabase {
 
   users = {
-    selectAll: (): User[] => {
-      return this.getStorage('users');
+    selectAll: async (): Promise<User[]> => {
+      return api<User[]>('/users');
     },
-    insert: (user: any) => {
-      const users = this.getStorage('users');
-      const newUser = {
-        id: `u-${Date.now()}`,
-        avatar: user.avatar || `https://picsum.photos/seed/${user.name}/200`,
-        quota: { limit: 10000, used: 0, resetAt: new Date(Date.now() + 3600000).toISOString() },
-        lastLogin: new Date().toISOString(),
-        status: 'Offline',
-        ...user
-      };
-      users.push(newUser);
-      this.setStorage('users', users);
-      return newUser;
+
+    insert: async (user: any): Promise<any> => {
+      return api('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify(user),
+      });
     },
-    findByEmail: (email: string) => {
-      const users = this.getStorage('users');
-      return users.find((u: any) => u.email === email);
+
+    findByEmail: async (email: string): Promise<User | null> => {
+      return api<User | null>(`/users/by-email?email=${encodeURIComponent(email)}`);
     },
-    updateActivity: (userId: string) => {
-      const users = this.getStorage('users');
-      const idx = users.findIndex((u: any) => u.id === userId);
-      if (idx !== -1) {
-        users[idx].lastLogin = new Date().toISOString();
-        users[idx].status = 'Online';
-        this.setStorage('users', users);
-        
-        const currentUserStr = localStorage.getItem('reurb_current_user');
-        if (currentUserStr) {
-          const currentUser = JSON.parse(currentUserStr);
-          if (currentUser.id === userId) {
-            localStorage.setItem('reurb_current_user', JSON.stringify(users[idx]));
-          }
+
+    updateActivity: async (userId: string): Promise<void> => {
+      const result = await api<User>(`/users/${userId}/activity`, { method: 'PATCH' });
+      // Atualizar usuário no localStorage
+      const currentUser = localStorage.getItem('reurb_current_user');
+      if (currentUser) {
+        const parsed = JSON.parse(currentUser);
+        if (parsed.id === userId) {
+          localStorage.setItem('reurb_current_user', JSON.stringify({ ...parsed, ...result }));
         }
       }
     },
-    updateQuota: (userId: string, tokensUsed: number) => {
-      const users = this.getStorage('users');
-      const idx = users.findIndex((u: any) => u.id === userId);
-      if (idx !== -1) {
-        users[idx].quota.used += tokensUsed;
-        this.setStorage('users', users);
-        const currentUserStr = localStorage.getItem('reurb_current_user');
-        if (currentUserStr) {
-          const currentUser = JSON.parse(currentUserStr);
-          if (currentUser.id === userId) {
-            currentUser.quota = users[idx].quota;
-            localStorage.setItem('reurb_current_user', JSON.stringify(currentUser));
-          }
+
+    updateQuota: async (userId: string, tokensUsed: number): Promise<any> => {
+      const result = await api(`/users/${userId}/quota`, {
+        method: 'PATCH',
+        body: JSON.stringify({ tokensUsed }),
+      });
+      // Atualizar quota no localStorage
+      const currentUser = localStorage.getItem('reurb_current_user');
+      if (currentUser) {
+        const parsed = JSON.parse(currentUser);
+        if (parsed.id === userId) {
+          parsed.quota = (result as any).quota;
+          localStorage.setItem('reurb_current_user', JSON.stringify(parsed));
         }
-        return users[idx];
       }
-      return null;
-    }
+      return result;
+    },
+
+    login: async (email: string, password: string): Promise<{ token: string; user: User }> => {
+      const result = await api<{ token: string; user: User }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+      localStorage.setItem('reurb_token', result.token);
+      return result;
+    },
+
+    googleLogin: async (userData: { name: string; email: string; avatar: string }): Promise<{ token: string; user: User }> => {
+      const result = await api<{ token: string; user: User }>('/auth/google', {
+        method: 'POST',
+        body: JSON.stringify(userData),
+      });
+      localStorage.setItem('reurb_token', result.token);
+      return result;
+    },
   };
 
   processes = {
-    selectAll: (): REURBProcess[] => {
-      return this.getStorage('processes');
+    selectAll: async (): Promise<REURBProcess[]> => {
+      return api<REURBProcess[]>('/processes');
     },
-    insert: (process: Partial<REURBProcess>) => {
-      const processes = this.getStorage('processes');
-      const year = new Date().getFullYear();
-      const count = processes.filter((p: any) => p.protocol?.startsWith(year.toString())).length + 1;
-      const protocol = `${year}.${String(count).padStart(4, '0')}`;
-      
-      const newProcess = {
-        id: `PR-${year}-${Math.floor(1000 + Math.random() * 9000)}`,
-        protocol: protocol,
-        createdAt: new Date().toISOString().split('T')[0],
-        updatedAt: new Date().toISOString().split('T')[0],
-        status: ProcessStatus.INICIAL,
-        progress: 10,
-        area: '0 m²',
-        responsibleName: 'Não atribuído',
-        ...process
-      };
-      processes.unshift(newProcess);
-      this.setStorage('processes', processes);
-      return newProcess;
+
+    insert: async (process: Partial<REURBProcess>): Promise<REURBProcess> => {
+      return api<REURBProcess>('/processes', {
+        method: 'POST',
+        body: JSON.stringify(process),
+      });
     },
-    updateStatus: (id: string, status: ProcessStatus) => {
-      const processes = this.getStorage('processes');
-      const idx = processes.findIndex((p: any) => p.id === id);
-      if (idx !== -1) {
-        processes[idx].status = status;
-        processes[idx].updatedAt = new Date().toISOString().split('T')[0];
-        this.setStorage('processes', processes);
-      }
-    }
+
+    updateStatus: async (id: string, status: ProcessStatus): Promise<void> => {
+      await api(`/processes/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+    },
   };
 
   documents = {
-    findByProcessId: (processId: string): REURBDocument[] => {
-      const docs = this.getStorage('documents');
-      return docs.filter((d: any) => d.processId === processId);
+    findByProcessId: async (processId: string): Promise<REURBDocument[]> => {
+      return api<REURBDocument[]>(`/documents?processId=${encodeURIComponent(processId)}`);
     },
-    upsert: (doc: Partial<REURBDocument>) => {
-      const docs = this.getStorage('documents');
-      const existingIdx = docs.findIndex((d: any) => d.id === doc.id);
-      const now = new Date().toISOString();
-      
-      if (existingIdx !== -1) {
-        const updatedDoc = { ...docs[existingIdx], ...doc, updatedAt: now };
-        docs[existingIdx] = updatedDoc;
-        this.setStorage('documents', docs);
-        return updatedDoc;
-      } else {
-        const newDoc = {
-          id: `doc-${Date.now()}`,
-          version: 1,
-          updatedAt: now,
-          status: 'Draft',
-          ...doc
-        };
-        docs.push(newDoc);
-        this.setStorage('documents', docs);
-        return newDoc;
-      }
-    }
+
+    upsert: async (doc: Partial<REURBDocument>): Promise<REURBDocument> => {
+      return api<REURBDocument>('/documents', {
+        method: 'PUT',
+        body: JSON.stringify(doc),
+      });
+    },
   };
 }
 
-export const dbService = new SQLDatabase();
-
-const initDB = () => {
-  const usersData = localStorage.getItem('reurb_db_users');
-  if (!usersData || JSON.parse(usersData).length === 0) {
-    const defaultUsers = [
-      {
-        id: 'u-admin',
-        name: 'Administrador do Sistema',
-        email: 'admin@reurb.gov.br',
-        password: 'Admin123!',
-        role: 'Jurídico',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
-        status: 'Offline',
-        lastLogin: new Date().toISOString(),
-        quota: { limit: 50000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() }
-      }
-    ];
-    localStorage.setItem('reurb_db_users', JSON.stringify(defaultUsers));
-  }
-};
-
-initDB();
+export const dbService = new APIDatabase();

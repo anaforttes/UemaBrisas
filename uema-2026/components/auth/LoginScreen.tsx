@@ -9,7 +9,7 @@ const parseJwt = (token: string) => {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
       return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
     }).join(''));
     return JSON.parse(jsonPayload);
@@ -20,9 +20,10 @@ const parseJwt = (token: string) => {
 
 export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) => {
   const [email, setEmail] = useState('');
-  const [passwordInput, setPasswordInput] = useState(''); 
+  const [passwordInput, setPasswordInput] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -45,39 +46,37 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     }
   }, []);
 
-  const handleGoogleResponse = (response: any) => {
+  const handleGoogleResponse = async (response: any) => {
     const userData = parseJwt(response.credential);
     if (userData) {
-      const googleUser = {
-        name: userData.name,
-        email: userData.email,
-        role: 'Jurídico',
-        avatar: userData.picture
-      };
-      
-      const userFromDb = dbService.users.findByEmail(googleUser.email);
-      if (!userFromDb) {
-         dbService.users.insert(googleUser);
-      } else {
-         dbService.users.updateActivity(userFromDb.id);
+      try {
+        const result = await dbService.users.googleLogin({
+          name: userData.name,
+          email: userData.email,
+          avatar: userData.picture,
+        });
+        onLoginSuccess(result.user);
+        navigate('/');
+      } catch (err: any) {
+        setError(err.message || 'Erro na autenticação Google.');
       }
-      
-      onLoginSuccess(googleUser);
-      navigate('/');
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = dbService.users.findByEmail(email);
-    if (user && user.password === passwordInput) {
-      dbService.users.updateActivity(user.id);
-      const safeUser = { ...user };
-      delete safeUser.password;
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await dbService.users.login(email, passwordInput);
+      const safeUser = { ...result.user };
       onLoginSuccess(safeUser);
       navigate('/');
-    } else {
-      setError('Credenciais inválidas ou usuário não encontrado.');
+    } catch (err: any) {
+      setError(err.message || 'Credenciais inválidas ou usuário não encontrado.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -102,9 +101,9 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
             <label className="text-[11px] font-black text-slate-400 uppercase ml-3 tracking-[0.2em]">E-mail Corporativo</label>
             <div className="relative">
               <Mail className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-              <input 
+              <input
                 type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-16 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-3xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:outline-none text-base font-bold transition-all text-slate-700" 
+                className="w-full pl-16 pr-6 py-5 bg-slate-50 border border-slate-100 rounded-3xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:outline-none text-base font-bold transition-all text-slate-700"
                 placeholder="nome.sobrenome@prefeitura.gov.br"
               />
             </div>
@@ -119,15 +118,15 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
             </div>
             <div className="relative">
               <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-              <input 
-                type={showPassword ? "text" : "password"} 
-                required 
-                value={passwordInput} 
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                value={passwordInput}
                 onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full pl-16 pr-16 py-5 bg-slate-50 border border-slate-100 rounded-3xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:outline-none text-base font-bold transition-all text-slate-700" 
+                className="w-full pl-16 pr-16 py-5 bg-slate-50 border border-slate-100 rounded-3xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:outline-none text-base font-bold transition-all text-slate-700"
                 placeholder="••••••••"
               />
-              <button 
+              <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-300 hover:text-blue-600 transition-colors"
@@ -143,8 +142,12 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
             </div>
           )}
 
-          <button type="submit" className="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.25em] shadow-2xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-2">
-            Entrar no Painel
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full py-6 bg-blue-600 text-white rounded-[32px] font-black text-sm uppercase tracking-[0.25em] shadow-2xl shadow-blue-200 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {loading ? 'Entrando...' : 'Entrar no Painel'}
           </button>
         </form>
 

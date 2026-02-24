@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Clock, Search, Plus, 
+import {
+  Clock, Search, Plus,
   MoreVertical, Edit2, Trash2,
   CheckCircle2, Check, X, AlertTriangle
 } from 'lucide-react';
@@ -100,7 +100,10 @@ export const Team: React.FC = () => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
-  const fetchMembers = () => setMembers(dbService.users.selectAll());
+  const fetchMembers = async () => {
+    const data = await dbService.users.selectAll();
+    setMembers(data);
+  };
 
   useEffect(() => {
     fetchMembers();
@@ -127,10 +130,10 @@ export const Team: React.FC = () => {
   const getRoleBadge = (role: string) => {
     switch (role) {
       case 'Juridico': return 'bg-purple-50 text-purple-600 border-purple-100';
-      case 'Tecnico':  return 'bg-blue-50 text-blue-600 border-blue-100';
-      case 'Gestor':   return 'bg-amber-50 text-amber-600 border-amber-100';
-      case 'Admin':    return 'bg-red-50 text-red-600 border-red-100';
-      default:         return 'bg-slate-50 text-slate-600 border-slate-100';
+      case 'Tecnico': return 'bg-blue-50 text-blue-600 border-blue-100';
+      case 'Gestor': return 'bg-amber-50 text-amber-600 border-amber-100';
+      case 'Admin': return 'bg-red-50 text-red-600 border-red-100';
+      default: return 'bg-slate-50 text-slate-600 border-slate-100';
     }
   };
 

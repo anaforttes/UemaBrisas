@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, FileText, CheckCircle2, ArrowRight, User as UserIcon } from 'lucide-react';
 import { REURBProcess } from '../../types/index';
 import { dbService } from '../../services/databaseService';
@@ -11,9 +11,15 @@ interface ProcessDrawerProps {
 }
 
 export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }) => {
-  if (!process) return null;
+  const [documents, setDocuments] = useState<any[]>([]);
 
-  const documents = dbService.documents.findByProcessId(process.id);
+  useEffect(() => {
+    if (process) {
+      dbService.documents.findByProcessId(process.id).then(setDocuments);
+    }
+  }, [process]);
+
+  if (!process) return null;
 
   const steps = [
     { label: 'Instauração', status: 'done' },
@@ -42,10 +48,9 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
             <div className="space-y-6 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
               {steps.map((step, i) => (
                 <div key={i} className="flex gap-4 relative">
-                  <div className={`w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 ${
-                    step.status === 'done' ? 'bg-green-500 text-white' : 
-                    step.status === 'doing' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-white'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full border-4 border-white shadow-sm flex items-center justify-center z-10 ${step.status === 'done' ? 'bg-green-500 text-white' :
+                      step.status === 'doing' ? 'bg-blue-600 text-white' : 'bg-slate-200 text-white'
+                    }`}>
                     {step.status === 'done' && <CheckCircle2 size={12} />}
                   </div>
                   <div>
@@ -85,16 +90,16 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
           </section>
 
           <section>
-             <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Equipe Designada</h4>
-             <div className="flex items-center gap-3 p-4 bg-blue-50/30 border border-blue-50 rounded-2xl">
-               <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
-                 <UserIcon size={20} />
-               </div>
-               <div>
-                 <p className="text-sm font-bold text-slate-800">{process.responsibleName || 'Não atribuído'}</p>
-                 <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Responsável Atual</p>
-               </div>
-             </div>
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Equipe Designada</h4>
+            <div className="flex items-center gap-3 p-4 bg-blue-50/30 border border-blue-50 rounded-2xl">
+              <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
+                <UserIcon size={20} />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-slate-800">{process.responsibleName || 'Não atribuído'}</p>
+                <p className="text-[10px] text-blue-600 font-bold uppercase tracking-widest">Responsável Atual</p>
+              </div>
+            </div>
           </section>
 
           <div className="pt-6">

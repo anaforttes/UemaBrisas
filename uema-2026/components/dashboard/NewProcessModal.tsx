@@ -32,7 +32,7 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
       try {
         const response = await fetch(`https://viacep.com.br/ws/${value}/json/`);
         const data = await response.json();
-        
+
         if (!data.erro) {
           const address = `${data.logradouro}${data.logradouro ? ', ' : ''}${data.bairro} - ${data.localidade}/${data.uf}`;
           setForm(prev => ({ ...prev, location: address }));
@@ -47,12 +47,12 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
-      dbService.processes.insert({
+      await dbService.processes.insert({
         title: form.applicant,
         applicant: form.applicant,
         location: form.location,
@@ -61,8 +61,8 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
         responsibleName: currentUser.name || 'Admin',
         technicianId: currentUser.id,
         legalId: currentUser.id
-      });
-      
+      } as any);
+
       onSuccess();
       onClose();
       setForm({ applicant: '', location: '', modality: 'REURB-S', area: '' });
@@ -93,11 +93,11 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
               <User size={12} /> Requerente (Nome Completo)
             </label>
-            <input 
+            <input
               required
-              type="text" 
+              type="text"
               value={form.applicant}
-              onChange={(e) => setForm({...form, applicant: e.target.value})}
+              onChange={(e) => setForm({ ...form, applicant: e.target.value })}
               placeholder="Nome do cidadão ou associação"
               className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
             />
@@ -109,8 +109,8 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
                 <Search size={12} /> CEP
               </label>
               <div className="relative">
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   maxLength={8}
                   value={cep}
                   onChange={handleCepChange}
@@ -129,11 +129,11 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
                 <MapPin size={12} /> Localização / Núcleo
               </label>
-              <input 
+              <input
                 required
-                type="text" 
+                type="text"
                 value={form.location}
-                onChange={(e) => setForm({...form, location: e.target.value})}
+                onChange={(e) => setForm({ ...form, location: e.target.value })}
                 placeholder="Logradouro, Bairro - Cidade/UF"
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
               />
@@ -146,16 +146,16 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
                 <Layers size={12} /> Modalidade
               </label>
               <div className="relative">
-                <select 
+                <select
                   value={form.modality}
-                  onChange={(e) => setForm({...form, modality: e.target.value as any})}
+                  onChange={(e) => setForm({ ...form, modality: e.target.value as any })}
                   className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all appearance-none"
                 >
                   <option value="REURB-S">REURB-S (Social)</option>
                   <option value="REURB-E">REURB-E (Específica)</option>
                 </select>
                 <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                   <ArrowRight size={14} className="rotate-90" />
+                  <ArrowRight size={14} className="rotate-90" />
                 </div>
               </div>
             </div>
@@ -164,10 +164,10 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
                 <Ruler size={12} /> Área Est. (m²)
               </label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 value={form.area}
-                onChange={(e) => setForm({...form, area: e.target.value})}
+                onChange={(e) => setForm({ ...form, area: e.target.value })}
                 placeholder="Ex: 250"
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
               />
@@ -175,7 +175,7 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
           </div>
 
           <div className="pt-4">
-            <button 
+            <button
               type="submit"
               disabled={loading || searchingCep}
               className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:translate-y-0"

@@ -12,8 +12,9 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const fetchProcesses = () => {
-    setProcesses(dbService.processes.selectAll());
+  const fetchProcesses = async () => {
+    const data = await dbService.processes.selectAll();
+    setProcesses(data);
   };
 
   useEffect(() => {
@@ -38,7 +39,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             <Bell size={22} />
             <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-[3px] border-white"></span>
           </button>
-          <button 
+          <button
             onClick={() => setIsModalOpen(true)}
             className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all"
           >
@@ -100,9 +101,9 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
 
-      <NewProcessModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
+      <NewProcessModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
         onSuccess={fetchProcesses}
         currentUser={user}
       />
