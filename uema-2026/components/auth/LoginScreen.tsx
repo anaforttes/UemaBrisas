@@ -1,22 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 import { Logo } from '../common/Logo';
-
-const parseJwt = (token: string) => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(atob(base64).split('').map(function (c) {
-      return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-    }).join(''));
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    return null;
-  }
-};
 
 export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) => {
   const [email, setEmail] = useState('');
@@ -25,43 +12,6 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    // @ts-ignore
-    if (window.google) {
-      try {
-        // @ts-ignore
-        google.accounts.id.initialize({
-          client_id: "777000000000-sampleid.apps.googleusercontent.com",
-          callback: handleGoogleResponse,
-        });
-        // @ts-ignore
-        google.accounts.id.renderButton(
-          document.getElementById("googleBtn"),
-          { theme: "outline", size: "large", width: "100%", text: "signin_with", shape: "pill" }
-        );
-      } catch (e) {
-        console.error("Erro Google GSI:", e);
-      }
-    }
-  }, []);
-
-  const handleGoogleResponse = async (response: any) => {
-    const userData = parseJwt(response.credential);
-    if (userData) {
-      try {
-        const result = await dbService.users.googleLogin({
-          name: userData.name,
-          email: userData.email,
-          avatar: userData.picture,
-        });
-        onLoginSuccess(result.user);
-        navigate('/');
-      } catch (err: any) {
-        setError(err.message || 'Erro na autenticação Google.');
-      }
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,12 +101,7 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
           </button>
         </form>
 
-        <div className="relative my-16">
-          <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-100"></div></div>
-          <div className="relative flex justify-center text-[10px] uppercase font-black tracking-[0.3em]"><span className="bg-white px-8 text-slate-400">Ou use sua conta Google</span></div>
-        </div>
 
-        <div id="googleBtn" className="w-full flex justify-center scale-110 mb-8"></div>
 
         <p className="mt-16 text-center text-sm text-slate-500 font-medium">
           Ainda não possui credenciais? <Link to="/signup" className="text-blue-600 font-black hover:underline decoration-2 underline-offset-8 ml-1">Solicitar acesso institucional</Link>

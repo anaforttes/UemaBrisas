@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Plus, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 import { MOCK_MODELS } from '../../constants';
@@ -11,6 +11,7 @@ import { NewProcessModal } from './NewProcessModal';
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   const fetchProcesses = async () => {
     const data = await dbService.processes.selectAll();
@@ -66,7 +67,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
+        <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm flex flex-col overflow-hidden min-w-0">
           <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
             <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
             <Link to="/processes" className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2">
@@ -81,22 +82,28 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             <h3 className="font-black text-lg">Modelos Oficiais</h3>
           </div>
           <div className="p-6 space-y-4">
-            {MOCK_MODELS.slice(0, 4).map((model) => (
-              <div key={model.id} className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-white transition-all group flex items-center justify-between cursor-pointer">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:border-blue-100 transition-all">
-                    <FileText size={20} />
+            {MOCK_MODELS.slice(0, 4).map((model) => {
+              const handleClick = () => {
+                const content = `<h1>${model.name.toUpperCase()}</h1><p>Este documento foi gerado a partir do modelo oficial versão ${model.version}.</p><p>Edite os campos abaixo conforme a Lei 13.465/2017...</p>`;
+                navigate(`/edit/new?template=${encodeURIComponent(model.name)}&content=${encodeURIComponent(content)}`);
+              };
+              return (
+                <div key={model.id} onClick={handleClick} className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-white transition-all group flex items-center justify-between cursor-pointer">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:border-blue-100 transition-all">
+                      <FileText size={20} />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-all">{model.name}</h4>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Versão {model.version}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-all">{model.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Versão {model.version}</p>
-                  </div>
+                  <button onClick={(e) => { e.stopPropagation(); handleClick(); }} className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200">
+                    <Plus size={18} />
+                  </button>
                 </div>
-                <button className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200">
-                  <Plus size={18} />
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>

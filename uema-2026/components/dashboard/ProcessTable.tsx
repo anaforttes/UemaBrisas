@@ -11,7 +11,7 @@ interface ProcessTableProps {
 
 export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
   const [selectedProcess, setSelectedProcess] = useState<REURBProcess | null>(null);
-  
+
   const getStatusStyles = (status: ProcessStatus) => {
     switch (status) {
       case ProcessStatus.APROVADO:
@@ -38,18 +38,18 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-white text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-50">
-                <th className="px-10 py-6">Protocolo</th>
+                <th className="px-6 py-6">Protocolo</th>
                 <th className="px-6 py-6">Requerente / Núcleo</th>
                 <th className="px-6 py-6">Modalidade</th>
                 <th className="px-6 py-6">Status</th>
                 <th className="px-6 py-6">Responsável</th>
-                <th className="px-10 py-6 text-right">Ações</th>
+                <th className="px-6 py-6 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {processes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-10 py-24 text-center">
+                  <td colSpan={6} className="px-6 py-24 text-center">
                     <div className="flex flex-col items-center gap-4 opacity-20">
                       <Database size={48} />
                       <p className="text-sm font-bold">Nenhum processo localizado</p>
@@ -58,9 +58,9 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
                 </tr>
               ) : (
                 processes.map((proc) => (
-                  <tr key={proc.id} className="hover:bg-slate-50/40 transition-all group">
-                    <td className="px-10 py-6">
-                      <button 
+                  <tr key={proc.id} className="hover:bg-slate-50/40 transition-all group cursor-pointer" onClick={() => setSelectedProcess(proc)}>
+                    <td className="px-6 py-6">
+                      <button
                         onClick={() => setSelectedProcess(proc)}
                         className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline transition-all"
                       >
@@ -86,9 +86,9 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
                         {proc.responsibleName || 'Não atribuído'}
                       </span>
                     </td>
-                    <td className="px-10 py-6 text-right">
-                      <Link 
-                        to="/templates" 
+                    <td className="px-6 py-6 text-right">
+                      <Link
+                        to="/templates"
                         className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
                       >
                         Gerar Documento
@@ -102,9 +102,9 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
         </div>
       </div>
 
-      <ProcessDrawer 
-        process={selectedProcess} 
-        onClose={() => setSelectedProcess(null)} 
+      <ProcessDrawer
+        process={selectedProcess}
+        onClose={() => setSelectedProcess(null)}
       />
     </>
   );

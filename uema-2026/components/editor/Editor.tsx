@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Bold, Italic, List, AlignLeft, AlignCenter, AlignRight, 
+import {
+  Bold, Italic, List, AlignLeft, AlignCenter, AlignRight,
   Save, FileCheck, MessageSquare, Wand2,
   CheckCircle2, X, RefreshCw, Sparkles, FileDown, Shield
 } from 'lucide-react';
@@ -15,6 +15,7 @@ import { saveAs } from 'file-saver';
 import { geminiService } from '../../services/geminiService';
 import { User } from '../../types/index';
 import { SignatureModal, SignatureRecord } from './SignatureModal';
+import { signatureStore } from '../../services/signatureStore';
 
 interface EditorProps {
   initialContent: string;
@@ -328,7 +329,10 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [signatureRecord, setSignatureRecord] = useState<SignatureRecord | null>(null);
+  const [signatureRecord, setSignatureRecord] = useState<SignatureRecord | null>(() => {
+    // Carrega assinatura salva para este documento
+    return signatureStore.getByDocumentTitle(title);
+  });
   const editorRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -399,6 +403,7 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
 
   const handleSignatureComplete = (record: SignatureRecord) => {
     setSignatureRecord(record);
+    signatureStore.save(record);
     onSave(content, localTitle, 'Signed');
   };
 
@@ -427,11 +432,10 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
               placeholder="Digite o titulo do documento..."
             />
             <div className="flex items-center gap-2 mt-1">
-              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                signatureRecord ? 'bg-green-100 text-green-700' :
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${signatureRecord ? 'bg-green-100 text-green-700' :
                 status === 'Review' ? 'bg-amber-100 text-amber-700' :
-                status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
-              }`}>
+                  status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
+                }`}>
                 {signatureRecord ? '✓ Assinado' : status}
               </span>
               {signatureRecord && (
@@ -597,10 +601,10 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
           <button
             onClick={() => setShowSignatureModal(true)}
             disabled={!!signatureRecord}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <FileCheck size={18} />
-            {signatureRecord ? '✓ Documento Assinado' : 'Assinar com Certificado'}
+            {signatureRecord ? '✓ Assinado ICP-Brasil' : 'Assinar ICP-Brasil'}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-slate-700 text-white rounded-lg hover:bg-slate-600 transition-colors text-xs font-bold uppercase tracking-wider">
             Finalizar Fluxo

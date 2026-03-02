@@ -3,19 +3,14 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Info } from 'lucide-react';
 import { MOCK_MODELS } from '../../constants';
-import { dbService } from '../../services/databaseService';
 
 export const Templates: React.FC = () => {
   const navigate = useNavigate();
 
-  const handleUseTemplate = async (model: any) => {
-    // Cria um documento baseado no modelo via API
-    const newDoc = await dbService.documents.upsert({
-      title: model.name,
-      content: `<h1>${model.name.toUpperCase()}</h1><p>Este documento foi gerado a partir do modelo oficial versão ${model.version}.</p><p>Edite os campos abaixo conforme a Lei 13.465/2017...</p>`,
-      processId: 'PR-2024-001' // Vincula ao processo padrão para teste
-    });
-    navigate(`/edit/${newDoc.id}`);
+  const handleUseTemplate = (model: any) => {
+    // Navega para o editor com o conteúdo do template
+    const content = `<h1>${model.name.toUpperCase()}</h1><p>Este documento foi gerado a partir do modelo oficial versão ${model.version}.</p><p>Edite os campos abaixo conforme a Lei 13.465/2017...</p>`;
+    navigate(`/edit/new?template=${encodeURIComponent(model.name)}&content=${encodeURIComponent(content)}`);
   };
 
   return (

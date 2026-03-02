@@ -22,5 +22,8 @@ Thumbs.db
 *.log
 npm-debug.log*
 
+# Database
+*.db
+
 # Test files
 backend/test-api.mjs

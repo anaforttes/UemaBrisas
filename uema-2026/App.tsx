@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import {
-  HashRouter as Router, Routes, Route, Navigate
+  HashRouter as Router, Routes, Route, Navigate, useSearchParams
 } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { User } from './types/index';
@@ -15,6 +15,26 @@ import Editor from './components/editor/Editor';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
+
+const EditorWrapper: React.FC<{ currentUser: User }> = ({ currentUser }) => {
+  const [searchParams] = useSearchParams();
+  const templateName = searchParams.get('template') || 'Documento de Instauração';
+  const templateContent = searchParams.get('content') || "<h1 style='text-align:center'>PORTARIA DE INSTAURAÇÃO REURB</h1><p>Considerando a Lei Federal 13.465/2017...</p>";
+
+  return (
+    <div className="h-full bg-slate-100 p-6">
+      <Editor
+        currentUser={currentUser}
+        title={templateName}
+        status="Draft"
+        initialContent={templateContent}
+        onSave={async (c, t, s) => {
+          alert(s === 'Signed' ? 'Documento assinado digitalmente e salvo com sucesso!' : 'Documento salvo com sucesso!');
+        }}
+      />
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -62,22 +82,7 @@ const App: React.FC = () => {
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/settings" element={<div className="p-10"><h2 className="text-2xl font-black text-slate-800">Configurações</h2></div>} />
                   <Route path="/edit/:docId" element={
-                    <div className="h-full bg-slate-100 p-6">
-                      <Editor
-                        currentUser={user}
-                        title="Documento de Instauração"
-                        status="Draft"
-                        initialContent="<h1 style='text-align:center'>PORTARIA DE INSTAURAÇÃO REURB</h1><p>Considerando a Lei Federal 13.465/2017...</p>"
-                        onSave={async (c, t, s) => {
-                          await dbService.documents.upsert({ title: t, content: c, processId: 'PR-2024-001', status: s || 'Draft' });
-                          if (s === 'Signed') {
-                            alert('Documento assinado digitalmente e salvo com sucesso!');
-                          } else {
-                            alert('Documento salvo no banco de dados!');
-                          }
-                        }}
-                      />
-                    </div>
+                    <EditorWrapper currentUser={user} />
                   } />
                 </Routes>
               </main>
