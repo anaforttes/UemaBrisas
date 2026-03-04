@@ -8,8 +8,14 @@ import {
 import { dbService } from '../../services/databaseService';
 import { Logo } from '../common/Logo';
 
+const PROFESSIONAL_TYPES = [
+  'Advogado', 'Engenheiro', 'Arquiteto', 'Topógrafo',
+  'Assistente Social', 'Geólogo', 'Cidadão', 'Terceirizado',
+  'Representante', 'Outro',
+];
+
 export const SignupScreen = () => {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Técnico' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Técnico', professionalType: '' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -55,12 +61,11 @@ export const SignupScreen = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6 relative overflow-hidden font-sans">
-      {/* Elementos visuais de fundo - Gradientes suaves e profissionais */}
+    <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4 py-8 sm:p-6 relative overflow-hidden font-sans">
       <div className="absolute top-[-20%] left-[-10%] w-[70%] h-[70%] bg-blue-100/40 rounded-full blur-[160px] -z-10 animate-pulse" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[70%] h-[70%] bg-indigo-100/40 rounded-full blur-[160px] -z-10 animate-pulse" style={{ animationDelay: '3s' }} />
 
-      <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-[48px] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] overflow-hidden z-10 p-10 md:p-16 animate-in fade-in zoom-in-95 duration-700">
+      <div className="w-full max-w-md sm:max-w-2xl bg-white border border-slate-200 rounded-[32px] sm:rounded-[48px] shadow-[0_40px_100px_-20px_rgba(0,0,0,0.1)] overflow-hidden z-10 p-6 sm:p-10 md:p-16 animate-in fade-in zoom-in-95 duration-700">
 
         {success ? (
           <div className="text-center py-10 animate-in fade-in duration-500">
@@ -72,16 +77,16 @@ export const SignupScreen = () => {
           </div>
         ) : (
           <>
-            <div className="flex flex-col items-center mb-12">
+            <div className="flex flex-col items-center mb-8 sm:mb-12">
               <Logo size="lg" />
-              <div className="mt-8 text-center">
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Solicitar Acesso</h2>
-                <p className="text-slate-400 font-medium">Credenciamento de operadores do fluxo REURB-Doc</p>
+              <div className="mt-6 text-center">
+                <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight mb-1">Solicitar Acesso</h2>
+                <p className="text-slate-400 text-sm font-medium">Credenciamento de operadores do fluxo REURB-Doc</p>
               </div>
             </div>
 
-            <form onSubmit={handleSignup} className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <form onSubmit={handleSignup} className="space-y-5 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">Nome Completo</label>
                   <div className="relative">
@@ -95,17 +100,15 @@ export const SignupScreen = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">Perfil Funcional</label>
+                  <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">Tipo Profissional</label>
                   <div className="relative">
                     <Briefcase className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                     <select
-                      value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value as any })}
+                      value={form.professionalType} onChange={(e) => setForm({ ...form, professionalType: e.target.value })}
                       className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm appearance-none"
                     >
-                      <option value="Técnico">Técnico / Agrimensura</option>
-                      <option value="Jurídico">Jurídico / Procuradoria</option>
-                      <option value="Gestor">Gestor Municipal</option>
-                      <option value="Atendente">Assistente Social</option>
+                      <option value="">Selecione...</option>
+                      {PROFESSIONAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   </div>
                 </div>
@@ -123,7 +126,7 @@ export const SignupScreen = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">Crie uma Senha</label>
                   <div className="relative">

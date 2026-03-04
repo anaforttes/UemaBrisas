@@ -1,8 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   Bold, Italic, List, AlignLeft, AlignCenter, AlignRight,
   Save, FileCheck, MessageSquare, Wand2,
-  CheckCircle2, X, RefreshCw, Sparkles, FileDown, Shield
+  CheckCircle2, X, RefreshCw, Sparkles, FileDown, Shield, AlertCircle
 } from 'lucide-react';
 import {
   Document, Packer, Paragraph, TextRun,
@@ -23,6 +23,7 @@ interface EditorProps {
   onSave: (content: string, title: string, status?: string) => void;
   status: string;
   currentUser?: User | null;
+  onNotify?: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
 // ─── Bloco de Assinaturas visível no documento ────────────────────────────────
@@ -318,7 +319,7 @@ const exportToDOCX = async (title: string, contentHtml: string, record?: Signatu
 };
 
 // ─── Componente Principal ─────────────────────────────────────────────────────
-const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, currentUser }) => {
+const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, currentUser, onNotify }) => {
   const [content, setContent] = useState(initialContent);
   const [localTitle, setLocalTitle] = useState(title);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -329,12 +330,24 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
   const [signatureRecord, setSignatureRecord] = useState<SignatureRecord | null>(() => {
     // Carrega assinatura salva para este documento
     return signatureStore.getByDocumentTitle(title);
   });
   const editorRef = useRef<HTMLDivElement>(null);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const notify = useCallback(
+    (msg: string, type: 'success' | 'error' | 'info' = 'info') => {
+      if (onNotify) {
+        onNotify(msg, type);
+      } else {
+        if (type === 'error') console.error(msg);
+        else console.info(msg);
+      }
+    },
+    [onNotify],
+  );
 
   const [activeUsers] = useState([
     { name: 'Ana Silva', color: 'bg-blue-500' },
@@ -358,10 +371,10 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
     setIsAnalyzing(true);
     try {
       const analysis = await geminiService.analyzeDocument(content);
-      setAiAnalysis(analysis || 'Nenhuma analise disponivel.');
+      setAiAnalysis(analysis || 'Nenhuma análise disponível.');
     } catch (error) {
       console.error(error);
-      alert('Falha ao consultar a IA.');
+      notify('Falha ao consultar a IA.', 'error');
     } finally {
       setIsAnalyzing(false);
     }
@@ -376,11 +389,11 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
         setContent(newHtml);
         if (editorRef.current) editorRef.current.innerHTML = newHtml;
         setAiInstruction('');
-        setAiAnalysis('Mudancas aplicadas com sucesso pela IA!');
+        setAiAnalysis('Mudanças aplicadas com sucesso pela IA!');
       }
     } catch (error) {
       console.error(error);
-      alert('Erro ao aplicar edicoes inteligentes.');
+      notify('Erro ao aplicar edições inteligentes.', 'error');
     } finally {
       setIsEditing(false);
     }
@@ -397,7 +410,7 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
     setIsExporting(true);
     setShowExportMenu(false);
     try { await exportToDOCX(localTitle, content, signatureRecord); }
-    catch (e) { console.error(e); alert('Erro ao exportar DOCX.'); }
+    catch (e) { console.error(e); notify('Erro ao exportar DOCX.', 'error'); }
     finally { setIsExporting(false); }
   };
 
@@ -422,93 +435,99 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
 
       <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white sticky top-0 z-10">
-          <div className="flex flex-col flex-1 mr-4">
+        <div className="flex items-center justify-between px-3 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-white sticky top-0 z-10 gap-2">
+          <div className="flex flex-col flex-1 min-w-0 mr-2">
             <input
               type="text"
               value={localTitle}
               onChange={(e) => setLocalTitle(e.target.value)}
-              className="text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 rounded px-1 -ml-1 transition-all border-none bg-transparent hover:bg-slate-50"
-              placeholder="Digite o titulo do documento..."
+              className="text-sm sm:text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 rounded px-1 -ml-1 transition-all border-none bg-transparent hover:bg-slate-50 truncate"
+              placeholder="Título do documento..."
             />
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2 mt-0.5">
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${signatureRecord ? 'bg-green-100 text-green-700' :
                 status === 'Review' ? 'bg-amber-100 text-amber-700' :
                   status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'
                 }`}>
                 {signatureRecord ? '✓ Assinado' : status}
               </span>
-              {signatureRecord && (
-                <span className="text-[10px] text-slate-400 font-mono">Protocolo: {signatureRecord.protocol}</span>
-              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex -space-x-2 mr-4">
+          <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+            <div className="hidden sm:flex -space-x-2">
               {activeUsers.map((u, i) => (
-                <div key={i} title={u.name} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${u.color}`}>
+                <div key={i} title={u.name} className={`w-7 h-7 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${u.color}`}>
                   {u.name.charAt(0)}
                 </div>
               ))}
             </div>
 
             <button onClick={handleAiAnalysis} disabled={isAnalyzing}
-              className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium">
-              <Wand2 size={16} className={isAnalyzing ? 'animate-pulse' : ''} />
-              {isAnalyzing ? 'Analisando...' : 'Consultar IA'}
+              className="flex items-center gap-1.5 px-2.5 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-xs sm:text-sm font-medium">
+              <Wand2 size={14} className={isAnalyzing ? 'animate-pulse' : ''} />
+              <span className="hidden sm:inline">{isAnalyzing ? 'Analisando...' : 'Consultar IA'}</span>
             </button>
 
             <div className="relative" ref={exportMenuRef}>
               <button onClick={() => setShowExportMenu(v => !v)} disabled={isExporting}
-                className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium">
-                <FileDown size={16} className={isExporting ? 'animate-bounce' : ''} />
-                {isExporting ? 'Exportando...' : 'Exportar'}
+                className="flex items-center gap-1.5 px-2.5 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-xs sm:text-sm font-medium">
+                <FileDown size={14} className={isExporting ? 'animate-bounce' : ''} />
+                <span className="hidden sm:inline">{isExporting ? 'Exportando...' : 'Exportar'}</span>
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-11 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-2 min-w-[160px]">
+                <div className="absolute right-0 top-10 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-2 min-w-[150px]">
                   <button onClick={handleExportPDF} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors">
-                    <span className="text-lg">📄</span> Exportar PDF
+                    <span>📄</span> PDF
                   </button>
                   <button onClick={handleExportDOCX} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">
-                    <span className="text-lg">📝</span> Exportar DOCX
+                    <span>📝</span> DOCX
                   </button>
                 </div>
               )}
             </div>
 
             <button onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm">
-              <Save size={16} /> Salvar
+              className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs sm:text-sm font-medium shadow-sm">
+              <Save size={14} />
+              <span className="hidden sm:inline">Salvar</span>
+            </button>
+
+            {/* Toggle painel IA no mobile */}
+            <button onClick={() => setShowAiPanel(v => !v)}
+              className="lg:hidden flex items-center p-2 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-colors">
+              <Sparkles size={14} />
             </button>
           </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
           {/* Editor Area */}
-          <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex justify-center">
+          <div className="flex-1 overflow-y-auto p-2 sm:p-6 lg:p-12 bg-slate-100 flex justify-center">
             <div className="w-full max-w-[816px]">
               <div
                 ref={editorRef}
-                className={`w-full min-h-[1056px] bg-white shadow-xl p-[2cm] border border-slate-200 outline-none ${signatureRecord ? 'pointer-events-none' : ''}`}
+                className={`w-full min-h-[600px] sm:min-h-[1056px] bg-white shadow-xl p-6 sm:p-[2cm] border border-slate-200 outline-none ${signatureRecord ? 'pointer-events-none' : ''}`}
                 contentEditable={!signatureRecord}
                 onInput={(e) => setContent(e.currentTarget.innerHTML)}
                 suppressContentEditableWarning={true}
               />
-              {/* Bloco de assinaturas abaixo do documento */}
               {signatureRecord && (
-                <div className="bg-white shadow-xl border border-slate-200 px-[2cm] pb-[2cm]">
+                <div className="bg-white shadow-xl border border-slate-200 px-6 sm:px-[2cm] pb-6 sm:pb-[2cm]">
                   <SignatureBlock record={signatureRecord} />
                 </div>
               )}
             </div>
           </div>
 
-          {/* AI Sidebar */}
-          <div className="w-80 border-l border-slate-200 bg-white flex flex-col">
-            <div className="flex border-b border-slate-200">
+          {/* AI Sidebar — sempre visível em desktop, toggle em mobile */}
+          <div className={`${showAiPanel ? 'flex' : 'hidden'} lg:flex w-full lg:w-80 absolute lg:relative inset-0 lg:inset-auto border-l border-slate-200 bg-white flex-col z-20 lg:z-auto`}>
+            <div className="flex border-b border-slate-200 items-center">
               <button onClick={() => setShowComments(false)} className={`flex-1 py-3 text-xs font-semibold ${!showComments ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>Inteligencia</button>
               <button onClick={() => setShowComments(true)} className={`flex-1 py-3 text-xs font-semibold ${showComments ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-500'}`}>Notas</button>
+              <button onClick={() => setShowAiPanel(false)} className="lg:hidden p-2 mx-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors">
+                <X size={16} />
+              </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-5">

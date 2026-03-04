@@ -101,8 +101,13 @@ export const Team: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   const fetchMembers = async () => {
-    const data = await dbService.users.selectAll();
-    setMembers(data);
+    try {
+      const data = await dbService.users.selectAll();
+      setMembers(data || []);
+    } catch (err: any) {
+      console.error('Erro ao carregar equipe:', err);
+      setMembers([]);
+    }
   };
 
   useEffect(() => {

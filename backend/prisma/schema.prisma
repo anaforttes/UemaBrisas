@@ -16,6 +16,19 @@ enum UserStatus {
   Offline
 }
 
+enum ProfessionalType {
+  Advogado
+  Engenheiro
+  Arquiteto
+  Topografo      @map("Topógrafo")
+  AssistenteSocial @map("Assistente Social")
+  Geologo        @map("Geólogo")
+  Cidadao        @map("Cidadão")
+  Terceirizado
+  Representante
+  Outro
+}
+
 enum ProcessStatus {
   Inicial
   Iniciado
@@ -35,6 +48,14 @@ enum ProcessModality {
   REURB_E  @map("REURB-E")
 }
 
+enum StepStatus {
+  pendente
+  em_andamento
+  concluida
+  bloqueada
+  cancelada
+}
+
 enum DocumentStatus {
   Draft
   Review
@@ -46,6 +67,18 @@ enum SignatureStatus {
   pending
   signed
   rejected
+}
+
+enum AuditAction {
+  login
+  logout
+  signup
+  create
+  update
+  delete
+  status_change
+  export
+  sign
 }
 
 // ──────────────────────────────────────────────
@@ -64,21 +97,24 @@ model Role {
 }
 
 model User {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name          String    @db.VarChar(200)
-  email         String    @unique @db.VarChar(255)
-  passwordHash  String    @map("password_hash") @db.VarChar(255)
-  avatarUrl     String?   @map("avatar_url")
-  status        UserStatus @default(Offline)
-  lastLoginAt   DateTime? @map("last_login_at") @db.Timestamptz()
-  quotaLimit    Int       @default(10000) @map("quota_limit")
-  quotaUsed     Int       @default(0) @map("quota_used")
-  quotaResetAt  DateTime? @map("quota_reset_at") @db.Timestamptz()
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz()
-  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
-  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz()
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String            @db.VarChar(200)
+  email            String            @unique @db.VarChar(255)
+  passwordHash     String            @map("password_hash") @db.VarChar(255)
+  avatarUrl        String?           @map("avatar_url")
+  professionalType ProfessionalType? @map("professional_type")
+  allowedSteps     Int[]             @default([]) @map("allowed_steps")
+  status           UserStatus        @default(Offline)
+  lastLoginAt      DateTime?         @map("last_login_at") @db.Timestamptz()
+  quotaLimit       Int               @default(10000) @map("quota_limit")
+  quotaUsed        Int               @default(0) @map("quota_used")
+  quotaResetAt     DateTime?         @map("quota_reset_at") @db.Timestamptz()
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt        DateTime          @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+  deletedAt        DateTime?         @map("deleted_at") @db.Timestamptz()
 
   userRoles          UserRole[]
+  refreshTokens      RefreshToken[]
   technicianProcesses Process[] @relation("technician")
   legalProcesses     Process[] @relation("legal")
   documents          Document[]
@@ -86,6 +122,8 @@ model User {
   documentSignatures DocumentSignature[]
   documentComments   DocumentComment[]
   processHistories   ProcessHistory[]
+  processStepsOwned  ProcessStep[]
+  auditLogs          AuditLog[]
 
   @@map("users")
 }
@@ -101,6 +139,33 @@ model UserRole {
 
   @@unique([userId, roleId])
   @@map("user_roles")
+}
+
+model RefreshToken {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(500)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz()
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id        String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String?     @map("user_id") @db.Uuid
+  action    AuditAction
+  entity    String      @db.VarChar(100)
+  entityId  String?     @map("entity_id") @db.VarChar(100)
+  details   Json?
+  ipAddress String?     @map("ip_address") @db.VarChar(45)
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz()
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@map("audit_logs")
 }
 
 model Process {
@@ -124,8 +189,30 @@ model Process {
   legal          User?            @relation("legal", fields: [legalId], references: [id], onDelete: SetNull)
   documents      Document[]
   processHistory ProcessHistory[]
+  steps          ProcessStep[]
 
   @@map("processes")
+}
+
+model ProcessStep {
+  id            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  processId     String     @map("process_id") @db.Uuid
+  stepNumber    Int        @map("step_number") @db.SmallInt
+  name          String     @db.VarChar(200)
+  axis          String?    @db.VarChar(50)
+  status        StepStatus @default(pendente)
+  responsibleId String?    @map("responsible_id") @db.Uuid
+  notes         String?
+  startedAt     DateTime?  @map("started_at") @db.Timestamptz()
+  concludedAt   DateTime?  @map("concluded_at") @db.Timestamptz()
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz()
+  updatedAt     DateTime   @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
+
+  process     Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  responsible User?   @relation(fields: [responsibleId], references: [id], onDelete: SetNull)
+
+  @@unique([processId, stepNumber])
+  @@map("process_steps")
 }
 
 model ProcessHistory {
@@ -159,7 +246,7 @@ model DocumentTemplate {
 
 model Document {
   id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  processId         String         @map("process_id") @db.Uuid
+  processId         String?        @map("process_id") @db.Uuid
   templateId        String?        @map("template_id") @db.Uuid
   authorId          String?        @map("author_id") @db.Uuid
   title             String         @db.VarChar(500)
@@ -172,9 +259,9 @@ model Document {
   updatedAt         DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz()
   deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz()
 
-  process    Process          @relation(fields: [processId], references: [id], onDelete: Cascade)
+  process    Process?          @relation(fields: [processId], references: [id], onDelete: Cascade)
   template   DocumentTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  author     User?            @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  author     User?             @relation(fields: [authorId], references: [id], onDelete: SetNull)
   versions   DocumentVersion[]
   signatures DocumentSignature[]
   comments   DocumentComment[]

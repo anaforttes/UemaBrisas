@@ -6,6 +6,7 @@ import authRoutes from './routes/auth.js';
 import usersRoutes from './routes/users.js';
 import processesRoutes from './routes/processes.js';
 import documentsRoutes from './routes/documents.js';
+import { authMiddleware } from './middleware/auth.js';
 
 dotenv.config();
 
@@ -22,9 +23,11 @@ app.use(express.json({ limit: '10mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/processes', processesRoutes);
-app.use('/api/documents', documentsRoutes);
+
+// Rotas autenticadas
+app.use('/api/users', authMiddleware, usersRoutes);
+app.use('/api/processes', authMiddleware, processesRoutes);
+app.use('/api/documents', authMiddleware, documentsRoutes);
 
 // Health check
 app.get('/api/health', (_req, res) => {

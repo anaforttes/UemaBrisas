@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../server.js';
+import { getParam } from '../utils/params.js';
 
 const router = Router();
 
@@ -98,7 +99,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
 // ─── PATCH /api/processes/:id/status ─────────────────────────────────
 router.patch('/:id/status', async (req: Request, res: Response): Promise<void> => {
     try {
-        const { id } = req.params;
+        const id = getParam(req, 'id');
         const { status } = req.body;
 
         const prismaStatus = statusMap[status] || status;

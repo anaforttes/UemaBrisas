@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { X, User, MapPin, Layers, Ruler, ArrowRight, Search, Loader2 } from 'lucide-react';
+import { X, User, MapPin, Layers, Ruler, ArrowRight, Search, Loader2, AlertCircle } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 
 interface NewProcessModalProps {
@@ -13,6 +13,7 @@ interface NewProcessModalProps {
 export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
   const [loading, setLoading] = useState(false);
   const [searchingCep, setSearchingCep] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const [cep, setCep] = useState('');
   const [form, setForm] = useState({
     applicant: '',
@@ -50,6 +51,7 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setSubmitError('');
 
     try {
       await dbService.processes.insert({
@@ -67,31 +69,31 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
       onClose();
       setForm({ applicant: '', location: '', modality: 'REURB-S', area: '' });
       setCep('');
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert("Erro ao criar processo.");
+      setSubmitError(err.message || 'Erro ao criar processo. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white w-full sm:max-w-lg rounded-t-[32px] sm:rounded-[32px] shadow-2xl overflow-hidden animate-in slide-in-from-bottom sm:zoom-in-95 duration-300 max-h-[95dvh] overflow-y-auto">
+        <div className="p-5 sm:p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
           <div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">Novo Processo REURB</h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Abertura de Protocolo Digital</p>
+            <h3 className="text-lg sm:text-xl font-black text-slate-800 tracking-tight">Novo Processo REURB</h3>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-0.5">Abertura de Protocolo Digital</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
-            <X size={24} />
+            <X size={22} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="p-5 sm:p-8 space-y-4 sm:space-y-5">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-              <User size={12} /> Requerente (Nome Completo)
+              <User size={11} /> Requerente
             </label>
             <input
               required
@@ -99,14 +101,14 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
               value={form.applicant}
               onChange={(e) => setForm({ ...form, applicant: e.target.value })}
               placeholder="Nome do cidadão ou associação"
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+              className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-1 space-y-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="sm:col-span-1 space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Search size={12} /> CEP
+                <Search size={11} /> CEP
               </label>
               <div className="relative">
                 <input
@@ -115,19 +117,19 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
                   value={cep}
                   onChange={handleCepChange}
                   placeholder="00000000"
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all"
+                  className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all"
                 />
                 {searchingCep && (
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 size={16} className="text-blue-600 animate-spin" />
+                    <Loader2 size={15} className="text-blue-600 animate-spin" />
                   </div>
                 )}
               </div>
             </div>
 
-            <div className="col-span-2 space-y-1">
+            <div className="sm:col-span-2 space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <MapPin size={12} /> Localização / Núcleo
+                <MapPin size={11} /> Localização
               </label>
               <input
                 required
@@ -135,57 +137,61 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClos
                 value={form.location}
                 onChange={(e) => setForm({ ...form, location: e.target.value })}
                 placeholder="Logradouro, Bairro - Cidade/UF"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+                className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3 sm:gap-4">
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Layers size={12} /> Modalidade
+                <Layers size={11} /> Modalidade
               </label>
               <div className="relative">
                 <select
                   value={form.modality}
                   onChange={(e) => setForm({ ...form, modality: e.target.value as any })}
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all appearance-none"
+                  className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all appearance-none"
                 >
                   <option value="REURB-S">REURB-S (Social)</option>
                   <option value="REURB-E">REURB-E (Específica)</option>
                 </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <ArrowRight size={14} className="rotate-90" />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <ArrowRight size={13} className="rotate-90" />
                 </div>
               </div>
             </div>
 
             <div className="space-y-1">
               <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Ruler size={12} /> Área Est. (m²)
+                <Ruler size={11} /> Área (m²)
               </label>
               <input
                 type="number"
                 value={form.area}
                 onChange={(e) => setForm({ ...form, area: e.target.value })}
                 placeholder="Ex: 250"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+                className="w-full px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
               />
             </div>
           </div>
 
-          <div className="pt-4">
+          {submitError && (
+            <div className="flex items-center gap-3 p-4 bg-red-50 text-red-600 rounded-2xl text-sm font-bold border border-red-100 animate-in fade-in">
+              <AlertCircle size={16} className="shrink-0" /> {submitError}
+            </div>
+          )}
+
+          <div className="pt-2 pb-safe">
             <button
               type="submit"
               disabled={loading || searchingCep}
-              className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:translate-y-0"
+              className="w-full py-4 sm:py-5 bg-blue-600 text-white rounded-[22px] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
             >
               {loading ? (
-                <Loader2 size={20} className="animate-spin" />
+                <Loader2 size={18} className="animate-spin" />
               ) : (
-                <>
-                  Gerar Novo Protocolo <ArrowRight size={20} />
-                </>
+                <>Gerar Protocolo <ArrowRight size={18} /></>
               )}
             </button>
           </div>

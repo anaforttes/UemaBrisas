@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../server.js';
+import { getParam } from '../utils/params.js';
 
 const router = Router();
 
@@ -79,7 +80,7 @@ router.get('/by-email', async (req: Request, res: Response): Promise<void> => {
 // ─── PATCH /api/users/:id/activity ───────────────────────────────────
 router.patch('/:id/activity', async (req: Request, res: Response): Promise<void> => {
     try {
-        const { id } = req.params;
+        const id = getParam(req, 'id');
 
         const user = await prisma.user.update({
             where: { id },
@@ -90,11 +91,12 @@ router.patch('/:id/activity', async (req: Request, res: Response): Promise<void>
             include: { userRoles: { include: { role: true } } },
         });
 
+        const u = user as any;
         res.json({
             id: user.id,
             name: user.name,
             email: user.email,
-            role: user.userRoles[0]?.role.name || 'Atendente',
+            role: u.userRoles?.[0]?.role?.name || 'Atendente',
             avatar: user.avatarUrl,
             status: user.status,
             lastLogin: user.lastLoginAt?.toISOString(),
@@ -113,7 +115,7 @@ router.patch('/:id/activity', async (req: Request, res: Response): Promise<void>
 // ─── PATCH /api/users/:id/quota ──────────────────────────────────────
 router.patch('/:id/quota', async (req: Request, res: Response): Promise<void> => {
     try {
-        const { id } = req.params;
+        const id = getParam(req, 'id');
         const { tokensUsed } = req.body;
 
         const user = await prisma.user.update({
