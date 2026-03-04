@@ -10,23 +10,20 @@ export const ForgotPasswordScreen = () => {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleRecover = async (e: React.FormEvent) => {
+  const handleRecover = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
 
-    try {
-      const user = await dbService.users.findByEmail(email);
+    setTimeout(() => {
+      const user = dbService.users.findByEmail(email);
       if (user) {
         setIsSubmitted(true);
       } else {
         setError('Este e-mail não consta em nossa base de dados.');
       }
-    } catch {
-      setError('Erro ao verificar e-mail. Tente novamente.');
-    } finally {
       setIsLoading(false);
-    }
+    }, 1000);
   };
 
   return (
@@ -59,9 +56,9 @@ export const ForgotPasswordScreen = () => {
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">E-mail Institucional</label>
                 <div className="relative">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input
+                  <input 
                     type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all"
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" 
                     placeholder="exemplo@prefeitura.gov.br"
                   />
                 </div>
@@ -73,7 +70,7 @@ export const ForgotPasswordScreen = () => {
                 </div>
               )}
 
-              <button
+              <button 
                 type="submit" disabled={isLoading}
                 className={`w-full py-4 bg-slate-800 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-100 hover:bg-slate-900 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
               >

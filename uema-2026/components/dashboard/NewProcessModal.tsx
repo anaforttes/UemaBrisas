@@ -1,195 +1,186 @@
-
 import React, { useState } from 'react';
-import { X, User, MapPin, Layers, Ruler, ArrowRight, Search, Loader2 } from 'lucide-react';
+import { X, Plus } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
+import { User } from '../../types/index';
 
 interface NewProcessModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  currentUser: any;
+  currentUser: User;
 }
 
-export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
-  const [loading, setLoading] = useState(false);
-  const [searchingCep, setSearchingCep] = useState(false);
-  const [cep, setCep] = useState('');
+export const NewProcessModal: React.FC<NewProcessModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  currentUser,
+}) => {
   const [form, setForm] = useState({
+    title: '',
     applicant: '',
     location: '',
     modality: 'REURB-S' as 'REURB-S' | 'REURB-E',
-    area: ''
+    area: '',
+    responsibleName: '',
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-    setCep(value);
-
-    if (value.length === 8) {
-      setSearchingCep(true);
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${value}/json/`);
-        const data = await response.json();
-
-        if (!data.erro) {
-          const address = `${data.logradouro}${data.logradouro ? ', ' : ''}${data.bairro} - ${data.localidade}/${data.uf}`;
-          setForm(prev => ({ ...prev, location: address }));
-        } else {
-          // Opcional: Feedback de CEP não encontrado
-        }
-      } catch (err) {
-        console.error("Erro ao buscar CEP:", err);
-      } finally {
-        setSearchingCep(false);
-      }
-    }
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
+    if (!form.title || !form.applicant) {
+      setError('Preencha os campos obrigatórios: Título e Requerente.');
+      return;
+    }
     setLoading(true);
-
+    setError('');
     try {
-      await dbService.processes.insert({
-        title: form.applicant,
-        applicant: form.applicant,
-        location: form.location,
-        modality: form.modality,
-        area: form.area ? `${form.area} m²` : 'Não informada',
-        responsibleName: currentUser.name || 'Admin',
+      dbService.processes.insert({
+        ...form,
         technicianId: currentUser.id,
-        legalId: currentUser.id
-      } as any);
-
+        legalId: currentUser.id,
+      });
       onSuccess();
       onClose();
-      setForm({ applicant: '', location: '', modality: 'REURB-S', area: '' });
-      setCep('');
+      setForm({ title: '', applicant: '', location: '', modality: 'REURB-S', area: '', responsibleName: '' });
     } catch (err) {
-      console.error(err);
-      alert("Erro ao criar processo.");
+      setError('Erro ao criar processo. Tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-lg mx-4 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-8 border-b border-slate-100">
           <div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">Novo Processo REURB</h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Abertura de Protocolo Digital</p>
+            <h2 className="text-xl font-black text-slate-800">Novo Protocolo</h2>
+            <p className="text-slate-400 text-sm font-medium mt-0.5">Preencha os dados do processo REURB</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
-            <X size={24} />
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-all"
+          >
+            <X size={22} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-5">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-              <User size={12} /> Requerente (Nome Completo)
+        {/* Formulário */}
+        <div className="p-8 space-y-5">
+          {error && (
+            <div className="bg-red-50 border border-red-100 text-red-600 text-sm font-medium px-4 py-3 rounded-2xl">
+              {error}
+            </div>
+          )}
+
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              Título do Núcleo / Processo *
             </label>
             <input
-              required
-              type="text"
-              value={form.applicant}
-              onChange={(e) => setForm({ ...form, applicant: e.target.value })}
-              placeholder="Nome do cidadão ou associação"
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+              name="title"
+              value={form.title}
+              onChange={handleChange}
+              placeholder="Ex: Núcleo Habitacional Esperança"
+              className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-50 transition-all"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-1 space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Search size={12} /> CEP
-              </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={8}
-                  value={cep}
-                  onChange={handleCepChange}
-                  placeholder="00000000"
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all"
-                />
-                {searchingCep && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 size={16} className="text-blue-600 animate-spin" />
-                  </div>
-                )}
-              </div>
-            </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              Requerente *
+            </label>
+            <input
+              name="applicant"
+              value={form.applicant}
+              onChange={handleChange}
+              placeholder="Ex: Associação de Moradores Vila Verde"
+              className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-50 transition-all"
+            />
+          </div>
 
-            <div className="col-span-2 space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <MapPin size={12} /> Localização / Núcleo
-              </label>
-              <input
-                required
-                type="text"
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="Logradouro, Bairro - Cidade/UF"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
-              />
-            </div>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              Localização
+            </label>
+            <input
+              name="location"
+              value={form.location}
+              onChange={handleChange}
+              placeholder="Ex: Bairro Santa Luzia, São Luís - MA"
+              className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-50 transition-all"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Layers size={12} /> Modalidade
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                Modalidade
               </label>
-              <div className="relative">
-                <select
-                  value={form.modality}
-                  onChange={(e) => setForm({ ...form, modality: e.target.value as any })}
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all appearance-none"
-                >
-                  <option value="REURB-S">REURB-S (Social)</option>
-                  <option value="REURB-E">REURB-E (Específica)</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <ArrowRight size={14} className="rotate-90" />
-                </div>
-              </div>
+              <select
+                name="modality"
+                value={form.modality}
+                onChange={handleChange}
+                className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-bold text-slate-700 outline-none focus:bg-white focus:border-blue-200 transition-all cursor-pointer"
+              >
+                <option value="REURB-S">REURB-S</option>
+                <option value="REURB-E">REURB-E</option>
+              </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Ruler size={12} /> Área Est. (m²)
+            <div>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+                Área Total
               </label>
               <input
-                type="number"
+                name="area"
                 value={form.area}
-                onChange={(e) => setForm({ ...form, area: e.target.value })}
-                placeholder="Ex: 250"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+                onChange={handleChange}
+                placeholder="Ex: 15.400 m²"
+                className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-50 transition-all"
               />
             </div>
           </div>
 
-          <div className="pt-4">
-            <button
-              type="submit"
-              disabled={loading || searchingCep}
-              className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:translate-y-0"
-            >
-              {loading ? (
-                <Loader2 size={20} className="animate-spin" />
-              ) : (
-                <>
-                  Gerar Novo Protocolo <ArrowRight size={20} />
-                </>
-              )}
-            </button>
+          <div>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block mb-2">
+              Responsável Técnico
+            </label>
+            <input
+              name="responsibleName"
+              value={form.responsibleName}
+              onChange={handleChange}
+              placeholder="Ex: Eng. João da Silva"
+              className="w-full px-4 py-3.5 bg-slate-50 border border-transparent rounded-2xl text-sm font-medium text-slate-800 outline-none focus:bg-white focus:border-blue-200 focus:ring-4 focus:ring-blue-50 transition-all"
+            />
           </div>
-        </form>
+        </div>
+
+        {/* Footer */}
+        <div className="px-8 pb-8 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-2xl font-bold text-sm hover:bg-slate-200 transition-all"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={loading}
+            className="flex-1 py-3.5 bg-blue-600 text-white rounded-2xl font-bold text-sm hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {loading ? 'Criando...' : (<><Plus size={18} /> Criar Processo</>)}
+          </button>
+        </div>
       </div>
     </div>
   );

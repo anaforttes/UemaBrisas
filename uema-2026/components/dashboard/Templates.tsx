@@ -3,14 +3,19 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, Info } from 'lucide-react';
 import { MOCK_MODELS } from '../../constants';
+import { dbService } from '../../services/databaseService';
 
 export const Templates: React.FC = () => {
   const navigate = useNavigate();
 
   const handleUseTemplate = (model: any) => {
-    // Navega para o editor com o conteúdo do template
-    const content = `<h1>${model.name.toUpperCase()}</h1><p>Este documento foi gerado a partir do modelo oficial versão ${model.version}.</p><p>Edite os campos abaixo conforme a Lei 13.465/2017...</p>`;
-    navigate(`/edit/new?template=${encodeURIComponent(model.name)}&content=${encodeURIComponent(content)}`);
+    // Simula a criação de um documento baseado no modelo
+    const newDoc = dbService.documents.upsert({
+      title: model.name,
+      content: `<h1>${model.name.toUpperCase()}</h1><p>Este documento foi gerado a partir do modelo oficial versão ${model.version}.</p><p>Edite os campos abaixo conforme a Lei 13.465/2017...</p>`,
+      processId: 'PR-2024-001' // Vincula ao processo padrão para teste
+    });
+    navigate(`/edit/${newDoc.id}`);
   };
 
   return (
@@ -23,9 +28,9 @@ export const Templates: React.FC = () => {
       <div className="flex gap-4 mb-8">
         <div className="flex-1 relative">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-          <input
-            type="text"
-            placeholder="Buscar por nome do documento ou tipo..."
+          <input 
+            type="text" 
+            placeholder="Buscar por nome do documento ou tipo..." 
             className="w-full pl-12 pr-4 py-4 bg-white border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
           />
         </div>
@@ -40,7 +45,7 @@ export const Templates: React.FC = () => {
             <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
               <FileText size={80} />
             </div>
-
+            
             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
               <FileText size={24} />
             </div>
@@ -59,7 +64,7 @@ export const Templates: React.FC = () => {
               <div className="text-[10px] text-slate-400 font-medium">
                 Atualizado em {model.lastUpdated}
               </div>
-              <button
+              <button 
                 onClick={() => handleUseTemplate(model)}
                 className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all"
               >
