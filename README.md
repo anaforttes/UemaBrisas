@@ -11,7 +11,13 @@ Este projeto possui duas partes principais: o **Backend** (Node.js/Express) e o 
    ```bash
    cd backend
    ```
-3. Instale as dependências (caso ainda não tenha feito):
+3. Crie o arquivo de variáveis de ambiente:
+   - Duplique o arquivo `.env.example` e renomeie-o para `.env`
+   - Preencha as informações necessárias no `.env` (como o *DATABASE_URL*)
+   ```bash
+   cp .env.example .env
+   ```
+4. Instale as dependências (caso ainda não tenha feito):
    ```bash
    npm install
    ```
@@ -28,7 +34,13 @@ Este projeto possui duas partes principais: o **Backend** (Node.js/Express) e o 
    ```bash
    cd uema-2026
    ```
-3. Instale as dependências (caso ainda não tenha feito):
+3. Crie o arquivo de variáveis de ambiente:
+   - Duplique o arquivo `.env.example` e renomeie-o para `.env`
+   - Preencha as informações necessárias (como a *VITE_API_KEY*)
+   ```bash
+   cp .env.example .env
+   ```
+4. Instale as dependências (caso ainda não tenha feito):
    ```bash
    npm install
    ```
