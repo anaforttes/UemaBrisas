@@ -89,6 +89,7 @@ const EditorWrapper: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const { showToast } = useToast();
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ content: string; title: string; status?: string } | null>(null);
+  const [savedDocId, setSavedDocId] = useState<string | undefined>(docId !== 'new' ? docId : undefined);
   const [linkedProcessId, setLinkedProcessId] = useState<string>('');
 
   const templateName = searchParams.get('template') || 'Documento de Instauração';
@@ -99,14 +100,18 @@ const EditorWrapper: React.FC<{ currentUser: User }> = ({ currentUser }) => {
   const effectiveProcessId = linkedProcessId || urlProcessId;
 
   const doSave = async (content: string, title: string, processId: string | undefined, status?: string) => {
-    await dbService.documents.upsert({
-      id: docId !== 'new' ? docId : undefined,
+    const result = await dbService.documents.upsert({
+      id: savedDocId,
       processId: processId || undefined,
       title,
       content,
       status: (status || 'Draft') as any,
       authorId: currentUser.id,
     });
+    // Guardar o ID retornado para que o próximo save atualize em vez de criar
+    if (result?.id) {
+      setSavedDocId(result.id);
+    }
     showToast(
       status === 'Signed'
         ? 'Documento assinado e vinculado ao processo!'

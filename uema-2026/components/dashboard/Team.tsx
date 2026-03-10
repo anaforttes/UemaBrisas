@@ -195,19 +195,19 @@ export const Team: React.FC = () => {
                 <th className="px-8 py-5 text-right">Acoes</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-50/80">
               {filteredMembers.map((member) => {
                 const quotaPercent = Math.round((member.quota?.used || 0) / (member.quota?.limit || 1) * 100);
 
                 return (
-                  <tr key={member.id} className="hover:bg-blue-50/20 transition-all group">
+                  <tr key={member.id} className="hover:bg-gradient-to-r hover:from-blue-50/40 hover:to-transparent transition-all duration-300 ease-in-out group cursor-default">
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
                         <div className="relative">
                           <img
                             src={member.avatar}
                             alt={member.name}
-                            className="w-11 h-11 rounded-2xl object-cover border-2 border-white shadow-sm"
+                            className="w-11 h-11 rounded-2xl object-cover border-2 border-white shadow-sm transition-all duration-300 ease-in-out group-hover:shadow-md group-hover:scale-105 group-hover:border-blue-100"
                           />
                           <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${member.status === 'Online' ? 'bg-green-500' : 'bg-slate-300'}`}>
                             {member.status === 'Online' && <CheckCircle2 size={8} className="text-white" />}
@@ -268,7 +268,7 @@ export const Team: React.FC = () => {
                     </td>
 
                     <td className="px-8 py-5 text-right">
-                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all duration-300 ease-in-out">
                         <button
                           title="Editar nome"
                           onClick={() => setEditingId(member.id)}
@@ -284,7 +284,7 @@ export const Team: React.FC = () => {
                           <Trash2 size={16} />
                         </button>
                       </div>
-                      <div className="group-hover:hidden">
+                      <div className="transition-all duration-300 ease-in-out group-hover:opacity-0 group-hover:scale-75">
                         <MoreVertical size={18} className="text-slate-300 ml-auto" />
                       </div>
                     </td>

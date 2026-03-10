@@ -11,6 +11,7 @@ export const geminiService = {
     const usage = user.quota?.used || 0;
     const limit = user.quota?.limit || 0;
 
+  
     if (usage >= limit) {
       return { allowed: false, error: "Limite de tokens atingido. Contate o administrador." };
     }
