@@ -15,7 +15,8 @@ import {
 import { saveAs } from 'file-saver';
 import { geminiService } from '../../services/geminiService';
 import { User } from '../../types/index';
-import { SignatureModal, SignatureRecord } from './SignatureModal';
+import { SignatureModal } from './SignatureModal';
+import type { SignatureRecord } from '../../services/assinaturaService';
 import ModalImagem from './ModalImagem';
 import PainelComentarios from './PainelComentarios';
 import HistoricoVersoes, { Versao, EventoAuditoria } from './HistoricoVersoes';
@@ -685,7 +686,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
   // ── IA: Consultar ─────────────────────────────────────────────────────────
 
   const handleConsultarIA = async () => {
-    // Impede chamadas duplicadas
     if (analisando) return;
     setAnalisando(true);
     setAnaliseIA(null);
@@ -693,7 +693,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
     try {
       const resultado = await geminiService.analyzeDocument(conteudo);
 
-      // Trata erros de quota e sistema retornados como string
       if (typeof resultado === 'string' && resultado.startsWith('ERRO_QUOTA:')) {
         setAnaliseIA(`⚠️ ${resultado.replace('ERRO_QUOTA:', '')}`);
         return;
@@ -715,7 +714,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
 
   const handleEditarViaIA = async () => {
     if (!instrucaoIA.trim()) return;
-    // Impede chamadas duplicadas
     if (editando) return;
     setEditando(true);
     setAnaliseIA(null);
@@ -723,7 +721,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
     try {
       const novoHtml = await geminiService.applySmartEdit(conteudo, instrucaoIA);
 
-      // Trata erros de quota e sistema retornados como string
       if (typeof novoHtml === 'string' && novoHtml.startsWith('ERRO_QUOTA:')) {
         setAnaliseIA(`⚠️ ${novoHtml.replace('ERRO_QUOTA:', '')}`);
         return;
@@ -733,7 +730,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
         return;
       }
 
-      // Garante que o HTML retornado não está vazio antes de aplicar
       if (novoHtml && novoHtml.trim().length > 0) {
         setConteudo(novoHtml);
         if (refEditor.current) refEditor.current.innerHTML = novoHtml;
@@ -744,7 +740,6 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
         setAnaliseIA('⚠️ A IA não retornou conteúdo. Tente reformular a instrução.');
       }
     } catch (erro: any) {
-      // Trata erro de quota lançado como exceção
       const mensagem = erro?.message ?? '';
       if (mensagem.includes('ERRO_QUOTA:')) {
         setAnaliseIA(`⚠️ ${mensagem.replace('ERRO_QUOTA:', '')}`);
@@ -784,11 +779,8 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-
   return (
     <>
-      {/* ─── Modais ──────────────────────────────────────────────────────────── */}
       <SignatureModal
         isOpen={mostrarModalAssinatura}
         onClose={() => setMostrarModalAssinatura(false)}
@@ -817,38 +809,13 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
         />
       )}
 
-      {/* ─── Overlay de imagem ───────────────────────────────────────────────── */}
       {imagem.selecionada && (
         <div ref={imagem.refOverlay} style={imagem.estiloOverlay}>
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              border: '2px solid #3b82f6',
-              borderRadius: 2,
-              pointerEvents: 'none',
-            }}
-          />
+          <div style={{ position: 'absolute', inset: 0, border: '2px solid #3b82f6', borderRadius: 2, pointerEvents: 'none' }} />
           <div
             onMouseDown={imagem.iniciarArrasto}
             title="Arrastar para reposicionar"
-            style={{
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              background: 'rgba(59,130,246,0.85)',
-              cursor: 'grab',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              pointerEvents: 'all',
-              fontSize: 14,
-              color: '#fff',
-            }}
+            style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 28, height: 28, borderRadius: '50%', background: 'rgba(59,130,246,0.85)', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'all', fontSize: 14, color: '#fff' }}
           >
             ✥
           </div>
@@ -856,231 +823,71 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
             <div
               key={dir}
               onMouseDown={(e) => imagem.iniciarRedimensionamento(e, dir)}
-              style={{
-                position: 'absolute',
-                width: 10,
-                height: 10,
-                background: '#fff',
-                border: '2px solid #3b82f6',
-                borderRadius: 2,
-                cursor: CURSOR_POR_ALÇA[dir],
-                pointerEvents: 'all',
-                zIndex: 1,
-                ...POSIÇÃO_ALÇAS[dir],
-              }}
+              style={{ position: 'absolute', width: 10, height: 10, background: '#fff', border: '2px solid #3b82f6', borderRadius: 2, cursor: CURSOR_POR_ALÇA[dir], pointerEvents: 'all', zIndex: 1, ...POSIÇÃO_ALÇAS[dir] }}
             />
           ))}
-          <div
-            style={{
-              position: 'absolute',
-              top: -44,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              background: '#1e293b',
-              borderRadius: 10,
-              padding: '5px 10px',
-              pointerEvents: 'all',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {(
-              [
-                { alinhamento: 'left', label: '◧ Esq' },
-                { alinhamento: 'center', label: '▣ Centro' },
-                { alinhamento: 'right', label: 'Dir ◨' },
-              ] as const
-            ).map(({ alinhamento, label }) => (
-              <button
-                key={alinhamento}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  imagem.definirAlinhamento(alinhamento);
-                }}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '2px 7px',
-                  borderRadius: 6,
-                  fontSize: 12,
-                  fontWeight: 600,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#e2e8f0')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-              >
-                {label}
-              </button>
+          <div style={{ position: 'absolute', top: -44, left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: 4, background: '#1e293b', borderRadius: 10, padding: '5px 10px', pointerEvents: 'all', boxShadow: '0 4px 16px rgba(0,0,0,0.35)', whiteSpace: 'nowrap' }}>
+            {([{ alinhamento: 'left', label: '◧ Esq' }, { alinhamento: 'center', label: '▣ Centro' }, { alinhamento: 'right', label: 'Dir ◨' }] as const).map(({ alinhamento, label }) => (
+              <button key={alinhamento} onMouseDown={(e) => { e.preventDefault(); imagem.definirAlinhamento(alinhamento); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px 7px', borderRadius: 6, fontSize: 12, fontWeight: 600 }} onMouseEnter={(e) => (e.currentTarget.style.color = '#e2e8f0')} onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}>{label}</button>
             ))}
             <div style={{ width: 1, background: '#334155', alignSelf: 'stretch', margin: '0 2px' }} />
             {[25, 50, 75, 100].map((pct) => (
-              <button
-                key={pct}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  imagem.definirLarguraPorcentual(pct);
-                }}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  padding: '2px 5px',
-                  borderRadius: 6,
-                  fontSize: 11,
-                  fontWeight: 700,
-                }}
-                onMouseEnter={(e) => (e.currentTarget.style.color = '#e2e8f0')}
-                onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}
-              >
-                {pct}%
-              </button>
+              <button key={pct} onMouseDown={(e) => { e.preventDefault(); imagem.definirLarguraPorcentual(pct); }} style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px 5px', borderRadius: 6, fontSize: 11, fontWeight: 700 }} onMouseEnter={(e) => (e.currentTarget.style.color = '#e2e8f0')} onMouseLeave={(e) => (e.currentTarget.style.color = '#94a3b8')}>{pct}%</button>
             ))}
             <div style={{ width: 1, background: '#334155', alignSelf: 'stretch', margin: '0 2px' }} />
-            <button
-              onMouseDown={(e) => {
-                e.preventDefault();
-                imagem.deletarImagem();
-              }}
-              title="Remover imagem"
-              style={{
-                background: 'transparent',
-                border: 'none',
-                color: '#f87171',
-                cursor: 'pointer',
-                padding: '2px 6px',
-                borderRadius: 6,
-                fontSize: 14,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = '#f87171')}
-            >
-              ✕
-            </button>
+            <button onMouseDown={(e) => { e.preventDefault(); imagem.deletarImagem(); }} title="Remover imagem" style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '2px 6px', borderRadius: 6, fontSize: 14 }} onMouseEnter={(e) => (e.currentTarget.style.color = '#ef4444')} onMouseLeave={(e) => (e.currentTarget.style.color = '#f87171')}>✕</button>
           </div>
         </div>
       )}
 
       <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        {/* ─── Cabeçalho ───────────────────────────────────────────────────────── */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-white sticky top-0 z-10">
           <div className="flex flex-col flex-1 mr-4">
-            <input
-              type="text"
-              value={tituloLocal}
-              onChange={(e) => setTituloLocal(e.target.value)}
-              className="text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 rounded px-1 -ml-1 border-none bg-transparent hover:bg-slate-50"
-              placeholder="Título do documento..."
-            />
+            <input type="text" value={tituloLocal} onChange={(e) => setTituloLocal(e.target.value)} className="text-lg font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-100 rounded px-1 -ml-1 border-none bg-transparent hover:bg-slate-50" placeholder="Título do documento..." />
             <div className="flex items-center gap-2 mt-1">
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                  documentoFinalizado
-                    ? 'bg-green-100 text-green-700'
-                    : registroAssinatura
-                    ? 'bg-green-100 text-green-700'
-                    : status === 'Review'
-                    ? 'bg-amber-100 text-amber-700'
-                    : status === 'Approved'
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-blue-100 text-blue-700'
-                }`}
-              >
+              <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${documentoFinalizado ? 'bg-green-100 text-green-700' : registroAssinatura ? 'bg-green-100 text-green-700' : status === 'Review' ? 'bg-amber-100 text-amber-700' : status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}`}>
                 {documentoFinalizado ? '✓ Finalizado' : registroAssinatura ? '✓ Assinado' : status}
               </span>
-              {registroAssinatura && (
-                <span className="text-[10px] text-slate-400 font-mono">Protocolo: {registroAssinatura.protocol}</span>
-              )}
-              {statusAutoSave === 'salvando' && (
-                <span className="flex items-center gap-1 text-[10px] text-slate-400 animate-pulse">
-                  <RefreshCw size={10} className="animate-spin" /> Salvando...
-                </span>
-              )}
-              {statusAutoSave === 'salvo' && (
-                <span className="flex items-center gap-1 text-[10px] text-green-600">
-                  <CheckCircle2 size={10} /> Salvo às {ultimoSalvoEm}
-                </span>
-              )}
-              {statusAutoSave === 'idle' && ultimoSalvoEm && (
-                <span className="text-[10px] text-slate-300">
-                  Auto-save: {ultimoSalvoEm}
-                </span>
-              )}
+              {registroAssinatura && <span className="text-[10px] text-slate-400 font-mono">Protocolo: {registroAssinatura.protocol}</span>}
+              {statusAutoSave === 'salvando' && <span className="flex items-center gap-1 text-[10px] text-slate-400 animate-pulse"><RefreshCw size={10} className="animate-spin" /> Salvando...</span>}
+              {statusAutoSave === 'salvo' && <span className="flex items-center gap-1 text-[10px] text-green-600"><CheckCircle2 size={10} /> Salvo às {ultimoSalvoEm}</span>}
+              {statusAutoSave === 'idle' && ultimoSalvoEm && <span className="text-[10px] text-slate-300">Auto-save: {ultimoSalvoEm}</span>}
             </div>
           </div>
-
           <div className="flex items-center gap-3">
             <div className="flex -space-x-2 mr-2">
               {usuariosAtivos.map((u, i) => (
-                <div
-                  key={i}
-                  title={u.nome}
-                  className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${u.cor}`}
-                >
-                  {u.nome.charAt(0)}
-                </div>
+                <div key={i} title={u.nome} className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${u.cor}`}>{u.nome.charAt(0)}</div>
               ))}
             </div>
-
-            <button
-              onClick={handleConsultarIA}
-              disabled={analisando || documentoFinalizado}
-              className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleConsultarIA} disabled={analisando || documentoFinalizado} className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg hover:bg-indigo-100 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed">
               <Wand2 size={16} className={analisando ? 'animate-pulse' : ''} />
               {analisando ? 'Analisando...' : 'Consultar IA'}
             </button>
-
             <div className="relative" ref={refMenuExport}>
-              <button
-                onClick={() => setMostrarMenuExportar((v) => !v)}
-                disabled={exportando}
-                className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium"
-              >
+              <button onClick={() => setMostrarMenuExportar((v) => !v)} disabled={exportando} className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-100 transition-colors text-sm font-medium">
                 <FileDown size={16} className={exportando ? 'animate-bounce' : ''} />
                 {exportando ? 'Exportando...' : 'Exportar'}
               </button>
               {mostrarMenuExportar && (
                 <div className="absolute right-0 top-11 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-2 min-w-[160px]">
-                  <button
-                    onClick={handleExportarPDF}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    📄 Exportar PDF
-                  </button>
-                  <button
-                    onClick={handleExportarDOCX}
-                    className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    📝 Exportar DOCX
-                  </button>
+                  <button onClick={handleExportarPDF} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors">📄 Exportar PDF</button>
+                  <button onClick={handleExportarDOCX} className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">📝 Exportar DOCX</button>
                 </div>
               )}
             </div>
-
-            <button
-              onClick={handleSalvar}
-              disabled={documentoFinalizado}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleSalvar} disabled={documentoFinalizado} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
               <Save size={16} /> Salvar
             </button>
           </div>
         </div>
 
         <div className="flex flex-1 overflow-hidden">
-          {/* ─── Área do Editor ──────────────────────────────────────────────── */}
           <div className="flex-1 overflow-y-auto p-12 bg-slate-100 flex justify-center">
             <div className="w-full max-w-[816px]">
               <div
                 ref={refEditor}
-                className={`w-full min-h-[1056px] bg-white shadow-xl p-[2cm] border border-slate-200 outline-none ${
-                  registroAssinatura || documentoFinalizado ? 'pointer-events-none' : ''
-                }`}
+                className={`w-full min-h-[1056px] bg-white shadow-xl p-[2cm] border border-slate-200 outline-none ${registroAssinatura || documentoFinalizado ? 'pointer-events-none' : ''}`}
                 contentEditable={!registroAssinatura && !documentoFinalizado}
                 onInput={(e) => setConteudo(e.currentTarget.innerHTML)}
                 onClick={imagem.aoClicarNoEditor}
@@ -1094,35 +901,15 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
             </div>
           </div>
 
-          {/* ─── Sidebar ─────────────────────────────────────────────────────── */}
           <div className="w-80 border-l border-slate-200 bg-white flex flex-col">
             <div className="flex border-b border-slate-200">
-              <button
-                onClick={() => setAbaAtiva('ia')}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'ia' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => setAbaAtiva('ia')} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'ia' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <Sparkles size={12} className="inline mr-1" /> IA
               </button>
-              <button
-                onClick={() => setAbaAtiva('comentarios')}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'comentarios'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => setAbaAtiva('comentarios')} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'comentarios' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <MessageSquare size={12} className="inline mr-1" /> Comentários
               </button>
-              <button
-                onClick={() => setAbaAtiva('historico')}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'historico'
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => setAbaAtiva('historico')} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'historico' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <Clock size={12} className="inline mr-1" /> Histórico
               </button>
             </div>
@@ -1133,152 +920,61 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
                   <h4 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
                     <Sparkles size={14} className="text-indigo-600" /> Comando de Edição
                   </h4>
-                  <textarea
-                    value={instrucaoIA}
-                    onChange={(e) => setInstrucaoIA(e.target.value)}
-                    disabled={documentoFinalizado}
-                    placeholder="Ex: 'Atualize os dados do beneficiário'..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-none disabled:opacity-50"
-                  />
-                  <button
-                    onClick={handleEditarViaIA}
-                    disabled={editando || !instrucaoIA.trim() || documentoFinalizado}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50"
-                  >
+                  <textarea value={instrucaoIA} onChange={(e) => setInstrucaoIA(e.target.value)} disabled={documentoFinalizado} placeholder="Ex: 'Atualize os dados do beneficiário'..." className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none min-h-[120px] resize-none disabled:opacity-50" />
+                  <button onClick={handleEditarViaIA} disabled={editando || !instrucaoIA.trim() || documentoFinalizado} className="w-full flex items-center justify-center gap-2 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all disabled:opacity-50">
                     {editando ? <RefreshCw size={14} className="animate-spin" /> : <Wand2 size={14} />}
                     {editando ? 'Aplicando...' : 'Aplicar via IA'}
                   </button>
                 </div>
-
                 {analiseIA && (
-                  <div
-                    className={`border p-4 rounded-xl relative ${
-                      analiseIA.startsWith('⚠️')
-                        ? 'bg-red-50 border-red-200'
-                        : analiseIA.startsWith('✓')
-                        ? 'bg-green-50 border-green-200'
-                        : 'bg-slate-50 border-slate-200'
-                    }`}
-                  >
-                    <button onClick={() => setAnaliseIA(null)} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600">
-                      <X size={14} />
-                    </button>
+                  <div className={`border p-4 rounded-xl relative ${analiseIA.startsWith('⚠️') ? 'bg-red-50 border-red-200' : analiseIA.startsWith('✓') ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                    <button onClick={() => setAnaliseIA(null)} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X size={14} /></button>
                     <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Feedback</h4>
                     <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{analiseIA}</p>
                   </div>
                 )}
-
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-                  <h4 className="text-xs font-bold text-slate-700 uppercase mb-3 flex items-center gap-2">
-                    <CheckCircle2 size={14} className="text-green-600" /> Checklist de REURB
-                  </h4>
+                  <h4 className="text-xs font-bold text-slate-700 uppercase mb-3 flex items-center gap-2"><CheckCircle2 size={14} className="text-green-600" /> Checklist de REURB</h4>
                   <ul className="space-y-2">
                     {['Qualificação Completa', 'Fundamentação Art. 12', 'Indicação de Beneficiários'].map((item, idx) => (
-                      <li key={idx} className="flex items-center justify-between text-xs">
-                        <span className="text-slate-500">{item}</span>
-                        <CheckCircle2 size={14} className="text-green-500" />
-                      </li>
+                      <li key={idx} className="flex items-center justify-between text-xs"><span className="text-slate-500">{item}</span><CheckCircle2 size={14} className="text-green-500" /></li>
                     ))}
                   </ul>
                 </div>
-
                 <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                   <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Metadados Jurídicos</h4>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 uppercase font-bold text-[10px]">Normativa</span>
-                      <span className="text-slate-700">Lei 13.465/17</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-slate-400 uppercase font-bold text-[10px]">Autor</span>
-                      <span className="text-slate-700">{currentUser?.name || 'Usuário'}</span>
-                    </div>
-                    {registroAssinatura && (
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-400 uppercase font-bold text-[10px]">Protocolo</span>
-                        <span className="text-green-700 font-mono text-[10px]">{registroAssinatura.protocol}</span>
-                      </div>
-                    )}
+                    <div className="flex justify-between text-xs"><span className="text-slate-400 uppercase font-bold text-[10px]">Normativa</span><span className="text-slate-700">Lei 13.465/17</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-slate-400 uppercase font-bold text-[10px]">Autor</span><span className="text-slate-700">{currentUser?.name || 'Usuário'}</span></div>
+                    {registroAssinatura && <div className="flex justify-between text-xs"><span className="text-slate-400 uppercase font-bold text-[10px]">Protocolo</span><span className="text-green-700 font-mono text-[10px]">{registroAssinatura.protocol}</span></div>}
                   </div>
                 </div>
               </div>
             )}
-
-            {abaAtiva === 'comentarios' && (
-              <PainelComentarios nomeUsuario={currentUser?.name || 'Usuário'} cargoUsuario={currentUser?.role || 'Operador'} />
-            )}
-
-            {abaAtiva === 'historico' && (
-              <HistoricoVersoes versoes={versoes} eventos={eventos} onRestaurar={handleRestaurarVersao} />
-            )}
+            {abaAtiva === 'comentarios' && <PainelComentarios nomeUsuario={currentUser?.name || 'Usuário'} cargoUsuario={currentUser?.role || 'Operador'} />}
+            {abaAtiva === 'historico' && <HistoricoVersoes versoes={versoes} eventos={eventos} onRestaurar={handleRestaurarVersao} />}
           </div>
         </div>
 
-        {/* ─── Barra de Ferramentas ─────────────────────────────────────────── */}
         <div className="h-14 bg-slate-900 text-white flex items-center justify-center gap-2 px-6">
           <div className="flex items-center gap-1">
-            <button onClick={() => document.execCommand('bold')} title="Negrito" className="p-2 hover:bg-slate-800 rounded transition-colors">
-              <Bold size={18} />
-            </button>
-            <button onClick={() => document.execCommand('italic')} title="Itálico" className="p-2 hover:bg-slate-800 rounded transition-colors">
-              <Italic size={18} />
-            </button>
+            <button onClick={() => document.execCommand('bold')} title="Negrito" className="p-2 hover:bg-slate-800 rounded transition-colors"><Bold size={18} /></button>
+            <button onClick={() => document.execCommand('italic')} title="Itálico" className="p-2 hover:bg-slate-800 rounded transition-colors"><Italic size={18} /></button>
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            <button onClick={() => document.execCommand('justifyLeft')} title="Alinhar esquerda" className="p-2 hover:bg-slate-800 rounded transition-colors">
-              <AlignLeft size={18} />
-            </button>
-            <button onClick={() => document.execCommand('justifyCenter')} title="Centralizar" className="p-2 hover:bg-slate-800 rounded transition-colors">
-              <AlignCenter size={18} />
-            </button>
-            <button onClick={() => document.execCommand('justifyRight')} title="Alinhar direita" className="p-2 hover:bg-slate-800 rounded transition-colors">
-              <AlignRight size={18} />
-            </button>
+            <button onClick={() => document.execCommand('justifyLeft')} title="Alinhar esquerda" className="p-2 hover:bg-slate-800 rounded transition-colors"><AlignLeft size={18} /></button>
+            <button onClick={() => document.execCommand('justifyCenter')} title="Centralizar" className="p-2 hover:bg-slate-800 rounded transition-colors"><AlignCenter size={18} /></button>
+            <button onClick={() => document.execCommand('justifyRight')} title="Alinhar direita" className="p-2 hover:bg-slate-800 rounded transition-colors"><AlignRight size={18} /></button>
             <div className="w-px h-6 bg-slate-700 mx-1" />
-            <button
-              onClick={() => document.execCommand('insertUnorderedList')}
-              title="Lista"
-              className="p-2 hover:bg-slate-800 rounded transition-colors"
-            >
-              <List size={18} />
-            </button>
-            <button
-              onClick={() => {
-                const sel = window.getSelection();
-                if (sel && sel.rangeCount > 0) {
-                  selecaoSalvaRef.current = sel.getRangeAt(0).cloneRange();
-                }
-                setMostrarModalTabela(true);
-              }}
-              title="Inserir tabela"
-              className="p-2 hover:bg-slate-800 rounded transition-colors text-emerald-400"
-            >
-              <Table2 size={18} />
-            </button>
-            <button
-              onClick={() => setMostrarModalImagem(true)}
-              title="Inserir imagem"
-              className="p-2 hover:bg-slate-800 rounded transition-colors text-purple-400"
-            >
-              <Image size={18} />
-            </button>
+            <button onClick={() => document.execCommand('insertUnorderedList')} title="Lista" className="p-2 hover:bg-slate-800 rounded transition-colors"><List size={18} /></button>
+            <button onClick={() => { const sel = window.getSelection(); if (sel && sel.rangeCount > 0) { selecaoSalvaRef.current = sel.getRangeAt(0).cloneRange(); } setMostrarModalTabela(true); }} title="Inserir tabela" className="p-2 hover:bg-slate-800 rounded transition-colors text-emerald-400"><Table2 size={18} /></button>
+            <button onClick={() => setMostrarModalImagem(true)} title="Inserir imagem" className="p-2 hover:bg-slate-800 rounded transition-colors text-purple-400"><Image size={18} /></button>
           </div>
-
           <div className="w-px h-6 bg-slate-700 mx-3" />
-
-          <button
-            onClick={() => setMostrarModalAssinatura(true)}
-            disabled={!!registroAssinatura || documentoFinalizado}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button onClick={() => setMostrarModalAssinatura(true)} disabled={!!registroAssinatura || documentoFinalizado} className="flex items-center gap-2 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed">
             <FileCheck size={18} />
             {registroAssinatura ? '✓ Documento Assinado' : 'Assinar com Certificado'}
           </button>
-
-          <button
-            onClick={handleFinalizarFluxo}
-            disabled={documentoFinalizado}
-            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button onClick={handleFinalizarFluxo} disabled={documentoFinalizado} className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-bold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed">
             <CheckCheck size={18} />
             {documentoFinalizado ? '✓ Finalizado' : 'Finalizar Fluxo'}
           </button>
