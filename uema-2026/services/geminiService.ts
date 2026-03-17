@@ -3,19 +3,34 @@ import { dbService } from "./databaseService";
 
 const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
 
+let inProgress = false;
+
 export const geminiService = {
   async checkUserQuota() {
-    const user = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
+    const user = JSON.parse(localStorage.getItem("reurb_current_user") || "{}");
     if (!user.id) return { allowed: false, error: "Usuário não autenticado." };
 
     const usage = user.quota?.used || 0;
     const limit = user.quota?.limit || 0;
 
-  
     if (usage >= limit) {
       return { allowed: false, error: "Limite de tokens atingido. Contate o administrador." };
     }
     return { allowed: true, userId: user.id };
+  },
+
+  async retryWithBackoff(fn: () => Promise<any>, retries = 3, delay = 1000) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        return await fn();
+      } catch (error: any) {
+        if (error.message?.includes("429") && i < retries - 1) {
+          await new Promise(res => setTimeout(res, delay * (i + 1)));
+          continue;
+        }
+        throw error;
+      }
+    }
   },
 
   async analyzeDocument(content: string) {
@@ -28,19 +43,23 @@ export const geminiService = {
     "${content}"`;
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-        config: {
-          temperature: 0.2,
-          maxOutputTokens: 800
-        },
-      });
+      if (inProgress) return "ERRO_SISTEMA: Já existe uma requisição em andamento. Aguarde.";
+      inProgress = true;
 
-      await dbService.users.updateQuota(quotaCheck.userId!, 500);
-      return response.text;
+      const response = await this.retryWithBackoff(() =>
+        ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: { temperature: 0.2, maxOutputTokens: 800 },
+        })
+      );
+
+      dbService.users.updateQuota(quotaCheck.userId!, 500);
+      return response.text();
     } catch (error: any) {
       return this.handleAiError(error);
+    } finally {
+      inProgress = false;
     }
   },
 
@@ -56,26 +75,33 @@ export const geminiService = {
     ${currentContent}`;
 
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
-        contents: prompt,
-        config: { temperature: 0.1 },
-      });
+      if (inProgress) throw new Error("ERRO_SISTEMA: Já existe uma requisição em andamento. Aguarde.");
+      inProgress = true;
 
-      await dbService.users.updateQuota(quotaCheck.userId!, 300);
+      const response = await this.retryWithBackoff(() =>
+        ai.models.generateContent({
+          model: "gemini-2.0-flash",
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          config: { temperature: 0.1 },
+        })
+      );
 
-      let cleanedHtml = response.text || "";
+      dbService.users.updateQuota(quotaCheck.userId!, 300);
+
+      let cleanedHtml = response.text() || "";
       cleanedHtml = cleanedHtml.replace(/```html/g, "").replace(/```/g, "").trim();
       return cleanedHtml;
     } catch (error: any) {
       throw new Error(this.handleAiError(error));
+    } finally {
+      inProgress = false;
     }
   },
 
   handleAiError(error: any): string {
-    console.error("[Gemini Error]:", error);
     if (error.message?.includes("429")) return "ERRO_SISTEMA: O servidor de IA está ocupado. Tente em instantes.";
-    if (error.message?.includes("API key not found")) return "ERRO_SISTEMA: Chave de API não configurada. Verifique o arquivo .env.";
-    return "Erro inesperado na IA. Verifique sua conexão e chave de API.";
-  }
+    if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("API key not found"))
+      return "ERRO_SISTEMA: Chave de API inválida. Verifique o arquivo .env.";
+    return `Erro inesperado na IA: ${error.message}`;
+  },
 };
