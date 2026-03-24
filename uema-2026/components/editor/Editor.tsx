@@ -45,7 +45,7 @@ import { dbService } from '../../services/databaseService';
 import { SignatureModal } from './SignatureModal';
 import type { SignatureRecord } from '../../services/assinaturaService';
 import PainelComentarios from './PainelComentarios';
-import HistoricoVersoes, { Versao, EventoAuditoria } from './HistoricoVersoes';
+import HistoricoVersoes, { Versao, EventoAuditoria } from './components/HistoricoVersoes';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface EditorProps {
