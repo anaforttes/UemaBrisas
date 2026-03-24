@@ -174,7 +174,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
               Ver Todos <ArrowUpRight size={16} />
             </Link>
           </div>
-          <ProcessTable processes={processes.slice(0, 5)} currentUser={user} />
+          <ProcessTable processes={processes.slice(0, 5)} />
         </div>
 
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden h-fit">
