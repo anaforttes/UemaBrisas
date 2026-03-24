@@ -14,7 +14,7 @@ export interface Signer {
   role: string;
   email: string;
   order: number;
-  status: 'pending' | 'signed' | 'rejected' | 'awaiting';
+  status: 'pending' | 'signed' | 'rejected';
   signedAt?: string;
   signatureHash?: string;
   ip?: string;
@@ -35,6 +35,7 @@ export interface SignatureRecord {
   status: 'pending' | 'partial' | 'completed' | 'rejected';
   qrCodeData: string;
   documentHash: string;
+  events: any[];
 }
 
 // ─── Dados extraídos de um certificado real ──────────────────────────────────
@@ -267,7 +268,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
       role: tm.role,
       email: tm.email,
       order: i + 2,
-      status: 'awaiting' as const,
+    status: 'pending' as const,
     }));
     return [me, ...others];
   };
@@ -388,6 +389,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
       status: allSigned ? 'completed' : 'partial',
       qrCodeData: `https://verificador.iti.gov.br/${protocol}`,
       documentHash,
+      events: [],
     };
     setRecord(finalRecord);
     setStep('complete');
