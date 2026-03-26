@@ -1,15 +1,17 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Search, Filter, Plus, LayoutGrid, List,
   FileText, MapPin, Calendar,
   ChevronRight, MoreHorizontal, Activity,
-  AlertCircle, CheckCircle2, Clock
+  AlertCircle, CheckCircle2, Clock,
+  Trash2, Eye
 } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
-import { REURBProcess, ProcessStatus } from '../../types';
+import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
+import { ProcessDrawer } from './ProcessDrawer';
 
 export const ProcessManagement: React.FC = () => {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
@@ -17,14 +19,36 @@ export const ProcessManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [selectedProcess, setSelectedProcess] = useState<REURBProcess | null>(null);
+  const [contextMenuId, setContextMenuId] = useState<string | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        setContextMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const fetchData = async () => {
     const data = await dbService.processes.selectAll();
     setProcesses(data);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Tem certeza que deseja excluir este processo?')) {
+      await dbService.processes.delete(id);
+      setContextMenuId(null);
+      fetchData();
+    }
   };
 
   const filteredProcesses = processes.filter(p => {
@@ -171,12 +195,42 @@ export const ProcessManagement: React.FC = () => {
               </div>
 
               <div className="flex gap-2">
-                <button className="flex-1 py-3.5 bg-slate-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg shadow-slate-100">
+                <button
+                  onClick={() => setSelectedProcess(proc)}
+                  className="flex-1 py-3.5 bg-slate-900 text-white rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-blue-600 transition-all shadow-lg shadow-slate-100"
+                >
                   Gerenciar <ChevronRight size={14} />
                 </button>
-                <button className="p-3.5 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-all">
-                  <MoreHorizontal size={20} />
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setContextMenuId(contextMenuId === proc.id ? null : proc.id);
+                    }}
+                    className="p-3.5 bg-slate-50 text-slate-400 rounded-2xl hover:bg-slate-100 transition-all"
+                  >
+                    <MoreHorizontal size={20} />
+                  </button>
+                  {contextMenuId === proc.id && (
+                    <div ref={contextMenuRef} className="absolute bottom-full right-0 mb-2 bg-white rounded-2xl shadow-2xl border border-slate-100 py-2 min-w-[180px] z-50 animate-in fade-in slide-in-from-bottom-2 duration-200">
+                      <button
+                        onClick={() => {
+                          setSelectedProcess(proc);
+                          setContextMenuId(null);
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        <Eye size={14} /> Ver Detalhes
+                      </button>
+                      <button
+                        onClick={() => handleDelete(proc.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
+                      >
+                        <Trash2 size={14} /> Excluir Processo
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -198,6 +252,11 @@ export const ProcessManagement: React.FC = () => {
         onClose={() => setIsModalOpen(false)}
         onSuccess={fetchData}
         currentUser={JSON.parse(localStorage.getItem('reurb_current_user') || '{}')}
+      />
+
+      <ProcessDrawer
+        process={selectedProcess}
+        onClose={() => setSelectedProcess(null)}
       />
     </div>
   );

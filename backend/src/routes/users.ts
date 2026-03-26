@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../server.js';
+import { randomUUID } from 'crypto';
 
 const router = Router();
+const templateProfilesByUser = new Map<string, Array<{ id: string; nomePerfil: string; dados: Record<string, string>; atualizadoEm: string }>>();
 
 // ─── GET /api/users ──────────────────────────────────────────────────
 router.get('/', async (_req: Request, res: Response): Promise<void> => {
@@ -73,6 +75,66 @@ router.get('/by-email', async (req: Request, res: Response): Promise<void> => {
     } catch (error: any) {
         console.error('Find by email error:', error);
         res.status(500).json({ error: 'Erro ao buscar usuário.' });
+    }
+});
+
+// ─── GET /api/users/:id/template-profiles ─────────────────────────────
+router.get('/:id/template-profiles', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const profiles = templateProfilesByUser.get(id) || [];
+        res.json(profiles);
+    } catch (error: any) {
+        console.error('Template profiles list error:', error);
+        res.status(500).json({ error: 'Erro ao listar perfis salvos.' });
+    }
+});
+
+// ─── POST /api/users/:id/template-profiles ────────────────────────────
+router.post('/:id/template-profiles', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params;
+        const { nomePerfil, dados } = req.body;
+
+        if (!nomePerfil || typeof nomePerfil !== 'string') {
+            res.status(400).json({ error: 'nomePerfil é obrigatório.' });
+            return;
+        }
+
+        if (!dados || typeof dados !== 'object') {
+            res.status(400).json({ error: 'dados é obrigatório.' });
+            return;
+        }
+
+        const novoPerfil = {
+            id: randomUUID(),
+            nomePerfil: nomePerfil.trim(),
+            dados,
+            atualizadoEm: new Date().toISOString(),
+        };
+
+        const atuais = templateProfilesByUser.get(id) || [];
+        const atualizados = [novoPerfil, ...atuais].slice(0, 15);
+        templateProfilesByUser.set(id, atualizados);
+
+        res.status(201).json(novoPerfil);
+    } catch (error: any) {
+        console.error('Template profile create error:', error);
+        res.status(500).json({ error: 'Erro ao salvar perfil.' });
+    }
+});
+
+// ─── DELETE /api/users/:id/template-profiles/:profileId ───────────────
+router.delete('/:id/template-profiles/:profileId', async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id, profileId } = req.params;
+        const atuais = templateProfilesByUser.get(id) || [];
+        const filtrados = atuais.filter((p) => p.id !== profileId);
+        templateProfilesByUser.set(id, filtrados);
+        res.json({ ok: true });
+    } catch (error: any) {
+        console.error('Template profile delete error:', error);
+        res.status(500).json({ error: 'Erro ao excluir perfil.' });
     }
 });
 

@@ -15,7 +15,8 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
 
   useEffect(() => {
     if (process) {
-      dbService.documents.findByProcessId(process.id).then(setDocuments);
+      const docs = dbService.documents.findByProcessId(process.id);
+      setDocuments(docs);
     }
   }, [process]);
 

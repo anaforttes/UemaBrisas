@@ -56,6 +56,19 @@ export interface DocumentModel {
   lastUpdated: string;
 }
 
+// ─── Dados Adicionais do Documento ────────────────────────────────────────────
+// Capturados do usuário ao criar um novo documento baseado em modelo
+
+export interface DadosAdicionaisDocumento {
+  nome: string;
+  cpf: string;
+  local: string;
+  cargo?: string;
+  instituicao?: string;
+  dataDocumento?: string;
+  observacoes?: string;
+}
+
 export interface REURBDocument {
   id: string;
   processId: string;
@@ -65,4 +78,5 @@ export interface REURBDocument {
   authorId: string;
   version: number;
   updatedAt: string;
+  dadosAdicionais?: DadosAdicionaisDocumento;
 }

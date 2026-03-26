@@ -4,8 +4,8 @@ import {
   Save, FileCheck, MessageSquare, Wand2,
   CheckCircle2, X, RefreshCw, Sparkles, FileDown
 } from 'lucide-react';
-import { geminiService } from '../../services/geminiService';
-import { User } from '../../types/index';
+import { geminiService } from '../services/geminiService';
+import { User } from '../types/index';
 
 interface EditorProps {
   initialContent: string;
