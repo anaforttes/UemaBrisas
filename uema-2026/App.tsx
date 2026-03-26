@@ -55,6 +55,7 @@ const App: React.FC = () => {
     setUser(null);
     localStorage.removeItem('reurb_current_user');
     localStorage.removeItem('reurb_token');
+    localStorage.removeItem('reurb_auth_token');
   };
 
   if (loading) return (
