@@ -20,6 +20,8 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
 
     try {
       const result = await dbService.users.login(email, passwordInput);
+      localStorage.setItem('reurb_token', result.token);
+      localStorage.setItem('reurb_auth_token', result.token);
       const safeUser = { ...result.user };
       onLoginSuccess(safeUser);
       navigate('/');
