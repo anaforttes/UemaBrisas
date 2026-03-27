@@ -1,53 +1,38 @@
 import {
   User,
   REURBProcess,
-  REURBDocument,
   REURBEtapa,
-  LogAuditoria,
+  REURBDocument,
   EtapaStatus,
+  LogAuditoria,
   ProcessStatus,
   ETAPAS_PADRAO,
-} from '../types/index';
-import { MOCK_PROCESSES } from '../constants';
+  MOCK_PROCESSES,
+} from '../constants';
+
+export { ProcessStatus, MOCK_PROCESSES };
+
+// ─── Classe principal ─────────────────────────────────────────────────────────
 
 class SQLDatabase {
-  private getStorage<T>(table: string): T[] {
-    const data = localStorage.getItem(`reurb_db_${table}`);
-    return data ? JSON.parse(data) : [];
+  private getStorage<T>(key: string): T[] {
+    try {
+      const raw = localStorage.getItem(`reurb_db_${key}`);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
   }
 
-  private setStorage(table: string, data: any) {
-    localStorage.setItem(`reurb_db_${table}`, JSON.stringify(data));
+  private setStorage<T>(key: string, data: T[]): void {
+    localStorage.setItem(`reurb_db_${key}`, JSON.stringify(data));
   }
 
-  // ─── Usuários ──────────────────────────────────────────────────────────────
+  // ─── Usuários ───────────────────────────────────────────────────────────────
 
   users = {
     selectAll: (): User[] => {
       return this.getStorage<User>('users');
-    },
-
-    insert: (user: any): User => {
-      const users = this.getStorage<User>('users');
-      const newUser: User = {
-        id: `u-${Date.now()}`,
-        avatar: user.avatar || `https://picsum.photos/seed/${user.name}/200`,
-        quota: { limit: 10000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() },
-        lastLogin: new Date().toISOString(),
-        status: 'Offline',
-        flags: user.flags || {
-          superusuario: false,
-          adminMunicipio: false,
-          profissionalInterno: true,
-          usuarioExterno: false,
-        },
-        etapasPermitidas: user.etapasPermitidas || [],
-        tipoProfissional: user.tipoProfissional || 'Outro',
-        ...user,
-      };
-      users.push(newUser);
-      this.setStorage('users', users);
-      return newUser;
     },
 
     findByEmail: (email: string): User | undefined => {
@@ -108,21 +93,27 @@ class SQLDatabase {
       }
       return null;
     },
+
+    delete: (userId: string): void => {
+      const users = this.getStorage<User>('users');
+      const filtered = users.filter((u) => u.id !== userId);
+      this.setStorage('users', filtered);
+    },
   };
 
   // ─── Processos ─────────────────────────────────────────────────────────────
 
- processes = {
-  selectAll: (): REURBProcess[] => {
-    const doDb = this.getStorage<REURBProcess>('processes');
-    return doDb.length > 0 ? doDb : MOCK_PROCESSES;
-  },
+  processes = {
+    selectAll: (): REURBProcess[] => {
+      const doDb = this.getStorage<REURBProcess>('processes');
+      return doDb.length > 0 ? doDb : MOCK_PROCESSES;
+    },
 
-  findById: (id: string): REURBProcess | undefined => {
-    const doDb = this.getStorage<REURBProcess>('processes');
-    const fonte = doDb.length > 0 ? doDb : MOCK_PROCESSES;
-    return fonte.find((p) => p.id === id);
-  },
+    findById: (id: string): REURBProcess | undefined => {
+      const doDb = this.getStorage<REURBProcess>('processes');
+      const fonte = doDb.length > 0 ? doDb : MOCK_PROCESSES;
+      return fonte.find((p) => p.id === id);
+    },
 
     insert: (process: Partial<REURBProcess>): REURBProcess => {
       const processes = this.getStorage<REURBProcess>('processes');

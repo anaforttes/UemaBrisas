@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { dbService } from "./databaseService";
 
-const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_API_KEY });
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 export const geminiService = {
   async checkUserQuota() {
@@ -28,7 +28,7 @@ export const geminiService = {
 
     try {
       const response = await ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+       model: 'gemini-1.5-flash',
         contents: prompt,
         config: {
           temperature: 0.2,

@@ -1,11 +1,11 @@
-
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, FileText, FolderKanban, Users, Settings, LogOut, Zap, BarChart3
+  LayoutDashboard, FileText, FolderKanban, Users, Settings, LogOut, BarChart3
 } from 'lucide-react';
 import { User } from '../../types';
 import { Logo } from '../common/Logo';
+import { usePermissoes } from '../../hooks/usePermissoes';
 
 interface SidebarProps {
   user: User;
@@ -14,7 +14,7 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   const location = useLocation();
-  // Pegamos a quota mais recente do localStorage para garantir sincronia
+  const { pode } = usePermissoes();
   const [quota, setQuota] = useState(user.quota);
 
   useEffect(() => {
@@ -25,12 +25,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
     return () => clearInterval(interval);
   }, []);
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Painel', path: '/' },
-    { icon: FolderKanban, label: 'Processos', path: '/processes' },
-    { icon: FileText, label: 'Modelos', path: '/templates' },
-    { icon: Users, label: 'Equipe', path: '/team' },
+  const todosMenuItems = [
+    { icon: LayoutDashboard, label: 'Painel',        path: '/',          visivel: pode.verPainel      },
+    { icon: FolderKanban,    label: 'Processos',     path: '/processes', visivel: pode.verProcessos   },
+    { icon: FileText,        label: 'Modelos',       path: '/templates', visivel: pode.verModelos     },
+    { icon: BarChart3,       label: 'Relatórios',    path: '/reports',   visivel: pode.verRelatorios  },
+    { icon: Users,           label: 'Equipe',        path: '/team',      visivel: pode.verEquipe      },
+    { icon: Settings,        label: 'Configurações', path: '/settings',  visivel: pode.verSettings    },
   ];
+
+  const menuItems = todosMenuItems.filter(item => item.visivel);
 
   const quotaPercent = quota ? Math.min((quota.used / quota.limit) * 100, 100) : 0;
 
@@ -63,7 +67,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
       </div>
 
       <div className="mt-auto p-8 border-t border-slate-50 space-y-6">
-        {/* Minha Quota Individual */}
         <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -78,8 +81,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
             />
           </div>
           <div className="flex justify-between items-center">
-             <p className="text-[9px] text-blue-400 font-bold">{Math.round(quota?.used || 0)} / {quota?.limit} tokens</p>
-             <p className="text-[9px] text-blue-300 font-medium">{Math.round(quotaPercent)}%</p>
+            <p className="text-[9px] text-blue-400 font-bold">{Math.round(quota?.used || 0)} / {quota?.limit} tokens</p>
+            <p className="text-[9px] text-blue-300 font-medium">{Math.round(quotaPercent)}%</p>
           </div>
         </div>
 

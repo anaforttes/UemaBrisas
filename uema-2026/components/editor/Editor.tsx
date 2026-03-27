@@ -57,7 +57,6 @@ interface EditorProps {
   processo?: REURBProcess | null;
 }
 
-
 type AbaAtiva = 'ia' | 'comentarios' | 'historico';
 
 const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -104,8 +103,6 @@ const FontSize = Extension.create({
 });
 
 // ─── Componente React da Imagem ───────────────────────────────────────────────
-// Renderizado pelo TipTap no lugar de cada imagem
-// Tem alças de redimensionamento e toolbar igual Google Docs
 
 const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor }) => {
   const { src, alt, width, align } = node.attrs;
@@ -115,7 +112,6 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
   const startX = useRef(0);
   const startW = useRef(0);
 
-  // Estilo do container conforme alinhamento
   const containerStyle: React.CSSProperties = {
     display: 'block',
     textAlign: align === 'center' ? 'center' : align === 'right' ? 'right' : 'left',
@@ -124,7 +120,6 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
     lineHeight: 0,
   };
 
-  // Estilo da imagem
   const imgStyle: React.CSSProperties = {
     width: width || 'auto',
     maxWidth: '100%',
@@ -137,7 +132,6 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
     userSelect: 'none',
   };
 
-  // Definição das 8 alças de redimensionamento
   const alcas = [
     { pos: 'nw', style: { top: -5,    left: -5,                                      cursor: 'nw-resize' } },
     { pos: 'n',  style: { top: -5,    left: '50%' as any, transform: 'translateX(-50%)', cursor: 'n-resize'  } },
@@ -149,7 +143,6 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
     { pos: 'w',  style: { top: '50%' as any, left: -5,    transform: 'translateY(-50%)', cursor: 'w-resize'  } },
   ];
 
-  // Lógica de redimensionamento ao arrastar alça
   const iniciarResize = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -181,20 +174,10 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
   return (
     <NodeViewWrapper style={containerStyle} data-drag-handle>
       <div ref={containerRef} style={{ position: 'relative', display: 'inline-block' }}>
+        <img ref={imgRef} src={src} alt={alt || ''} style={imgStyle} draggable={false} />
 
-        {/* A imagem em si */}
-        <img
-          ref={imgRef}
-          src={src}
-          alt={alt || ''}
-          style={imgStyle}
-          draggable={false}
-        />
-
-        {/* Alças e toolbar — só visíveis quando selecionada */}
         {selected && (
           <>
-            {/* 8 alças de redimensionamento */}
             {alcas.map(({ pos, style }) => (
               <div
                 key={pos}
@@ -212,7 +195,6 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
               />
             ))}
 
-            {/* Toolbar abaixo da imagem — igual Google Docs */}
             <div
               style={{
                 position: 'absolute',
@@ -232,11 +214,7 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
                 fontSize: 12,
               }}
             >
-              {/* Alinhamento */}
-              <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginRight: 4 }}>
-                ALINHAR
-              </span>
-
+              <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginRight: 4 }}>ALINHAR</span>
               {[
                 { label: '◧', title: 'Esquerda', value: 'left'   },
                 { label: '▣', title: 'Centro',   value: 'center' },
@@ -245,10 +223,7 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
                 <button
                   key={value}
                   title={title}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    updateAttributes({ align: value });
-                  }}
+                  onMouseDown={(e) => { e.preventDefault(); updateAttributes({ align: value }); }}
                   style={{
                     background: align === value ? '#dbeafe' : 'transparent',
                     border: 'none',
@@ -266,19 +241,12 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
               ))}
 
               <div style={{ width: 1, background: '#e2e8f0', alignSelf: 'stretch', margin: '0 4px' }} />
-
-              {/* Tamanho em % */}
-              <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginRight: 4 }}>
-                TAMANHO
-              </span>
+              <span style={{ color: '#94a3b8', fontSize: 10, fontWeight: 700, marginRight: 4 }}>TAMANHO</span>
 
               {[25, 50, 75, 100].map((pct) => (
                 <button
                   key={pct}
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    updateAttributes({ width: `${pct}%` });
-                  }}
+                  onMouseDown={(e) => { e.preventDefault(); updateAttributes({ width: `${pct}%` }); }}
                   style={{
                     background: width === `${pct}%` ? '#dbeafe' : 'transparent',
                     border: 'none',
@@ -295,23 +263,10 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
               ))}
 
               <div style={{ width: 1, background: '#e2e8f0', alignSelf: 'stretch', margin: '0 4px' }} />
-
-              {/* Botão deletar */}
               <button
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  editor.chain().focus().deleteSelection().run();
-                }}
+                onMouseDown={(e) => { e.preventDefault(); editor.chain().focus().deleteSelection().run(); }}
                 title="Remover imagem"
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ef4444',
-                  cursor: 'pointer',
-                  padding: '3px 6px',
-                  borderRadius: 6,
-                  fontSize: 14,
-                }}
+                style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '3px 6px', borderRadius: 6, fontSize: 14 }}
               >
                 ✕
               </button>
@@ -433,20 +388,15 @@ const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void>
   const borda = { style: BorderStyle.SINGLE, size: 1, color: '999999' };
   const bordasCelula = { top: borda, bottom: borda, left: borda, right: borda };
 
-  // Converte nós DOM em TextRun do docx
   const parseNo = (no: ChildNode): any[] => {
     if (no.nodeType === 3) {
-      // Nó de texto
       const texto = no.textContent || '';
       if (!texto.trim()) return [];
       return [new TextRun({ text: texto, size: 24, font: 'Times New Roman' })];
     }
-
     if (no.nodeType !== 1) return [];
-
     const el = no as HTMLElement;
     const filhos = () => Array.from(el.childNodes).flatMap(parseNo);
-
     switch (el.tagName?.toLowerCase()) {
       case 'b':
       case 'strong':
@@ -461,7 +411,6 @@ const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void>
     }
   };
 
-  // Converte elementos bloco em parágrafos/tabelas do docx
   const parseBloco = (el: Element): any[] => {
     const tag = el.tagName?.toLowerCase();
     const filhos = Array.from(el.childNodes).flatMap(parseNo);
@@ -473,20 +422,17 @@ const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void>
           alignment: AlignmentType.CENTER,
           children: [new TextRun({ text: el.textContent || '', bold: true, size: 28, font: 'Times New Roman' })],
         })];
-
       case 'h2':
         return [new Paragraph({
           heading: HeadingLevel.HEADING_2,
           children: [new TextRun({ text: el.textContent || '', bold: true, size: 26, font: 'Times New Roman' })],
         })];
-
       case 'p':
         return [new Paragraph({
           alignment: AlignmentType.JUSTIFIED,
           spacing: { after: 160 },
           children: filhos.length ? filhos : [new TextRun({ text: '', size: 24 })],
         })];
-
       case 'ul':
       case 'ol':
         return Array.from(el.querySelectorAll('li')).map((li) =>
@@ -495,13 +441,11 @@ const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void>
             children: [new TextRun({ text: li.textContent || '', size: 24, font: 'Times New Roman' })],
           })
         );
-
       case 'table': {
         const linhas = Array.from(el.querySelectorAll('tr'));
         const maxCols = Math.max(...linhas.map((r) => r.querySelectorAll('th,td').length));
         if (maxCols === 0) return [];
         const largura = Math.floor(9026 / maxCols);
-
         return [new DocxTable({
           width: { size: 9026, type: WidthType.DXA },
           columnWidths: Array(maxCols).fill(largura),
@@ -529,7 +473,6 @@ const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void>
           ),
         })];
       }
-
       default:
         return filhos.length
           ? [new Paragraph({ alignment: AlignmentType.JUSTIFIED, children: filhos })]
@@ -657,26 +600,18 @@ const BlocoAssinatura: React.FC<{ record: SignatureRecord }> = ({ record }) => (
           <Shield size={16} className="text-white" />
         </div>
         <div>
-          <p className="font-black text-blue-900 text-sm uppercase tracking-wide">
-            Registro de Assinaturas Digitais
-          </p>
+          <p className="font-black text-blue-900 text-sm uppercase tracking-wide">Registro de Assinaturas Digitais</p>
           <p className="text-[11px] text-blue-500 font-mono">Protocolo: {record.protocol}</p>
         </div>
-        <span className="ml-auto bg-green-100 text-green-700 text-[10px] font-black px-3 py-1 rounded-full uppercase">
-          ✓ Válido
-        </span>
+        <span className="ml-auto bg-green-100 text-green-700 text-[10px] font-black px-3 py-1 rounded-full uppercase">✓ Válido</span>
       </div>
       <div className="space-y-3">
         {record.signers.map((signer, idx) => (
           <div key={signer.id} className="flex items-start gap-3 bg-white rounded-lg p-3 border border-green-100">
             <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-black text-slate-800">
-                {idx + 1}. {signer.name} — {signer.role}
-              </p>
-              <p className="text-[11px] text-slate-500">
-                Assinado em: {signer.signedAt ? new Date(signer.signedAt).toLocaleString('pt-BR') : '-'}
-              </p>
+              <p className="text-xs font-black text-slate-800">{idx + 1}. {signer.name} — {signer.role}</p>
+              <p className="text-[11px] text-slate-500">Assinado em: {signer.signedAt ? new Date(signer.signedAt).toLocaleString('pt-BR') : '-'}</p>
             </div>
           </div>
         ))}
@@ -694,23 +629,12 @@ const ModalFinalizado: React.FC<{ titulo: string; onFechar: () => void }> = ({ t
         <CheckCheck size={32} className="text-green-600" />
       </div>
       <h3 className="text-xl font-black text-slate-800 mb-2">Documento Finalizado!</h3>
-      <p className="text-sm text-slate-500 mb-1">
-        O documento <span className="font-semibold text-slate-700">"{titulo}"</span> foi finalizado.
-      </p>
-      <p className="text-xs text-slate-400 mb-6">
-        Finalizado em {new Date().toLocaleString('pt-BR')}
-      </p>
+      <p className="text-sm text-slate-500 mb-1">O documento <span className="font-semibold text-slate-700">"{titulo}"</span> foi finalizado.</p>
+      <p className="text-xs text-slate-400 mb-6">Finalizado em {new Date().toLocaleString('pt-BR')}</p>
       <div className="bg-green-50 border border-green-200 rounded-xl p-3 mb-6">
-        <p className="text-xs text-green-700 font-medium">
-          Disponível para consulta no sistema REURB.
-        </p>
+        <p className="text-xs text-green-700 font-medium">Disponível para consulta no sistema REURB.</p>
       </div>
-      <button
-        onClick={onFechar}
-        className="w-full py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors"
-      >
-        Fechar
-      </button>
+      <button onClick={onFechar} className="w-full py-3 bg-green-600 text-white rounded-xl text-sm font-bold hover:bg-green-700 transition-colors">Fechar</button>
     </div>
   </div>
 );
@@ -731,32 +655,13 @@ const ModalSairSemSalvar: React.FC<{
         </div>
         <div>
           <h3 className="text-lg font-black text-slate-800">Deseja salvar as alterações?</h3>
-          <p className="text-sm text-slate-500 mt-1">
-            As alterações em{' '}
-            <span className="font-semibold text-slate-700">"{titulo}"</span>{' '}
-            serão perdidas se você não salvá-las.
-          </p>
+          <p className="text-sm text-slate-500 mt-1">As alterações em <span className="font-semibold text-slate-700">"{titulo}"</span> serão perdidas se você não salvá-las.</p>
         </div>
       </div>
       <div className="flex gap-3">
-        <button
-          onClick={onNaoSalvar}
-          className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          Não salvar
-        </button>
-        <button
-          onClick={onCancelar}
-          className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-        >
-          Cancelar
-        </button>
-        <button
-          onClick={onSalvar}
-          className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100"
-        >
-          Salvar
-        </button>
+        <button onClick={onNaoSalvar} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">Não salvar</button>
+        <button onClick={onCancelar} className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
+        <button onClick={onSalvar} className="flex-1 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-100">Salvar</button>
       </div>
     </div>
   </div>
@@ -788,10 +693,7 @@ const PainelMembros: React.FC<{ onInserir: (texto: string) => void }> = ({ onIns
           <p className="text-xs text-slate-400 text-center py-6">Nenhum membro encontrado.</p>
         )}
         {filtrados.map((u) => (
-          <div
-            key={u.id}
-            className="bg-slate-50 border border-slate-100 rounded-xl p-3 hover:border-blue-200 hover:bg-blue-50 transition-all"
-          >
+          <div key={u.id} className="bg-slate-50 border border-slate-100 rounded-xl p-3 hover:border-blue-200 hover:bg-blue-50 transition-all">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0">
                 {u.name.charAt(0)}
@@ -802,34 +704,17 @@ const PainelMembros: React.FC<{ onInserir: (texto: string) => void }> = ({ onIns
               </div>
             </div>
             <div className="flex flex-wrap gap-1">
-              <button
-                onClick={() => onInserir(u.name)}
-                className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-              >
-                + Nome
-              </button>
-              <button
-                onClick={() => onInserir(`${u.name} — ${u.role}`)}
-                className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-              >
-                + Nome/Cargo
-              </button>
+              <button onClick={() => onInserir(u.name)} className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium">+ Nome</button>
+              <button onClick={() => onInserir(`${u.name} — ${u.role}`)} className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium">+ Nome/Cargo</button>
               {u.email && (
-                <button
-                  onClick={() => onInserir(u.email)}
-                  className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-                >
-                  + E-mail
-                </button>
+                <button onClick={() => onInserir(u.email)} className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium">+ E-mail</button>
               )}
             </div>
           </div>
         ))}
       </div>
       <div className="p-3 border-t border-slate-100">
-        <p className="text-[10px] text-slate-400 text-center">
-          Clique para inserir no cursor do documento
-        </p>
+        <p className="text-[10px] text-slate-400 text-center">Clique para inserir no cursor do documento</p>
       </div>
     </div>
   );
@@ -863,15 +748,14 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
   const [statusAutoSave, setStatusAutoSave] = useState<StatusAutoSave>('idle');
   const [ultimoSalvoEm, setUltimoSalvoEm]   = useState<string | null>(null);
 
-const refMenuExport    = useRef<HTMLDivElement>(null);
-const pendingNavRef    = useRef<(() => void) | null>(null);
-const refCabecalho     = useRef<HTMLDivElement>(null);
-const refRodape        = useRef<HTMLDivElement>(null);
-const conteudoSalvoRef = useRef(initialContent);
-  const somenteLeitura = documentoFinalizado || !!registroAssinatura;
+  const refMenuExport    = useRef<HTMLDivElement>(null);
+  const pendingNavRef    = useRef<(() => void) | null>(null);
+  const refCabecalho     = useRef<HTMLDivElement>(null);
+  const refRodape        = useRef<HTMLDivElement>(null);
+  const conteudoSalvoRef = useRef(initialContent);
+  const somenteLeitura   = documentoFinalizado || !!registroAssinatura;
 
-  const gerarIdEvento = () =>
-    `ev-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+  const gerarIdEvento = () => `ev-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
 
   const registrarEvento = useCallback(
     (tipo: EventoAuditoria['tipo'], descricao: string) => {
@@ -890,10 +774,17 @@ const conteudoSalvoRef = useRef(initialContent);
   );
 
   // ─── Instância do TipTap ──────────────────────────────────────────────────
+  // CORREÇÃO: StarterKit.configure({ link: false, underline: false }) evita
+  // o aviso "Duplicate extension names found: ['link', 'underline']"
+  // pois essas extensões são registradas manualmente abaixo com config própria.
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // @ts-ignore — válido em runtime, elimina extensões duplicadas
+        link: false,
+        underline: false,
+      }),
       Underline,
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       Highlight.configure({ multicolor: true }),
@@ -916,12 +807,10 @@ const conteudoSalvoRef = useRef(initialContent);
     editable: !somenteLeitura,
   });
 
-  // Atualiza editável quando muda somenteLeitura
   useEffect(() => {
     if (editor) editor.setEditable(!somenteLeitura);
   }, [somenteLeitura, editor]);
 
-  // Inicializa versões e eventos ao abrir documento
   useEffect(() => {
     if (editor && initialContent !== editor.getHTML()) {
       editor.commands.setContent(initialContent);
@@ -947,7 +836,6 @@ const conteudoSalvoRef = useRef(initialContent);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialContent]);
 
-  // Aviso ao fechar aba com alterações não salvas
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (editor && editor.getHTML() !== conteudoSalvoRef.current) {
@@ -959,7 +847,6 @@ const conteudoSalvoRef = useRef(initialContent);
     return () => window.removeEventListener('beforeunload', handler);
   }, [editor]);
 
-  // Fechar menu exportar ao clicar fora
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -973,7 +860,6 @@ const conteudoSalvoRef = useRef(initialContent);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Auto-save a cada 30 segundos
   useEffect(() => {
     const intervalo = setInterval(() => {
       if (!editor) return;
@@ -1005,7 +891,6 @@ const conteudoSalvoRef = useRef(initialContent);
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
 
-  // Upload local → base64 → insere imagem centralizada
   const inserirImagem = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -1163,8 +1048,6 @@ const conteudoSalvoRef = useRef(initialContent);
   const charCount = editor.storage.characterCount?.characters() ?? 0;
   const wordCount = editor.storage.characterCount?.words() ?? 0;
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
   return (
     <>
       <style>{`
@@ -1181,67 +1064,37 @@ const conteudoSalvoRef = useRef(initialContent);
           pointer-events: none;
           height: 0;
         }
-        .ProseMirror table {
-          border-collapse: collapse;
-          width: 100%;
-          margin: 12px 0;
+        .ProseMirror table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+        .ProseMirror td, .ProseMirror th {
+          border: 1px solid #cbd5e1; padding: 6px 10px;
+          min-width: 60px; position: relative; vertical-align: top;
         }
-        .ProseMirror td,
-        .ProseMirror th {
-          border: 1px solid #cbd5e1;
-          padding: 6px 10px;
-          min-width: 60px;
-          position: relative;
-          vertical-align: top;
-        }
-        .ProseMirror th {
-          background: #f1f5f9;
-          font-weight: 700;
-        }
-        .ProseMirror .selectedCell {
-          background: #dbeafe;
-        }
+        .ProseMirror th { background: #f1f5f9; font-weight: 700; }
+        .ProseMirror .selectedCell { background: #dbeafe; }
         .ProseMirror .column-resize-handle {
-          position: absolute;
-          right: -2px;
-          top: 0;
-          bottom: 0;
-          width: 4px;
-          background: #3b82f6;
-          cursor: col-resize;
-          z-index: 10;
+          position: absolute; right: -2px; top: 0; bottom: 0;
+          width: 4px; background: #3b82f6; cursor: col-resize; z-index: 10;
         }
         .ProseMirror blockquote {
-          border-left: 4px solid #3b82f6;
-          padding-left: 16px;
-          color: #475569;
-          font-style: italic;
-          margin: 12px 0;
+          border-left: 4px solid #3b82f6; padding-left: 16px;
+          color: #475569; font-style: italic; margin: 12px 0;
         }
         .ProseMirror code {
-          background: #f1f5f9;
-          border-radius: 4px;
-          padding: 2px 6px;
-          font-family: monospace;
-          font-size: 0.9em;
+          background: #f1f5f9; border-radius: 4px;
+          padding: 2px 6px; font-family: monospace; font-size: 0.9em;
         }
         .ProseMirror pre {
-          background: #1e293b;
-          color: #e2e8f0;
-          border-radius: 8px;
-          padding: 16px;
-          font-family: monospace;
-          overflow-x: auto;
+          background: #1e293b; color: #e2e8f0; border-radius: 8px;
+          padding: 16px; font-family: monospace; overflow-x: auto;
         }
         .ProseMirror h1 { font-size: 1.6em; font-weight: 800; margin: 16px 0 8px; }
         .ProseMirror h2 { font-size: 1.3em; font-weight: 700; margin: 14px 0 6px; }
         .ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 12px 0 4px; }
-        .ProseMirror ul { list-style: disc;    padding-left: 24px; }
+        .ProseMirror ul { list-style: disc; padding-left: 24px; }
         .ProseMirror ol { list-style: decimal; padding-left: 24px; }
         .ProseMirror a  { color: #2563eb; text-decoration: underline; }
       `}</style>
 
-      {/* Modais */}
       {mostrarModalSair && (
         <ModalSairSemSalvar
           titulo={tituloLocal}
@@ -1270,7 +1123,7 @@ const conteudoSalvoRef = useRef(initialContent);
 
       <div className="flex flex-col h-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
 
-        {/* ── TOPBAR ─────────────────────────────────────────────────────── */}
+        {/* TOPBAR */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-slate-100 bg-white sticky top-0 z-10">
           <div className="flex flex-col flex-1 mr-4">
             <input
@@ -1282,17 +1135,15 @@ const conteudoSalvoRef = useRef(initialContent);
             />
             <div className="flex items-center gap-2 mt-0.5">
               <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                documentoFinalizado       ? 'bg-green-100 text-green-700'  :
-                registroAssinatura        ? 'bg-green-100 text-green-700'  :
-                status === 'Review'       ? 'bg-amber-100 text-amber-700'  :
-                                            'bg-blue-100 text-blue-700'
+                documentoFinalizado  ? 'bg-green-100 text-green-700'  :
+                registroAssinatura   ? 'bg-green-100 text-green-700'  :
+                status === 'Review'  ? 'bg-amber-100 text-amber-700'  :
+                                       'bg-blue-100 text-blue-700'
               }`}>
                 {documentoFinalizado ? '✓ Finalizado' : registroAssinatura ? '✓ Assinado' : status}
               </span>
               {registroAssinatura && (
-                <span className="text-[10px] text-slate-400 font-mono">
-                  Protocolo: {registroAssinatura.protocol}
-                </span>
+                <span className="text-[10px] text-slate-400 font-mono">Protocolo: {registroAssinatura.protocol}</span>
               )}
               {statusAutoSave === 'salvando' && (
                 <span className="flex items-center gap-1 text-[10px] text-slate-400 animate-pulse">
@@ -1307,25 +1158,20 @@ const conteudoSalvoRef = useRef(initialContent);
               {statusAutoSave === 'idle' && ultimoSalvoEm && (
                 <span className="text-[10px] text-slate-300">Auto-save: {ultimoSalvoEm}</span>
               )}
-              <span className="text-[10px] text-slate-300 ml-2">
-                {wordCount} palavras · {charCount} caracteres
-              </span>
+              <span className="text-[10px] text-slate-300 ml-2">{wordCount} palavras · {charCount} caracteres</span>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Avatares usuários ativos */}
+            {/* Avatares coautores — busca usuários reais do banco */}
             <div className="flex -space-x-2 mr-1">
-              {[
-                { nome: 'Ana Silva',   cor: 'bg-blue-500'  },
-                { nome: 'Carlos Tech', cor: 'bg-green-500' },
-              ].map((u, i) => (
+              {dbService.users.selectAll().slice(0, 2).map((u, i) => (
                 <div
                   key={i}
-                  title={u.nome}
-                  className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${u.cor}`}
+                  title={u.name}
+                  className={`w-8 h-8 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white ${i === 0 ? 'bg-blue-500' : 'bg-green-500'}`}
                 >
-                  {u.nome.charAt(0)}
+                  {u.name.charAt(0)}
                 </div>
               ))}
             </div>
@@ -1351,18 +1197,8 @@ const conteudoSalvoRef = useRef(initialContent);
               </button>
               {mostrarMenuExportar && (
                 <div className="absolute right-0 top-10 bg-white border border-slate-100 rounded-xl shadow-xl z-50 py-2 min-w-[150px]">
-                  <button
-                    onClick={handleExportarPDF}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors"
-                  >
-                    📄 Exportar PDF
-                  </button>
-                  <button
-                    onClick={handleExportarDOCX}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  >
-                    📝 Exportar DOCX
-                  </button>
+                  <button onClick={handleExportarPDF} className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-700 hover:bg-red-50 hover:text-red-600 transition-colors">📄 Exportar PDF</button>
+                  <button onClick={handleExportarDOCX} className="flex items-center gap-2 w-full px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 transition-colors">📝 Exportar DOCX</button>
                 </div>
               )}
             </div>
@@ -1377,67 +1213,28 @@ const conteudoSalvoRef = useRef(initialContent);
           </div>
         </div>
 
-        {/* ── TOOLBAR ────────────────────────────────────────────────────── */}
+        {/* TOOLBAR */}
         <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-slate-100 bg-white flex-wrap">
-
-          <BotaoToolbar
-            onClick={() => editor.chain().focus().undo().run()}
-            title="Desfazer"
-            disabled={!editor.can().undo()}
-          >
-            <Undo size={14} />
-          </BotaoToolbar>
-          <BotaoToolbar
-            onClick={() => editor.chain().focus().redo().run()}
-            title="Refazer"
-            disabled={!editor.can().redo()}
-          >
-            <Redo size={14} />
-          </BotaoToolbar>
+          <BotaoToolbar onClick={() => editor.chain().focus().undo().run()} title="Desfazer" disabled={!editor.can().undo()}><Undo size={14} /></BotaoToolbar>
+          <BotaoToolbar onClick={() => editor.chain().focus().redo().run()} title="Refazer" disabled={!editor.can().redo()}><Redo size={14} /></BotaoToolbar>
           <Sep />
 
-          {/* Tamanho de fonte */}
-          <select
-            value={tamanhoFonte}
-            onChange={(e) => {
-              setTamanhoFonte(e.target.value);
-              (editor.chain().focus() as any).setFontSize(`${e.target.value}pt`).run();
-            }}
-            disabled={somenteLeitura}
-            className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16"
-          >
-            {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72].map((t) => (
-              <option key={t} value={t}>{t}pt</option>
-            ))}
+          <select value={tamanhoFonte} onChange={(e) => { setTamanhoFonte(e.target.value); (editor.chain().focus() as any).setFontSize(`${e.target.value}pt`).run(); }} disabled={somenteLeitura} className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16">
+            {[8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48, 72].map((t) => (<option key={t} value={t}>{t}pt</option>))}
           </select>
 
-          {/* Família de fonte */}
-          <select
-            value={fonteFamilia}
-            onChange={(e) => setFonteFamilia(e.target.value)}
-            disabled={somenteLeitura}
-            className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-36 ml-1"
-            style={{ fontFamily: fonteFamilia }}
-          >
+          <select value={fonteFamilia} onChange={(e) => setFonteFamilia(e.target.value)} disabled={somenteLeitura} className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-36 ml-1" style={{ fontFamily: fonteFamilia }}>
             <option value="Times New Roman" style={{ fontFamily: 'Times New Roman' }}>Times New Roman</option>
-            <option value="Arial"           style={{ fontFamily: 'Arial' }}>Arial</option>
+            <option value="Arial" style={{ fontFamily: 'Arial' }}>Arial</option>
           </select>
 
-          {/* Espaçamento */}
-          <select
-            value={espacamento}
-            onChange={(e) => setEspacamento(e.target.value)}
-            disabled={somenteLeitura}
-            title="Espaçamento entre linhas"
-            className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16 ml-1"
-          >
+          <select value={espacamento} onChange={(e) => setEspacamento(e.target.value)} disabled={somenteLeitura} title="Espaçamento entre linhas" className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16 ml-1">
             <option value="1">1.0</option>
             <option value="1.15">1.15</option>
             <option value="1.5">1.5</option>
             <option value="2">2.0</option>
           </select>
 
-          {/* Estilo de parágrafo */}
           <select
             onChange={(e) => {
               const v = e.target.value;
@@ -1446,11 +1243,7 @@ const conteudoSalvoRef = useRef(initialContent);
               if (v === 'h2') editor.chain().focus().toggleHeading({ level: 2 }).run();
               if (v === 'h3') editor.chain().focus().toggleHeading({ level: 3 }).run();
             }}
-            value={
-              editor.isActive('heading', { level: 1 }) ? 'h1' :
-              editor.isActive('heading', { level: 2 }) ? 'h2' :
-              editor.isActive('heading', { level: 3 }) ? 'h3' : 'p'
-            }
+            value={editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : editor.isActive('heading', { level: 3 }) ? 'h3' : 'p'}
             disabled={somenteLeitura}
             className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-24 ml-1"
           >
@@ -1461,206 +1254,93 @@ const conteudoSalvoRef = useRef(initialContent);
           </select>
           <Sep />
 
-          {/* Formatação de texto */}
           <BotaoToolbar onClick={() => editor.chain().focus().toggleBold().run()}      title="Negrito"    ativo={editor.isActive('bold')}      disabled={somenteLeitura}><Bold          size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleItalic().run()}    title="Itálico"    ativo={editor.isActive('italic')}    disabled={somenteLeitura}><Italic        size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado" ativo={editor.isActive('underline')} disabled={somenteLeitura}><UnderlineIcon size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleStrike().run()}    title="Tachado"    ativo={editor.isActive('strike')}    disabled={somenteLeitura}><Strikethrough size={14} /></BotaoToolbar>
-          <BotaoToolbar
-            onClick={() => editor.chain().focus().toggleHighlight().run()}
-            title="Destacar"
-            ativo={editor.isActive('highlight')}
-            disabled={somenteLeitura}
-            className="text-yellow-500"
-          >
-            <Highlighter size={14} />
-          </BotaoToolbar>
+          <BotaoToolbar onClick={() => editor.chain().focus().toggleHighlight().run()} title="Destacar"   ativo={editor.isActive('highlight')} disabled={somenteLeitura} className="text-yellow-500"><Highlighter size={14} /></BotaoToolbar>
           <Sep />
 
-          {/* Alinhamento */}
           <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('left').run()}    title="Esquerda"   ativo={editor.isActive({ textAlign: 'left' })}    disabled={somenteLeitura}><AlignLeft    size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('center').run()}  title="Centro"     ativo={editor.isActive({ textAlign: 'center' })}  disabled={somenteLeitura}><AlignCenter  size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('right').run()}   title="Direita"    ativo={editor.isActive({ textAlign: 'right' })}   disabled={somenteLeitura}><AlignRight   size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justificar" ativo={editor.isActive({ textAlign: 'justify' })} disabled={somenteLeitura}><AlignJustify size={14} /></BotaoToolbar>
           <Sep />
 
-          {/* Listas e blocos */}
           <BotaoToolbar onClick={() => editor.chain().focus().toggleBulletList().run()}  title="Lista"          ativo={editor.isActive('bulletList')}  disabled={somenteLeitura}><List        size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada" ativo={editor.isActive('orderedList')} disabled={somenteLeitura}><ListOrdered size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleBlockquote().run()}  title="Citação"        ativo={editor.isActive('blockquote')}  disabled={somenteLeitura}><Quote       size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleCodeBlock().run()}   title="Código"         ativo={editor.isActive('codeBlock')}   disabled={somenteLeitura}><Code        size={14} /></BotaoToolbar>
           <Sep />
 
-          {/* Inserir elementos */}
-<BotaoToolbar onClick={inserirTabela} title="Inserir tabela" disabled={somenteLeitura} className="text-emerald-600">
-  <Table2 size={14} />
-</BotaoToolbar>
-<BotaoToolbar onClick={inserirImagem} title="Inserir imagem" disabled={somenteLeitura} className="text-purple-600">
-  <ImageIcon size={14} />
-</BotaoToolbar>
-<BotaoToolbar onClick={inserirLink} title="Inserir link" disabled={somenteLeitura} className="text-blue-600">
-  <LinkIcon size={14} />
-</BotaoToolbar>
-<BotaoToolbar
-  onClick={() => editor.chain().focus().setHorizontalRule().run()}
-  title="Linha divisória"
-  disabled={somenteLeitura}
->
-  <Minus size={14} />
-</BotaoToolbar>
-<Sep />
+          <BotaoToolbar onClick={inserirTabela} title="Inserir tabela" disabled={somenteLeitura} className="text-emerald-600"><Table2    size={14} /></BotaoToolbar>
+          <BotaoToolbar onClick={inserirImagem} title="Inserir imagem" disabled={somenteLeitura} className="text-purple-600"><ImageIcon size={14} /></BotaoToolbar>
+          <BotaoToolbar onClick={inserirLink}   title="Inserir link"   disabled={somenteLeitura} className="text-blue-600"  ><LinkIcon  size={14} /></BotaoToolbar>
+          <BotaoToolbar onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Linha divisória" disabled={somenteLeitura}><Minus size={14} /></BotaoToolbar>
+          <Sep />
 
-{editor.isActive('table') && (
-  <>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().mergeCells().run()}
-      title="Mesclar células selecionadas"
-      disabled={somenteLeitura || !editor.can().mergeCells()}
-      className="text-emerald-600"
-    >
-      <span className="text-[10px] font-bold">⊞</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().splitCell().run()}
-      title="Dividir célula mesclada"
-      disabled={somenteLeitura || !editor.can().splitCell()}
-      className="text-emerald-600"
-    >
-      <span className="text-[10px] font-bold">⊟</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().addColumnBefore().run()}
-      title="Adicionar coluna antes"
-      disabled={somenteLeitura}
-      className="text-slate-500"
-    >
-      <span className="text-[10px] font-bold">+|</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().addColumnAfter().run()}
-      title="Adicionar coluna depois"
-      disabled={somenteLeitura}
-      className="text-slate-500"
-    >
-      <span className="text-[10px] font-bold">|+</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().addRowBefore().run()}
-      title="Adicionar linha acima"
-      disabled={somenteLeitura}
-      className="text-slate-500"
-    >
-      <span className="text-[10px] font-bold">+—</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().addRowAfter().run()}
-      title="Adicionar linha abaixo"
-      disabled={somenteLeitura}
-      className="text-slate-500"
-    >
-      <span className="text-[10px] font-bold">—+</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().deleteColumn().run()}
-      title="Deletar coluna"
-      disabled={somenteLeitura}
-      className="text-rose-500"
-    >
-      <span className="text-[10px] font-bold">✕|</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().deleteRow().run()}
-      title="Deletar linha"
-      disabled={somenteLeitura}
-      className="text-rose-500"
-    >
-      <span className="text-[10px] font-bold">✕—</span>
-    </BotaoToolbar>
-    <BotaoToolbar
-      onClick={() => editor.chain().focus().deleteTable().run()}
-      title="Deletar tabela"
-      disabled={somenteLeitura}
-      className="text-rose-600"
-    >
-      <span className="text-[10px] font-bold">✕⊞</span>
-    </BotaoToolbar>
-    <Sep />
-  </>
-)}
-          {/* Headings rápidos */}
+          {editor.isActive('table') && (
+            <>
+              <BotaoToolbar onClick={() => editor.chain().focus().mergeCells().run()}      title="Mesclar células" disabled={somenteLeitura || !editor.can().mergeCells()} className="text-emerald-600"><span className="text-[10px] font-bold">⊞</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().splitCell().run()}       title="Dividir célula"  disabled={somenteLeitura || !editor.can().splitCell()}  className="text-emerald-600"><span className="text-[10px] font-bold">⊟</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().addColumnBefore().run()} title="Coluna antes"    disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">+|</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().addColumnAfter().run()}  title="Coluna depois"   disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">|+</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().addRowBefore().run()}    title="Linha acima"     disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">+—</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().addRowAfter().run()}     title="Linha abaixo"    disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">—+</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().deleteColumn().run()}    title="Deletar coluna"  disabled={somenteLeitura} className="text-rose-500"><span className="text-[10px] font-bold">✕|</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().deleteRow().run()}       title="Deletar linha"   disabled={somenteLeitura} className="text-rose-500"><span className="text-[10px] font-bold">✕—</span></BotaoToolbar>
+              <BotaoToolbar onClick={() => editor.chain().focus().deleteTable().run()}     title="Deletar tabela"  disabled={somenteLeitura} className="text-rose-600"><span className="text-[10px] font-bold">✕⊞</span></BotaoToolbar>
+              <Sep />
+            </>
+          )}
+
           <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()} title="H1" ativo={editor.isActive('heading', { level: 1 })} disabled={somenteLeitura}><Heading1 size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()} title="H2" ativo={editor.isActive('heading', { level: 2 })} disabled={somenteLeitura}><Heading2 size={14} /></BotaoToolbar>
           <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()} title="H3" ativo={editor.isActive('heading', { level: 3 })} disabled={somenteLeitura}><Heading3 size={14} /></BotaoToolbar>
 
-          {/* Ações do fluxo — direita da toolbar */}
           <div className="flex items-center gap-2 ml-auto">
-            <button
-              onClick={() => setMostrarModalAssinatura(true)}
-              disabled={!!registroAssinatura || documentoFinalizado}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold disabled:opacity-50"
-            >
+            <button onClick={() => setMostrarModalAssinatura(true)} disabled={!!registroAssinatura || documentoFinalizado} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold disabled:opacity-50">
               <FileCheck size={14} /> {registroAssinatura ? '✓ Assinado' : 'Assinar'}
             </button>
-            <button
-              onClick={handleFinalizarFluxo}
-              disabled={documentoFinalizado}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-bold disabled:opacity-50"
-            >
+            <button onClick={handleFinalizarFluxo} disabled={documentoFinalizado} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-bold disabled:opacity-50">
               <CheckCheck size={14} /> {documentoFinalizado ? '✓ Finalizado' : 'Finalizar Fluxo'}
             </button>
           </div>
         </div>
 
-        {/* ── ÁREA DO DOCUMENTO + SIDEBAR ──────────────────────────────── */}
+        {/* ÁREA DO DOCUMENTO + SIDEBAR */}
         <div className="flex flex-1 overflow-hidden">
 
-          {/* Página A4 */}
-<div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center">
-  <div className="w-full max-w-[816px]">
-    <div
-      className="bg-white shadow-xl border border-slate-200 min-h-[1056px] flex flex-col"
-      style={{
-        '--editor-fonte': fonteFamilia,
-        '--editor-espacamento': espacamento,
-      } as React.CSSProperties}
-    >
-      {/* Cabeçalho editável */}
-      <div
-        ref={refCabecalho}
-        contentEditable={!somenteLeitura}
-        suppressContentEditableWarning
-        className="px-[2cm] py-3 border-b border-dashed border-slate-300 text-xs focus:outline-none focus:bg-blue-50 transition-colors min-h-[40px]"
-        style={{ fontFamily: fonteFamilia, color: '#94a3b8' }}
-      >
-        {!somenteLeitura && (
-          <span className="pointer-events-none select-none italic">
-            Cabeçalho — clique para editar
-          </span>
-        )}
-      </div>
+          <div className="flex-1 overflow-y-auto p-8 bg-slate-100 flex justify-center">
+            <div className="w-full max-w-[816px]">
+              <div
+                className="bg-white shadow-xl border border-slate-200 min-h-[1056px] flex flex-col"
+                style={{ '--editor-fonte': fonteFamilia, '--editor-espacamento': espacamento } as React.CSSProperties}
+              >
+                <div
+                  ref={refCabecalho}
+                  contentEditable={!somenteLeitura}
+                  suppressContentEditableWarning
+                  className="px-[2cm] py-3 border-b border-dashed border-slate-300 text-xs focus:outline-none focus:bg-blue-50 transition-colors min-h-[40px]"
+                  style={{ fontFamily: fonteFamilia, color: '#94a3b8' }}
+                >
+                  {!somenteLeitura && <span className="pointer-events-none select-none italic">Cabeçalho — clique para editar</span>}
+                </div>
 
-      {/* Corpo do documento */}
-      <div className="flex-1 px-[2cm] py-[1cm]">
-        <EditorContent editor={editor} />
-      </div>
+                <div className="flex-1 px-[2cm] py-[1cm]">
+                  <EditorContent editor={editor} />
+                </div>
 
-      {/* Rodapé editável */}
-      <div
-        ref={refRodape}
-        contentEditable={!somenteLeitura}
-        suppressContentEditableWarning
-        className="px-[2cm] py-3 border-t border-dashed border-slate-300 text-xs focus:outline-none focus:bg-blue-50 transition-colors min-h-[40px]"
-        style={{ fontFamily: fonteFamilia, color: '#94a3b8' }}
-      >
-        {!somenteLeitura && (
-          <span className="pointer-events-none select-none italic">
-            Rodapé — clique para editar
-          </span>
-        )}
-      </div>
-    </div>
-
-  
+                <div
+                  ref={refRodape}
+                  contentEditable={!somenteLeitura}
+                  suppressContentEditableWarning
+                  className="px-[2cm] py-3 border-t border-dashed border-slate-300 text-xs focus:outline-none focus:bg-blue-50 transition-colors min-h-[40px]"
+                  style={{ fontFamily: fonteFamilia, color: '#94a3b8' }}
+                >
+                  {!somenteLeitura && <span className="pointer-events-none select-none italic">Rodapé — clique para editar</span>}
+                </div>
+              </div>
 
               {registroAssinatura && (
                 <div className="bg-white shadow-xl border border-slate-200 px-[2cm] pb-[2cm]">
@@ -1670,74 +1350,37 @@ const conteudoSalvoRef = useRef(initialContent);
             </div>
           </div>
 
-          {/* ── SIDEBAR ─────────────────────────────────────────────────── */}
+          {/* SIDEBAR */}
           <div className="w-80 border-l border-slate-200 bg-white flex flex-col">
-
-            {/* Abas */}
             <div className="flex border-b border-slate-200">
-              <button
-                onClick={() => { setAbaAtiva('ia'); setMostrarMembros(false); }}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'ia' && !mostrarMembros
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => { setAbaAtiva('ia'); setMostrarMembros(false); }} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'ia' && !mostrarMembros ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <Sparkles size={12} className="inline mr-1" /> IA
               </button>
-              <button
-                onClick={() => { setAbaAtiva('comentarios'); setMostrarMembros(false); }}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'comentarios' && !mostrarMembros
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => { setAbaAtiva('comentarios'); setMostrarMembros(false); }} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'comentarios' && !mostrarMembros ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <MessageSquare size={12} className="inline mr-1" /> Comentários
               </button>
-              <button
-                onClick={() => { setAbaAtiva('historico'); setMostrarMembros(false); }}
-                className={`flex-1 py-3 text-xs font-semibold transition-colors ${
-                  abaAtiva === 'historico' && !mostrarMembros
-                    ? 'text-blue-600 border-b-2 border-blue-600'
-                    : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => { setAbaAtiva('historico'); setMostrarMembros(false); }} className={`flex-1 py-3 text-xs font-semibold transition-colors ${abaAtiva === 'historico' && !mostrarMembros ? 'text-blue-600 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
                 <Clock size={12} className="inline mr-1" /> Histórico
               </button>
-              <button
-                onClick={() => setMostrarMembros((v) => !v)}
-                title="Inserir membro do banco"
-                className={`px-3 py-3 text-xs font-semibold transition-colors border-l border-slate-100 ${
-                  mostrarMembros ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-600'
-                }`}
-              >
+              <button onClick={() => setMostrarMembros((v) => !v)} title="Inserir membro do banco" className={`px-3 py-3 text-xs font-semibold transition-colors border-l border-slate-100 ${mostrarMembros ? 'text-blue-600 bg-blue-50' : 'text-slate-400 hover:text-slate-600'}`}>
                 <Users size={14} />
               </button>
             </div>
 
-            {/* Painel de Membros */}
             {mostrarMembros && (
               <div className="flex-1 overflow-hidden flex flex-col">
                 <div className="px-4 py-3 border-b border-slate-100 bg-blue-50">
-                  <p className="text-xs font-black text-blue-700 flex items-center gap-2">
-                    <Users size={14} /> Membros Cadastrados
-                  </p>
-                  <p className="text-[10px] text-blue-500 mt-0.5">
-                    Clique para inserir no cursor do documento
-                  </p>
+                  <p className="text-xs font-black text-blue-700 flex items-center gap-2"><Users size={14} /> Membros Cadastrados</p>
+                  <p className="text-[10px] text-blue-500 mt-0.5">Clique para inserir no cursor do documento</p>
                 </div>
                 <PainelMembros onInserir={handleInserirMembro} />
               </div>
             )}
 
-            {/* Conteúdo das abas */}
             {!mostrarMembros && (
               <>
                 {abaAtiva === 'ia' && (
                   <div className="flex-1 overflow-y-auto p-4 space-y-5">
-
-                    {/* Comando de edição via IA */}
                     <div className="space-y-3">
                       <h4 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-2">
                         <Sparkles size={14} className="text-indigo-600" /> Comando de Edição
@@ -1759,36 +1402,20 @@ const conteudoSalvoRef = useRef(initialContent);
                       </button>
                     </div>
 
-                    {/* Feedback da IA */}
                     {analiseIA && (
-                      <div className={`border p-4 rounded-xl relative ${
-                        analiseIA.startsWith('⚠️') ? 'bg-red-50 border-red-200'   :
-                        analiseIA.startsWith('✓')  ? 'bg-green-50 border-green-200' :
-                        'bg-slate-50 border-slate-200'
-                      }`}>
-                        <button
-                          onClick={() => setAnaliseIA(null)}
-                          className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"
-                        >
-                          <X size={14} />
-                        </button>
+                      <div className={`border p-4 rounded-xl relative ${analiseIA.startsWith('⚠️') ? 'bg-red-50 border-red-200' : analiseIA.startsWith('✓') ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-200'}`}>
+                        <button onClick={() => setAnaliseIA(null)} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600"><X size={14} /></button>
                         <h4 className="text-[10px] font-bold text-slate-400 uppercase mb-2">Feedback</h4>
                         <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{analiseIA}</p>
                       </div>
                     )}
 
-                    {/* Checklist REURB */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                       <h4 className="text-xs font-bold text-slate-700 uppercase mb-3 flex items-center gap-2">
                         <CheckCircle2 size={14} className="text-green-600" /> Checklist de REURB
                       </h4>
                       <ul className="space-y-2">
-                        {[
-                          'Qualificação Completa',
-                          'Fundamentação Art. 12',
-                          'Indicação de Beneficiários',
-                          'Equipe técnica designada',
-                        ].map((item, idx) => (
+                        {['Qualificação Completa', 'Fundamentação Art. 12', 'Indicação de Beneficiários', 'Equipe técnica designada'].map((item, idx) => (
                           <li key={idx} className="flex items-center justify-between text-xs">
                             <span className="text-slate-500">{item}</span>
                             <CheckCircle2 size={14} className="text-green-500" />
@@ -1797,34 +1424,22 @@ const conteudoSalvoRef = useRef(initialContent);
                       </ul>
                     </div>
 
-                    {/* Metadados Jurídicos */}
                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                       <h4 className="text-xs font-bold text-slate-400 uppercase mb-3">Metadados Jurídicos</h4>
                       <div className="space-y-2">
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Normativa</span>
-                          <span className="text-slate-700">Lei 13.465/17</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Autor</span>
-                          <span className="text-slate-700">{currentUser?.name || 'Usuário'}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Fonte</span>
-                          <span className="text-slate-700">{fonteFamilia}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Espaçamento</span>
-                          <span className="text-slate-700">{espacamento}x</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Palavras</span>
-                          <span className="text-slate-700">{wordCount}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-slate-400 uppercase font-bold text-[10px]">Caracteres</span>
-                          <span className="text-slate-700">{charCount}</span>
-                        </div>
+                        {[
+                          { label: 'Normativa',   value: 'Lei 13.465/17'               },
+                          { label: 'Autor',       value: currentUser?.name || 'Usuário' },
+                          { label: 'Fonte',       value: fonteFamilia                  },
+                          { label: 'Espaçamento', value: `${espacamento}x`             },
+                          { label: 'Palavras',    value: String(wordCount)             },
+                          { label: 'Caracteres',  value: String(charCount)             },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex justify-between text-xs">
+                            <span className="text-slate-400 uppercase font-bold text-[10px]">{label}</span>
+                            <span className="text-slate-700">{value}</span>
+                          </div>
+                        ))}
                         {registroAssinatura && (
                           <div className="flex justify-between text-xs">
                             <span className="text-slate-400 uppercase font-bold text-[10px]">Protocolo</span>
@@ -1840,7 +1455,7 @@ const conteudoSalvoRef = useRef(initialContent);
                   <PainelComentarios
                     nomeUsuario={currentUser?.name || 'Usuário'}
                     cargoUsuario={currentUser?.role || 'Operador'}
-                     editor={editor}
+                    editor={editor}
                   />
                 )}
 

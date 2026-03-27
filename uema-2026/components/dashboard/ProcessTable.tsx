@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Database } from 'lucide-react';
-import { REURBProcess, ProcessStatus } from '../../types/index';
+import { REURBProcess, ProcessStatus } from '../../constants';
+
 import { ProcessDrawer } from './ProcessDrawer';
 
 interface ProcessTableProps {

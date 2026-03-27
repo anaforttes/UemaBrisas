@@ -97,3 +97,57 @@ body {
 h1, h2, h3, h4 {
   letter-spacing: -0.025em;
 }
+/* ── Configurações de tema ─────────────────────────────────────────────── */
+:root {
+  --cor-principal: #2563eb;
+  --fonte-global: 15px;
+}
+
+html { font-size: var(--fonte-global); }
+
+/* Tema escuro */
+html.tema-escuro {
+  filter: invert(1) hue-rotate(180deg);
+}
+html.tema-escuro img,
+html.tema-escuro video {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Tema preto e branco */
+html.tema-pb {
+  filter: grayscale(1);
+}
+
+/* Alto contraste */
+html.alto-contraste {
+  filter: contrast(1.4);
+}
+
+/* Reduzir animações */
+html.reduzir-animacoes *,
+html.reduzir-animacoes *::before,
+html.reduzir-animacoes *::after {
+  animation-duration: 0.001ms !important;
+  transition-duration: 0.001ms !important;
+}
+
+/* Aumentar textos */
+html.aumentar-textos {
+  font-size: calc(var(--fonte-global) * 1.15);
+}
+
+/* Destacar foco */
+html.destacar-foco *:focus {
+  outline: 3px solid var(--cor-principal) !important;
+  outline-offset: 3px !important;
+}
+
+/* Melhorar legibilidade */
+html.melhorar-legibilidade button,
+html.melhorar-legibilidade input,
+html.melhorar-legibilidade select,
+html.melhorar-legibilidade textarea {
+  min-height: 44px;
+  font-size: 1rem;
+}

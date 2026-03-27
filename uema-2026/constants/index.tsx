@@ -1,574 +1,437 @@
-import { DocumentModel, REURBProcess, ProcessStatus } from '../types/index';
+// ─── Tipos de Usuário ─────────────────────────────────────────────────────────
 
-// ─── Modelos de documentos ────────────────────────────────────────────────────
+export type TipoProfissional =
+  | 'Advogado'
+  | 'Engenheiro'
+  | 'Arquiteto'
+  | 'Topógrafo'
+  | 'Assistente Social'
+  | 'Geólogo'
+  | 'Cidadão'
+  | 'Terceirizado'
+  | 'Representante'
+  | 'Outro';
 
-export const MOCK_MODELS: DocumentModel[] = [
-  { id: 'm1', name: 'Portaria de Instauração',        type: 'Administrativo', version: '2.1', lastUpdated: '2024-01-10' },
-  { id: 'm2', name: 'Notificação de Confrontantes',   type: 'Notificação',    version: '1.5', lastUpdated: '2023-11-22' },
-  { id: 'm3', name: 'Relatório Técnico Social',       type: 'Técnico',        version: '3.0', lastUpdated: '2024-02-15' },
-  { id: 'm4', name: 'Auto de Demarcação Urbanística', type: 'Técnico',        version: '1.2', lastUpdated: '2024-03-01' },
-  { id: 'm5', name: 'Título de Legitimação Fundiária',type: 'Titularidade',   version: '4.2', lastUpdated: '2024-05-05' },
+export type UserRole = 'Admin' | 'Técnico' | 'Jurídico' | 'Atendente' | 'Gestor' | 'Auditor';
+
+export interface FlagsAcesso {
+  superusuario: boolean;
+  adminMunicipio: boolean;
+  profissionalInterno: boolean;
+  usuarioExterno: boolean;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  role: UserRole;
+  tipoProfissional?: TipoProfissional;
+  flags?: FlagsAcesso;
+  etapasPermitidas?: number[];
+  email: string;
+  avatar?: string;
+  password?: string;
+  lastLogin?: string;
+  status?: 'Online' | 'Offline';
+  quota?: {
+    limit: number;
+    used: number;
+    resetAt: string;
+  };
+  permissions?: {
+    visualizar: boolean;
+    editor: boolean;
+    comentar: boolean;
+    aprovar: boolean;
+    assinar: boolean;
+    exportar: boolean;
+  };
+}
+
+// ─── Etapas do REURB ──────────────────────────────────────────────────────────
+
+export type EixoEtapa = 'Técnico' | 'Jurídico' | 'Social' | 'Cartorial' | 'Geral';
+
+export type EtapaStatus =
+  | 'pendente'
+  | 'em_andamento'
+  | 'concluida'
+  | 'bloqueada'
+  | 'cancelada';
+
+export interface SubTarefa {
+  id: string;
+  descricao: string;
+  concluida: boolean;
+  prioridade: 'baixa' | 'media' | 'alta';
+}
+
+export interface REURBEtapa {
+  id: string;
+  processId: string;
+  numero: number;
+  nome: string;
+  eixo: EixoEtapa;
+  status: EtapaStatus;
+  responsavelId?: string;
+  responsavelNome?: string;
+  observacoes?: string;
+  dataInicio?: string;
+  dataConclusao?: string;
+  dependeDe?: number[];
+  subTarefas?: SubTarefa[];
+}
+
+// ─── As 14 Etapas Padrão ──────────────────────────────────────────────────────
+
+export const ETAPAS_PADRAO: Omit<REURBEtapa, 'id' | 'processId' | 'status'>[] = [
+  { numero: 1,  nome: 'Abertura / Protocolo',           eixo: 'Geral',      dependeDe: [] },
+  { numero: 2,  nome: 'Diagnóstico Prévio',             eixo: 'Geral',      dependeDe: [1] },
+  { numero: 3,  nome: 'Levantamento Topográfico',       eixo: 'Técnico',    dependeDe: [2] },
+  { numero: 4,  nome: 'Classificação da Modalidade',    eixo: 'Jurídico',   dependeDe: [2] },
+  { numero: 5,  nome: 'Buscas Dominiais',               eixo: 'Jurídico',   dependeDe: [4] },
+  { numero: 6,  nome: 'Notificação dos Confrontantes',  eixo: 'Jurídico',   dependeDe: [5] },
+  { numero: 7,  nome: 'Estudos Técnicos',               eixo: 'Técnico',    dependeDe: [3] },
+  { numero: 8,  nome: 'Vetorização + Cadastro Social',  eixo: 'Social',     dependeDe: [7] },
+  { numero: 9,  nome: 'Saneamento',                     eixo: 'Geral',      dependeDe: [6, 8] },
+  { numero: 10, nome: 'Elaboração do PRF',              eixo: 'Técnico',    dependeDe: [9] },
+  { numero: 11, nome: 'Aprovação do PRF',               eixo: 'Geral',      dependeDe: [10] },
+  { numero: 12, nome: 'Emissão da CRF',                 eixo: 'Geral',      dependeDe: [11] },
+  { numero: 13, nome: 'Registro em Cartório',           eixo: 'Cartorial',  dependeDe: [12] },
+  { numero: 14, nome: 'Monitoramento Pós-REURB',        eixo: 'Geral',      dependeDe: [13] },
 ];
 
-// ─── Processos mock — municípios de todo o Brasil ─────────────────────────────
-// Cada processo tem municipio + estado separados para uso na geolocalização.
-// Em produção: GET /api/processos → substitui esta lista.
+// ─── Processos ────────────────────────────────────────────────────────────────
+
+export enum ProcessStatus {
+  PENDENTE         = 'Pendente',
+  EM_ANDAMENTO     = 'Em Andamento',
+  INICIADO         = 'Iniciado',
+  LEVANTAMENTO     = 'Levantamento Técnico',
+  ANALISE_JURIDICA = 'Análise Jurídica',
+  EDITAL           = 'Em Edital',
+  DILIGENCIA       = 'Diligência',
+  EM_ANALISE       = 'Em Análise',
+  APROVADO         = 'Aprovado',
+  CONCLUIDO        = 'Concluído',
+  FINALIZADO       = 'Finalizado',
+  CANCELADO        = 'Cancelado',
+  ARQUIVADO        = 'Arquivado',
+  INICIAL          = 'Inicial',
+}
+
+export interface REURBProcess {
+  id: string;
+  protocol?: string;
+  protocolado: boolean;
+  title: string;
+  applicant: string;
+  location?: string;
+
+  // ── Campos de geolocalização ──────────────────────────────────────────────
+  // Separados da string location para uso direto na validação de GPS.
+  // Opcionais para manter retrocompatibilidade com dados existentes.
+  // Em produção virão do backend: GET /api/processos/:id
+  municipio?: string; // ex: "São Luís", "Fortaleza", "Belém"
+  estado?: string;    // ex: "MA", "CE", "PA"
+
+  type?: 'REURB-S' | 'REURB-E' | 'REURB-I' | 'REURB-S/E' | 'Usucapião';
+  modality: 'REURB-S' | 'REURB-E';
+  status: ProcessStatus;
+  responsibleName?: string;
+  createdAt: string;
+  updatedAt: string;
+  technicianId: string;
+  legalId: string;
+  area: string;
+  progress: number;
+}
+
+// ─── Mock de Processos ────────────────────────────────────────────────────────
 
 export const MOCK_PROCESSES: REURBProcess[] = [
-  // ── Maranhão ────────────────────────────────────────────────────────────────
   {
-    id: 'proc-001',
+    id: 'PR-2026-1001',
     protocol: '0001-2026',
     protocolado: true,
-    title: 'Núcleo Habitacional Vila Verde',
-    applicant: 'Associação de Moradores Vila Verde',
-    location: 'Bairro Coroadinho, São Luís — MA',
-    municipio: 'São Luís',
-    estado: 'MA',
+    title: 'Regularização Bairro São João',
+    applicant: 'Prefeitura Municipal',
+    location: 'Bairro São João',
     modality: 'REURB-S',
     status: ProcessStatus.EM_ANDAMENTO,
-    responsibleName: 'Eng. Carlos Souza',
-    createdAt: '2026-01-15T10:00:00Z',
-    updatedAt: '2026-03-01T14:00:00Z',
-    technicianId: 'user-001',
-    legalId: 'user-002',
-    area: '22.400 m²',
-    progress: 45,
-  },
-  {
-    id: 'proc-002',
-    protocol: '0002-2026',
-    protocolado: true,
-    title: 'Núcleo Habitacional São Luís II',
-    applicant: 'Comunidade do Bairro Jardim Tropical',
-    location: 'Bairro Jardim Tropical, São Luís — MA',
-    municipio: 'São Luís',
-    estado: 'MA',
-    modality: 'REURB-S',
-    status: ProcessStatus.LEVANTAMENTO,
-    responsibleName: 'Arq. Maria Lima',
-    createdAt: '2026-02-01T09:00:00Z',
-    updatedAt: '2026-03-10T11:00:00Z',
-    technicianId: 'user-001',
-    legalId: 'user-002',
-    area: '18.700 m²',
-    progress: 20,
-  },
-  {
-    id: 'proc-003',
-    protocol: '0003-2026',
-    protocolado: true,
-    title: 'Vila Maranhão — Regularização',
-    applicant: 'Prefeitura Municipal de Imperatriz',
-    location: 'Bairro Vila Lobão, Imperatriz — MA',
-    municipio: 'Imperatriz',
-    estado: 'MA',
-    modality: 'REURB-E',
-    status: ProcessStatus.ANALISE_JURIDICA,
-    responsibleName: 'Adv. João Melo',
-    createdAt: '2025-11-10T08:00:00Z',
-    updatedAt: '2026-02-20T16:00:00Z',
-    technicianId: 'user-003',
-    legalId: 'user-002',
-    area: '31.200 m²',
-    progress: 60,
-  },
-
-  // ── Ceará ────────────────────────────────────────────────────────────────────
-  {
-    id: 'proc-004',
-    protocol: '0004-2026',
-    protocolado: true,
-    title: 'Ocupação Mondubim — REURB-S',
-    applicant: 'Associação Comunitária do Mondubim',
-    location: 'Bairro Mondubim, Fortaleza — CE',
-    municipio: 'Fortaleza',
-    estado: 'CE',
-    modality: 'REURB-S',
-    status: ProcessStatus.EM_ANDAMENTO,
-    responsibleName: 'Eng. Fernanda Costa',
-    createdAt: '2026-01-20T10:00:00Z',
-    updatedAt: '2026-03-15T09:00:00Z',
-    technicianId: 'user-004',
-    legalId: 'user-005',
-    area: '14.500 m²',
+    responsibleName: 'Administrador do Sistema',
+    createdAt: '2026-01-10',
+    updatedAt: '2026-03-01',
+    technicianId: 'u-admin',
+    legalId: 'u-admin',
+    area: '15.000 m²',
     progress: 35,
   },
   {
-    id: 'proc-005',
-    protocol: '0005-2026',
+    id: 'PR-2026-1002',
+    protocol: '0002-2026',
     protocolado: false,
-    title: 'Núcleo Bom Jardim',
-    applicant: 'Comunidade Bom Jardim',
-    location: 'Bairro Bom Jardim, Fortaleza — CE',
-    municipio: 'Fortaleza',
-    estado: 'CE',
-    modality: 'REURB-S',
-    status: ProcessStatus.PENDENTE,
-    createdAt: '2026-03-01T08:00:00Z',
-    updatedAt: '2026-03-01T08:00:00Z',
-    technicianId: 'user-004',
-    legalId: 'user-005',
-    area: '9.800 m²',
-    progress: 5,
-  },
-
-  // ── Pará ─────────────────────────────────────────────────────────────────────
-  {
-    id: 'proc-006',
-    protocol: '0006-2025',
-    protocolado: true,
-    title: 'Comunidade Ribeirinha — Belém',
-    applicant: 'Associação dos Ribeirinhos do Tucunduba',
-    location: 'Bairro Jurunas, Belém — PA',
-    municipio: 'Belém',
-    estado: 'PA',
-    modality: 'REURB-S',
-    status: ProcessStatus.APROVADO,
-    responsibleName: 'Geog. Rafael Santos',
-    createdAt: '2025-06-10T10:00:00Z',
-    updatedAt: '2026-01-30T14:00:00Z',
-    technicianId: 'user-006',
-    legalId: 'user-007',
-    area: '28.300 m²',
-    progress: 90,
-  },
-
-  // ── Bahia ────────────────────────────────────────────────────────────────────
-  {
-    id: 'proc-007',
-    protocol: '0007-2025',
-    protocolado: true,
-    title: 'Ocupação Subúrbio Ferroviário',
-    applicant: 'Comunidade do Subúrbio Ferroviário',
-    location: 'Subúrbio Ferroviário, Salvador — BA',
-    municipio: 'Salvador',
-    estado: 'BA',
-    modality: 'REURB-S',
-    status: ProcessStatus.LEVANTAMENTO,
-    responsibleName: 'Ass. Social Beatriz Nunes',
-    createdAt: '2025-09-05T09:00:00Z',
-    updatedAt: '2026-02-14T11:00:00Z',
-    technicianId: 'user-008',
-    legalId: 'user-009',
-    area: '45.100 m²',
-    progress: 25,
-  },
-
-  // ── Minas Gerais ──────────────────────────────────────────────────────────────
-  {
-    id: 'proc-008',
-    protocol: '0008-2026',
-    protocolado: true,
-    title: 'Vila Esperança — BH',
-    applicant: 'Associação de Moradores Vila Esperança',
-    location: 'Bairro Barreiro, Belo Horizonte — MG',
-    municipio: 'Belo Horizonte',
-    estado: 'MG',
+    title: 'Loteamento Vila Nova',
+    applicant: 'Associação de Moradores',
+    location: 'Vila Nova',
     modality: 'REURB-E',
-    status: ProcessStatus.EM_ANDAMENTO,
-    responsibleName: 'Eng. Paulo Ferreira',
-    createdAt: '2026-02-10T10:00:00Z',
-    updatedAt: '2026-03-18T15:00:00Z',
-    technicianId: 'user-010',
-    legalId: 'user-011',
-    area: '12.600 m²',
-    progress: 40,
-  },
-
-  // ── São Paulo ─────────────────────────────────────────────────────────────────
-  {
-    id: 'proc-009',
-    protocol: '0009-2025',
-    protocolado: true,
-    title: 'Favela do Sapé — Regularização',
-    applicant: 'Associação Comunitária do Sapé',
-    location: 'Bairro Jaguaré, São Paulo — SP',
-    municipio: 'São Paulo',
-    estado: 'SP',
-    modality: 'REURB-S',
-    status: ProcessStatus.CONCLUIDO,
-    responsibleName: 'Arq. Luciana Torres',
-    createdAt: '2025-03-15T08:00:00Z',
-    updatedAt: '2026-01-20T17:00:00Z',
-    technicianId: 'user-012',
-    legalId: 'user-013',
-    area: '38.900 m²',
-    progress: 100,
-  },
-
-  // ── Rio de Janeiro ────────────────────────────────────────────────────────────
-  {
-    id: 'proc-010',
-    protocol: '0010-2026',
-    protocolado: true,
-    title: 'Comunidade Nova Holanda',
-    applicant: 'Associação de Moradores da Nova Holanda',
-    location: 'Complexo da Maré, Rio de Janeiro — RJ',
-    municipio: 'Rio de Janeiro',
-    estado: 'RJ',
-    modality: 'REURB-S',
-    status: ProcessStatus.ANALISE_JURIDICA,
-    responsibleName: 'Adv. Marcos Oliveira',
-    createdAt: '2026-01-08T10:00:00Z',
-    updatedAt: '2026-03-05T13:00:00Z',
-    technicianId: 'user-014',
-    legalId: 'user-015',
-    area: '52.700 m²',
-    progress: 55,
-  },
-
-  // ── Pernambuco ────────────────────────────────────────────────────────────────
-  {
-    id: 'proc-011',
-    protocol: '0011-2026',
-    protocolado: false,
-    title: 'ZEIS Coque — Recife',
-    applicant: 'Prefeitura do Recife — COHAB-PE',
-    location: 'Bairro Coque, Recife — PE',
-    municipio: 'Recife',
-    estado: 'PE',
-    modality: 'REURB-S',
     status: ProcessStatus.PENDENTE,
-    createdAt: '2026-03-10T09:00:00Z',
-    updatedAt: '2026-03-10T09:00:00Z',
-    technicianId: 'user-016',
-    legalId: 'user-017',
-    area: '19.300 m²',
+    responsibleName: 'Não atribuído',
+    createdAt: '2026-02-15',
+    updatedAt: '2026-02-15',
+    technicianId: '',
+    legalId: '',
+    area: '8.200 m²',
     progress: 0,
   },
-
-  // ── Goiás ─────────────────────────────────────────────────────────────────────
   {
-    id: 'proc-012',
-    protocol: '0012-2025',
+    id: 'PR-2026-1003',
+    protocol: '0003-2026',
     protocolado: true,
-    title: 'Setor Santa Genoveva',
-    applicant: 'Comunidade Setor Santa Genoveva',
-    location: 'Setor Santa Genoveva, Goiânia — GO',
-    municipio: 'Goiânia',
-    estado: 'GO',
-    modality: 'REURB-E',
-    status: ProcessStatus.FINALIZADO,
-    responsibleName: 'Eng. Thiago Borges',
-    createdAt: '2024-08-20T10:00:00Z',
-    updatedAt: '2025-12-10T16:00:00Z',
-    technicianId: 'user-018',
-    legalId: 'user-019',
-    area: '7.400 m²',
-    progress: 100,
+    title: 'Ocupação Irregular Zona Oeste',
+    applicant: 'Secretaria de Habitação',
+    location: 'Zona Oeste',
+    modality: 'REURB-S',
+    status: ProcessStatus.ANALISE_JURIDICA,
+    responsibleName: 'Administrador do Sistema',
+    createdAt: '2026-01-20',
+    updatedAt: '2026-03-10',
+    technicianId: 'u-admin',
+    legalId: 'u-admin',
+    area: '22.500 m²',
+    progress: 60,
   },
 ];
 
-// ─── getConteudoModelo ────────────────────────────────────────────────────────
-// Gera o HTML do documento já preenchido com os dados reais do processo.
-// Funciona para qualquer modelo — novos modelos adicionados ao MOCK_MODELS
-// herdam automaticamente o template genérico (caso padrão do switch).
-//
-// Em produção: os templates podem vir de GET /api/modelos/:id/template
-// e os dados do processo de GET /api/processos/:id
+// ─── Documentos ───────────────────────────────────────────────────────────────
 
-export function getConteudoModelo(modeloId: string, processo: REURBProcess): string {
-
-  // ── Dados extraídos do processo ───────────────────────────────────────────
-  const municipio       = processo.municipio || extrairMunicipio(processo.location || '');
-  const estado          = processo.estado    || extrairEstado(processo.location    || '');
-  const municipioEstado = `${municipio} — ${estado}`;
-  const protocolo       = processo.protocol  || processo.id;
-  const modalidade      = processo.modality  || 'REURB-S';
-  const requerente      = processo.applicant;
-  const nucleo          = processo.title;
-  const responsavel     = processo.responsibleName || '________________________';
-  const area            = processo.area || '________________';
-  const hoje            = new Date().toLocaleDateString('pt-BR', {
-    day: 'numeric', month: 'long', year: 'numeric',
-  });
-
-  // ── Variáveis institucionais ───────────────────────────────────────────────
-  // Lidas do .env quando disponíveis — fallback para valores padrão
-  const secretaria  = import.meta.env?.VITE_SECRETARIA  || 'Secretaria Municipal de Habitação e Regularização Fundiária';
-  const normativa   = import.meta.env?.VITE_NORMATIVA   || 'Lei Federal nº 13.465/2017';
-  const secretario  = import.meta.env?.VITE_SECRETARIO  || '________________________';
-  const cargoSecret = import.meta.env?.VITE_CARGO_SECRETARIO || 'Secretário(a) Municipal de Habitação';
-
-  // ── Estilo compartilhado dos campos editáveis ─────────────────────────────
-  const F = (valor: string) =>
-    `<span style="color:#2563eb;font-weight:600;border-bottom:1.5px dashed #93c5fd;padding:0 2px;">${valor}</span>`;
-
-  const AVISO = `
-    <div style="margin:20px 0;padding:12px 16px;border-left:4px solid #f59e0b;background:#fffbeb;border-radius:0 8px 8px 0;font-size:12px;color:#78350f;">
-      ⚠️ Os campos destacados em azul são editáveis. Clique para alterar diretamente no editor.
-    </div>`;
-
-  const ASSINATURA = `
-    <div style="margin-top:40px;text-align:center;">
-      <p style="margin-bottom:40px;">${municipio}, ${F(hoje)}.</p>
-      <p>______________________________</p>
-      <p>${F(secretario)}</p>
-      <p style="font-size:12px;color:#666;">${cargoSecret}</p>
-    </div>`;
-
-  // ── Switch por modelo ─────────────────────────────────────────────────────
-
-  switch (modeloId) {
-
-    // ── m1: Portaria de Instauração ──────────────────────────────────────────
-    case 'm1': return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        PORTARIA DE INSTAURAÇÃO REURB
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        O(A) ${F(secretario)}, ${cargoSecret} do Município de ${F(municipio)},
-        Estado do ${F(estado)}, no uso de suas atribuições legais e regulamentares,
-        considerando o disposto na <strong>${normativa}</strong>, resolve:
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 1º</strong> — Instaurar o procedimento de Regularização Fundiária
-        Urbana de Interesse Social (<strong>${modalidade}</strong>) no núcleo urbano
-        informal denominado ${F(nucleo)}, localizado em ${F(municipioEstado)},
-        requerido por ${F(requerente)}, com área aproximada de ${F(area)}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 2º</strong> — Designar o(a) profissional ${F(responsavel)}
-        como Responsável Técnico(a) pelo levantamento planialtimétrico, elaboração
-        do Projeto de Regularização Fundiária e identificação dos beneficiários.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 3º</strong> — Esta Portaria entra em vigor na data de sua
-        publicação, revogadas as disposições em contrário.
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-
-    // ── m2: Notificação de Confrontantes ─────────────────────────────────────
-    case 'm2': return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        NOTIFICAÇÃO DE CONFRONTANTES
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        ${municipio}, ${F(hoje)}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Ao(s) Confrontante(s) do Núcleo Urbano Informal ${F(nucleo)},
-        localizado em ${F(municipioEstado)}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Assunto:</strong> Notificação sobre instauração de procedimento
-        ${F(modalidade)} — ${normativa}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Comunicamos a instauração do procedimento de Regularização Fundiária
-        Urbana (${F(modalidade)}) no núcleo urbano informal ${F(nucleo)},
-        requerido por ${F(requerente)}, com área de ${F(area)}, conforme
-        ${normativa}, processo nº ${F(protocolo)}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Nos termos do Art. 21 da ${normativa}, fica(m) o(s) confrontante(s)
-        notificado(s) para, querendo, manifestar-se no prazo de
-        ${F('30 (trinta)')} dias a partir do recebimento desta notificação.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Para mais informações, entre em contato com a ${secretaria},
-        localizada em ${F('________________________')},
-        telefone ${F('(__)____-____')}.
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-
-    // ── m3: Relatório Técnico Social ──────────────────────────────────────────
-    case 'm3': return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        RELATÓRIO TÉCNICO SOCIAL
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;margin:20px 0 8px;">1. Identificação do Núcleo</h2>
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Nome do Núcleo:</strong> ${F(nucleo)}<br/>
-        <strong>Município/Estado:</strong> ${F(municipioEstado)}<br/>
-        <strong>Requerente:</strong> ${F(requerente)}<br/>
-        <strong>Modalidade:</strong> ${F(modalidade)}<br/>
-        <strong>Área Total:</strong> ${F(area)}<br/>
-        <strong>Protocolo:</strong> ${F(protocolo)}
-      </p>
-
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;margin:20px 0 8px;">2. Caracterização Socioeconômica</h2>
-      <p style="margin-bottom:14px;line-height:1.8;">
-        O núcleo urbano ${F(nucleo)} possui aproximadamente ${F('___ famílias')}
-        beneficiárias, com renda média mensal de ${F('até 3 salários mínimos')}.
-        A ocupação data de ${F('____')} e apresenta características de
-        ${F('consolidação urbana / urbanização precária')}.
-      </p>
-
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;margin:20px 0 8px;">3. Infraestrutura</h2>
-      <p style="margin-bottom:14px;line-height:1.8;">
-        A área apresenta: ${F('abastecimento de água / rede elétrica / coleta de lixo')}.
-        Ausência de: ${F('saneamento básico / pavimentação / drenagem pluvial')}.
-      </p>
-
-      <h2 style="font-size:13px;font-weight:700;color:#1e293b;margin:20px 0 8px;">4. Conclusão e Recomendações</h2>
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Com base no levantamento realizado, recomenda-se a continuidade
-        do procedimento ${F(modalidade)} para o núcleo ${F(nucleo)},
-        por preencher os requisitos legais estabelecidos pela ${normativa}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Responsável Técnico:</strong> ${F(responsavel)}<br/>
-        <strong>Data do Levantamento:</strong> ${F(hoje)}
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-
-    // ── m4: Auto de Demarcação Urbanística ───────────────────────────────────
-    case 'm4': return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        AUTO DE DEMARCAÇÃO URBANÍSTICA
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        Aos ${F(hoje)}, no Município de ${F(municipio)}, Estado do ${F(estado)},
-        o(a) ${F(secretario)}, ${cargoSecret}, no uso de suas atribuições
-        conferidas pela ${normativa}, lavra o presente Auto de Demarcação
-        Urbanística referente ao núcleo ${F(nucleo)}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 1º</strong> — Fica demarcada a área de ${F(area)},
-        localizada em ${F(municipioEstado)}, destinada à Regularização
-        Fundiária Urbana na modalidade ${F(modalidade)}, conforme planta e
-        memorial descritivo elaborados pelo(a) responsável técnico(a)
-        ${F(responsavel)}, devidamente anexados a este processo.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 2º</strong> — A demarcação foi realizada com base em
-        levantamento topográfico georreferenciado, respeitando os limites
-        e confrontações descritos no memorial descritivo de fls.
-        ${F('___ a ___')}.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Art. 3º</strong> — O presente Auto será encaminhado ao
-        Cartório de Registro de Imóveis competente para as providências
-        previstas nos Art. 19 e seguintes da ${normativa}.
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-
-    // ── m5: Título de Legitimação Fundiária ──────────────────────────────────
-    case 'm5': return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        TÍTULO DE LEGITIMAÇÃO FUNDIÁRIA
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        O Município de ${F(municipio)}, Estado do ${F(estado)}, por meio de
-        ${F(secretario)}, ${cargoSecret}, no uso das atribuições que lhe
-        confere a ${normativa}, CONCEDE o presente Título de Legitimação
-        Fundiária ao(à) beneficiário(a) abaixo qualificado(a):
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Beneficiário(a):</strong> ${F('________________________')}<br/>
-        <strong>CPF/CNPJ:</strong> ${F('___.___.___-__')}<br/>
-        <strong>RG:</strong> ${F('__.___.___-_')}<br/>
-        <strong>Endereço:</strong> ${F(nucleo)}, ${F(municipioEstado)}<br/>
-        <strong>Núcleo Urbano:</strong> ${F(nucleo)}<br/>
-        <strong>Área do Imóvel:</strong> ${F(area)}<br/>
-        <strong>Processo:</strong> ${F(protocolo)}<br/>
-        <strong>Modalidade:</strong> ${F(modalidade)}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        O presente título foi expedido nos termos dos Art. 23 a 28 da
-        ${normativa}, constituindo forma originária de aquisição do direito
-        real de propriedade sobre o imóvel acima descrito.
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        O presente título deverá ser registrado no Cartório de Registro de
-        Imóveis da circunscrição imobiliária competente para produzir os
-        efeitos legais previstos na legislação.
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-
-    // ── Caso padrão: template genérico para qualquer modelo futuro ───────────
-    // Novos modelos adicionados ao MOCK_MODELS receberão automaticamente
-    // este template como base, evitando erros.
-    default: return `
-      <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        ${(MOCK_MODELS.find(m => m.id === modeloId)?.name || 'DOCUMENTO REURB').toUpperCase()}
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
-        Processo nº ${F(protocolo)} — ${secretaria}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;">
-        <strong>Núcleo Urbano:</strong> ${F(nucleo)}<br/>
-        <strong>Município/Estado:</strong> ${F(municipioEstado)}<br/>
-        <strong>Requerente:</strong> ${F(requerente)}<br/>
-        <strong>Modalidade:</strong> ${F(modalidade)}<br/>
-        <strong>Área:</strong> ${F(area)}<br/>
-        <strong>Responsável Técnico:</strong> ${F(responsavel)}<br/>
-        <strong>Data:</strong> ${F(hoje)}
-      </p>
-
-      <p style="margin-bottom:14px;line-height:1.8;color:#64748b;font-style:italic;">
-        [Conteúdo específico deste modelo será adicionado pelo setor jurídico.
-        Os dados do processo acima já estão preenchidos automaticamente.]
-      </p>
-
-      ${AVISO}
-      ${ASSINATURA}`;
-  }
+export interface DocumentModel {
+  id: string;
+  name: string;
+  type: string;
+  version: string;
+  lastUpdated: string;
 }
 
-// ─── Helpers internos ─────────────────────────────────────────────────────────
-// Extraem município/estado da string de location quando os campos separados
-// não estiverem disponíveis (retrocompatibilidade com dados antigos).
-
-function extrairMunicipio(location: string): string {
-  // Espera formato: "Bairro X, Município — UF" ou "Município — UF"
-  const partes = location.split(',');
-  if (partes.length >= 2) {
-    return partes[partes.length - 1].split('—')[0].trim();
-  }
-  return location.split('—')[0].trim() || '________________________';
+export interface REURBDocument {
+  id: string;
+  processId: string;
+  title: string;
+  content: string;
+  status: 'Draft' | 'Review' | 'Approved' | 'Signed';
+  authorId: string;
+  version: number;
+  updatedAt: string;
 }
 
-function extrairEstado(location: string): string {
-  // Extrai as 2 letras após o "—"
-  const match = location.match(/—\s*([A-Z]{2})/);
-  return match?.[1] || '__';
+// ─── Comentários ──────────────────────────────────────────────────────────────
+
+export interface Comment {
+  id: string;
+  authorName: string;
+  text: string;
+  timestamp: string;
+  resolved: boolean;
 }
+
+// ─── Auditoria ────────────────────────────────────────────────────────────────
+
+export type AcaoAuditoria =
+  | 'login'
+  | 'logout'
+  | 'criacao'
+  | 'edicao'
+  | 'exclusao'
+  | 'protocolo'
+  | 'mudanca_status'
+  | 'exportacao'
+  | 'assinatura';
+
+export interface LogAuditoria {
+  id: string;
+  usuarioId: string;
+  usuarioNome: string;
+  acao: AcaoAuditoria;
+  entidade: string;
+  entidadeId: string;
+  descricao: string;
+  ip?: string;
+  criadoEm: string;
+}
+// ─── Conteúdo dos Modelos ─────────────────────────────────────────────────────
+
+export const getConteudoModelo = (modelId: string, processo: REURBProcess): string => {
+  const p = processo;
+  const data = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
+
+  const cabecalho = `
+    <div style="text-align:center;margin-bottom:24px;">
+      <p style="font-size:11pt;font-weight:bold;margin:0;">PREFEITURA MUNICIPAL</p>
+      <p style="font-size:10pt;margin:0;">SECRETARIA DE REGULARIZAÇÃO FUNDIÁRIA URBANA</p>
+      <p style="font-size:10pt;margin:0;">${p.location || 'Município'}</p>
+    </div>
+  `;
+
+  const rodape = `
+    <div style="margin-top:48px;text-align:center;">
+      <p style="margin:0;">${p.location || 'Local'}, ${data}</p>
+      <br/><br/>
+      <p style="margin:0;">_____________________________________________</p>
+      <p style="margin:0;font-weight:bold;">${p.responsibleName || 'Responsável'}</p>
+      <p style="margin:0;">Secretaria de Regularização Fundiária</p>
+    </div>
+  `;
+
+  const modelos: Record<string, string> = {
+    m1: `
+      ${cabecalho}
+      <h2 style="text-align:center;font-size:13pt;">PORTARIA DE INSTAURAÇÃO Nº __/${new Date().getFullYear()}</h2>
+      <p style="text-align:justify;">
+        O Secretário Municipal de Regularização Fundiária, no uso de suas atribuições legais,
+        e com fundamento na Lei Federal nº 13.465/2017 e no Decreto Municipal correspondente,
+      </p>
+      <p style="text-align:justify;"><strong>RESOLVE:</strong></p>
+      <p style="text-align:justify;">
+        <strong>Art. 1º</strong> — Instaurar o procedimento de Regularização Fundiária Urbana (REURB)
+        referente ao núcleo urbano informal denominado <strong>"${p.title}"</strong>,
+        localizado em <strong>${p.location || 'localização não definida'}</strong>,
+        modalidade <strong>${p.modality}</strong>, protocolo nº <strong>${p.protocol || p.id}</strong>.
+      </p>
+      <p style="text-align:justify;">
+        <strong>Art. 2º</strong> — Fica designado como responsável técnico pelo processo o(a)
+        servidor(a) <strong>${p.responsibleName || 'a designar'}</strong>.
+      </p>
+      <p style="text-align:justify;">
+        <strong>Art. 3º</strong> — Esta Portaria entra em vigor na data de sua publicação.
+      </p>
+      ${rodape}
+    `,
+
+    m2: `
+      ${cabecalho}
+      <h2 style="text-align:center;font-size:13pt;">NOTIFICAÇÃO DE CONFRONTANTES</h2>
+      <p style="text-align:justify;">
+        Notificamos V.Sa. que foi instaurado procedimento de Regularização Fundiária Urbana
+        referente ao imóvel localizado em <strong>${p.location || 'área não especificada'}</strong>,
+        processo nº <strong>${p.protocol || p.id}</strong>, modalidade <strong>${p.modality}</strong>.
+      </p>
+      <p style="text-align:justify;">
+        Conforme disposto no Art. 9º da Lei Federal nº 13.465/2017, fica V.Sa. notificado(a)
+        para, querendo, apresentar impugnação no prazo de <strong>30 (trinta) dias</strong>
+        contados do recebimento desta notificação.
+      </p>
+      <p style="text-align:justify;">
+        A impugnação deverá ser dirigida à Secretaria de Regularização Fundiária do Município,
+        com as razões de fato e de direito que a fundamentem.
+      </p>
+      ${rodape}
+    `,
+
+    m3: `
+      ${cabecalho}
+      <h2 style="text-align:center;font-size:13pt;">RELATÓRIO TÉCNICO DE VISTORIA</h2>
+      <p><strong>Processo:</strong> ${p.protocol || p.id}</p>
+      <p><strong>Núcleo Urbano:</strong> ${p.title}</p>
+      <p><strong>Localização:</strong> ${p.location || 'Não definida'}</p>
+      <p><strong>Modalidade:</strong> ${p.modality}</p>
+      <p><strong>Responsável Técnico:</strong> ${p.responsibleName || 'A designar'}</p>
+      <p><strong>Data da Vistoria:</strong> ${data}</p>
+      <p><strong>Área Total:</strong> ${p.area || 'Não mensurada'}</p>
+      <br/>
+      <h3>1. OBJETO</h3>
+      <p style="text-align:justify;">
+        O presente relatório tem por objeto descrever as condições técnicas verificadas na
+        vistoria realizada no núcleo urbano informal <strong>"${p.title}"</strong>,
+        situado em <strong>${p.location || 'localização não definida'}</strong>.
+      </p>
+      <h3>2. SITUAÇÃO ENCONTRADA</h3>
+      <p style="text-align:justify;">[Descrever aqui as condições urbanísticas, infraestrutura existente, estimativa de famílias, etc.]</p>
+      <h3>3. CONCLUSÃO TÉCNICA</h3>
+      <p style="text-align:justify;">[Inserir conclusão técnica e recomendações para continuidade do processo REURB.]</p>
+      ${rodape}
+    `,
+
+    m4: `
+      ${cabecalho}
+      <h2 style="text-align:center;font-size:13pt;">TÍTULO DE LEGITIMAÇÃO FUNDIÁRIA INDIVIDUAL</h2>
+      <p style="text-align:center;font-size:10pt;">Art. 23 da Lei Federal nº 13.465/2017</p>
+      <br/>
+      <p style="text-align:justify;">
+        O MUNICÍPIO DE <strong>${p.location?.toUpperCase() || 'MUNICÍPIO'}</strong>, por meio da
+        Secretaria de Regularização Fundiária Urbana, no uso de suas atribuições legais,
+        conferidas pela Lei Federal nº 13.465/2017,
+      </p>
+      <p style="text-align:justify;"><strong>CONFERE</strong> o presente Título de Legitimação Fundiária ao(à) beneficiário(a):</p>
+      <p><strong>Nome:</strong> _______________________________________</p>
+      <p><strong>CPF:</strong> _______________________ <strong>RG:</strong> _______________________</p>
+      <p><strong>Estado Civil:</strong> _______________________</p>
+      <p><strong>Endereço do Imóvel:</strong> ${p.location || '_______________________________________'}</p>
+      <p><strong>Processo REURB nº:</strong> ${p.protocol || p.id}</p>
+      <p><strong>Modalidade:</strong> ${p.modality}</p>
+      <p><strong>Área do Imóvel:</strong> ${p.area || '_______________________'}</p>
+      <br/>
+      <p style="text-align:justify;">
+        Este título confere ao beneficiário a legitimação de posse do imóvel acima identificado,
+        nos termos do Art. 23 e seguintes da Lei Federal nº 13.465/2017.
+      </p>
+      <div style="margin-top:48px;display:grid;grid-template-columns:1fr 1fr;gap:32px;text-align:center;">
+        <div>
+          <p>_________________________________</p>
+          <p><strong>Prefeito Municipal</strong></p>
+        </div>
+        <div>
+          <p>_________________________________</p>
+          <p><strong>Beneficiário(a)</strong></p>
+        </div>
+        <div>
+          <p>_________________________________</p>
+          <p><strong>Secretário de Administração</strong></p>
+        </div>
+        <div>
+          <p>_________________________________</p>
+          <p><strong>Presidente da Comissão REURB</strong></p>
+        </div>
+      </div>
+    `,
+
+    m5: `
+      ${cabecalho}
+      <h2 style="text-align:center;font-size:13pt;">EDITAL DE NOTIFICAÇÃO</h2>
+      <p style="text-align:justify;">
+        A Secretaria de Regularização Fundiária Urbana do Município torna público que foi
+        instaurado procedimento de REURB referente ao núcleo urbano informal
+        <strong>"${p.title}"</strong>, localizado em <strong>${p.location || 'área não especificada'}</strong>,
+        processo nº <strong>${p.protocol || p.id}</strong>, modalidade <strong>${p.modality}</strong>.
+      </p>
+      <p style="text-align:justify;">
+        Ficam notificados todos os confrontantes e interessados para, no prazo de
+        <strong>30 (trinta) dias</strong> a contar da publicação deste edital, apresentarem
+        eventuais impugnações junto à Secretaria de Regularização Fundiária.
+      </p>
+      <p style="text-align:justify;">
+        O processo encontra-se disponível para consulta na sede da Secretaria, nos dias úteis,
+        durante o horário de expediente.
+      </p>
+      ${rodape}
+    `,
+  };
+
+  return modelos[modelId] ?? `
+    ${cabecalho}
+    <h2 style="text-align:center;">${MOCK_MODELS.find(m => m.id === modelId)?.name || 'Documento'}</h2>
+    <p>Processo: ${p.protocol || p.id}</p>
+    <p>Requerente: ${p.applicant}</p>
+    <p>Localização: ${p.location || 'Não definida'}</p>
+    <p>Modalidade: ${p.modality}</p>
+    ${rodape}
+  `;
+};
+// ─── Mock de Modelos Oficiais ─────────────────────────────────────────────────
+
+export const MOCK_MODELS: DocumentModel[] = [
+  { id: 'm1', name: 'Portaria de Instauração',              type: 'Portaria',     version: '2.1', lastUpdated: '2026-01-10' },
+  { id: 'm2', name: 'Notificação de Confrontantes',         type: 'Notificação',  version: '1.3', lastUpdated: '2026-01-15' },
+  { id: 'm3', name: 'Relatório Técnico de Vistoria',        type: 'Relatório',    version: '3.0', lastUpdated: '2026-02-01' },
+  { id: 'm4', name: 'Título de Legitimação Fundiária',      type: 'Título',       version: '1.8', lastUpdated: '2026-02-20' },
+  { id: 'm5', name: 'Edital de Notificação',                type: 'Edital',       version: '1.1', lastUpdated: '2026-03-05' },
+];

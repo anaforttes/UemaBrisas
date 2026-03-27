@@ -1,4 +1,3 @@
-
 export type UserRole = 'Admin' | 'Técnico' | 'Jurídico' | 'Atendente' | 'Gestor' | 'Auditor';
 
 export interface User {
@@ -10,6 +9,22 @@ export interface User {
   password?: string;
   lastLogin?: string;
   status?: 'Online' | 'Offline';
+  // ADICIONADO: Configurações de acesso (Flags)
+  flags?: {
+    superusuario: boolean;
+    adminMunicipio: boolean;
+    profissionalInterno: boolean;
+    usuarioExterno: boolean;
+  };
+  // ADICIONADO: Permissões detalhadas
+  permissions?: {
+    visualizar: boolean;
+    editor: boolean;
+    comentar: boolean;
+    aprovar: boolean;
+    assinar: boolean;
+    exportar: boolean;
+  };
   quota?: {
     limit: number;
     used: number;
