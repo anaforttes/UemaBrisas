@@ -30,9 +30,7 @@ Plataforma avançada para gestão e edição colaborativa de documentos de Regul
 4. **Acessar**:
    Abra o navegador em `http://localhost:5173`
 
-## 👤 Credenciais de Teste
-- **Login**: `admin@reurb.gov.br`
-- **Senha**: `Admin123!`
+
 
 ---
 *Desenvolvido para fins de gestão pública e modernização de processos de regularização fundiária.*
