@@ -45,6 +45,63 @@ class SQLDatabase {
       return users.find((u) => u.id === id);
     },
 
+    login: (email: string, password: string): { user: User } => {
+      const users = this.getStorage<User>('users');
+      const user = users.find((u) => u.email === email);
+
+      if (!user) {
+        throw new Error('Usuário não encontrado.');
+      }
+
+      if (user.password !== password) {
+        throw new Error('Senha incorreta.');
+      }
+
+      const idx = users.findIndex((u) => u.id === user.id);
+      users[idx].lastLogin = new Date().toISOString();
+      users[idx].status = 'Online';
+      localStorage.setItem('reurb_db_users', JSON.stringify(users));
+      localStorage.setItem('reurb_current_user', JSON.stringify(users[idx]));
+
+      return { user: users[idx] };
+    },
+
+    insert: (data: { name: string; email: string; password: string; role: string }): User => {
+      const users = this.getStorage<User>('users');
+
+      const emailExistente = users.find((u) => u.email === data.email);
+      if (emailExistente) {
+        throw new Error('Este e-mail já está cadastrado.');
+      }
+
+      const novoUsuario: User = {
+        id: `u-${Date.now()}`,
+        name: data.name,
+        email: data.email,
+        password: data.password,
+        role: (data.role as any) || 'Técnico',
+        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`,
+        status: 'Offline',
+        lastLogin: new Date().toISOString(),
+        quota: {
+          limit: 10000,
+          used: 0,
+          resetAt: new Date(Date.now() + 86400000).toISOString(),
+        },
+        flags: {
+          superusuario:        false,
+          adminMunicipio:      false,
+          profissionalInterno: true,
+          usuarioExterno:      false,
+        },
+        etapasPermitidas: [],
+      };
+
+      users.push(novoUsuario);
+      this.setStorage('users', users);
+      return novoUsuario;
+    },
+
     updateActivity: (userId: string) => {
       const users = this.getStorage<User>('users');
       const idx = users.findIndex((u) => u.id === userId);
@@ -299,7 +356,6 @@ class SQLDatabase {
       return docs.filter((d) => d.processId === processId);
     },
 
-    // Busca documento pelo ID — usado pelo EditorPage ao abrir /edit/:docId
     findById: (id: string): REURBDocument | undefined => {
       const docs = this.getStorage<REURBDocument>('documents');
       return docs.find((d) => d.id === id);
@@ -382,10 +438,10 @@ const initDB = () => {
         lastLogin: new Date().toISOString(),
         quota: { limit: 50000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() },
         flags: {
-          superusuario: true,
-          adminMunicipio: true,
+          superusuario:        true,
+          adminMunicipio:      true,
           profissionalInterno: true,
-          usuarioExterno: false,
+          usuarioExterno:      false,
         },
         etapasPermitidas: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       },
