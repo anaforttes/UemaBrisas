@@ -1,0 +1,1 @@
+# Permissoes do app processos.
