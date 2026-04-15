@@ -1,190 +1,278 @@
-
 import React, { useState } from 'react';
-import { X, User, MapPin, Layers, Ruler, ArrowRight, Search, Loader2 } from 'lucide-react';
-import { dbService } from '../../services/databaseService';
+import { X, Loader2, Plus } from 'lucide-react';
+import { criarProcesso } from '../../services/painelService';
+import { User } from '../../types/index';
 
 interface NewProcessModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccess: () => void;
-  currentUser: any;
+  currentUser: User;
 }
 
-export const NewProcessModal: React.FC<NewProcessModalProps> = ({ isOpen, onClose, onSuccess, currentUser }) => {
+interface FormData {
+  title: string;
+  applicant: string;
+  location: string;
+  modality: 'REURB-S' | 'REURB-E';
+  area: string;
+  municipio: string;
+  estado: string;
+  responsible_name: string;
+}
+
+const initialForm: FormData = {
+  title: '',
+  applicant: '',
+  location: '',
+  modality: 'REURB-S',
+  area: '',
+  municipio: '',
+  estado: '',
+  responsible_name: '',
+};
+
+export const NewProcessModal: React.FC<NewProcessModalProps> = ({
+  isOpen,
+  onClose,
+  onSuccess,
+  currentUser,
+}) => {
+  const [form, setForm] = useState<FormData>(initialForm);
   const [loading, setLoading] = useState(false);
-  const [searchingCep, setSearchingCep] = useState(false);
-  const [cep, setCep] = useState('');
-  const [form, setForm] = useState({
-    applicant: '',
-    location: '',
-    modality: 'REURB-S' as 'REURB-S' | 'REURB-E',
-    area: ''
-  });
+  const [erro, setErro] = useState('');
 
   if (!isOpen) return null;
 
-  const handleCepChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '');
-    setCep(value);
+  const updateField = (
+    field: keyof FormData,
+    value: string
+  ) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
 
-    if (value.length === 8) {
-      setSearchingCep(true);
-      try {
-        const response = await fetch(`https://viacep.com.br/ws/${value}/json/`);
-        const data = await response.json();
+  const validarFormulario = () => {
+    if (!form.title.trim()) return 'O título do processo é obrigatório.';
+    if (!form.applicant.trim()) return 'O requerente é obrigatório.';
+    if (!form.modality.trim()) return 'A modalidade é obrigatória.';
+    return '';
+  };
 
-        if (!data.erro) {
-          const address = `${data.logradouro}${data.logradouro ? ', ' : ''}${data.bairro} - ${data.localidade}/${data.uf}`;
-          setForm(prev => ({ ...prev, location: address }));
-        } else {
-          // Opcional: Feedback de CEP não encontrado
-        }
-      } catch (err) {
-        console.error("Erro ao buscar CEP:", err);
-      } finally {
-        setSearchingCep(false);
-      }
-    }
+  const limparFormulario = () => {
+    setForm(initialForm);
+    setErro('');
+  };
+
+  const handleClose = () => {
+    if (loading) return;
+    limparFormulario();
+    onClose();
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErro('');
+
+    const erroValidacao = validarFormulario();
+    if (erroValidacao) {
+      setErro(erroValidacao);
+      return;
+    }
+
     setLoading(true);
 
     try {
-      await dbService.processes.insert({
-        title: form.applicant,
+      await criarProcesso({
+        title: form.title,
         applicant: form.applicant,
-        location: form.location,
+        location: form.location || `${form.municipio} - ${form.estado}`.trim(),
         modality: form.modality,
-        area: form.area ? `${form.area} m²` : 'Não informada',
-        responsibleName: currentUser.name || 'Admin',
-        technicianId: currentUser.id,
-        legalId: currentUser.id
-      } as any);
+        area: form.area,
+        responsible_name: form.responsible_name || currentUser?.name || 'Administrador',
+        municipio: form.municipio,
+        estado: form.estado,
+        technician_id: Number(currentUser?.id) || 1,
+        legal_id: Number(currentUser?.id) || 1,
+      });
 
+      limparFormulario();
       onSuccess();
       onClose();
-      setForm({ applicant: '', location: '', modality: 'REURB-S', area: '' });
-      setCep('');
-    } catch (err) {
-      console.error(err);
-      alert("Erro ao criar processo.");
+    } catch (error) {
+      console.error(error);
+      setErro('Erro ao criar processo. Verifique os dados e tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white w-full max-w-lg rounded-[32px] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-        <div className="p-8 border-b border-slate-50 flex justify-between items-center bg-slate-50/50">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
+      <div className="w-full max-w-2xl rounded-[28px] bg-white shadow-2xl border border-slate-100 overflow-hidden">
+        <div className="flex items-center justify-between px-8 py-6 border-b border-slate-100">
           <div>
-            <h3 className="text-xl font-black text-slate-800 tracking-tight">Novo Processo REURB</h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Abertura de Protocolo Digital</p>
+            <h2 className="text-2xl font-black text-slate-800">
+              Novo Processo
+            </h2>
+            <p className="text-sm text-slate-400 mt-1">
+              Preencha os dados iniciais do processo REURB.
+            </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
-            <X size={24} />
+
+          <button
+            type="button"
+            onClick={handleClose}
+            className="p-2 rounded-xl hover:bg-slate-100 transition-all text-slate-500"
+          >
+            <X size={20} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-8 space-y-5">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-              <User size={12} /> Requerente (Nome Completo)
+        <form onSubmit={handleSubmit} className="px-8 py-6 space-y-5">
+          {erro && (
+            <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+              {erro}
+            </div>
+          )}
+
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Título do Processo *
             </label>
             <input
-              required
               type="text"
-              value={form.applicant}
-              onChange={(e) => setForm({ ...form, applicant: e.target.value })}
-              placeholder="Nome do cidadão ou associação"
-              className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+              value={form.title}
+              onChange={(e) => updateField('title', e.target.value)}
+              placeholder="Ex: Núcleo Habitacional Esperança"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
-            <div className="col-span-1 space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Search size={12} /> CEP
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Requerente *
+            </label>
+            <input
+              type="text"
+              value={form.applicant}
+              onChange={(e) => updateField('applicant', e.target.value)}
+              placeholder="Ex: Associação Vila Verde"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Localização
+            </label>
+            <input
+              type="text"
+              value={form.location}
+              onChange={(e) => updateField('location', e.target.value)}
+              placeholder="Ex: Coroadinho, São Luís - MA"
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Modalidade *
               </label>
-              <div className="relative">
-                <input
-                  type="text"
-                  maxLength={8}
-                  value={cep}
-                  onChange={handleCepChange}
-                  placeholder="00000000"
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all"
-                />
-                {searchingCep && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 size={16} className="text-blue-600 animate-spin" />
-                  </div>
-                )}
-              </div>
+              <select
+                value={form.modality}
+                onChange={(e) =>
+                  updateField('modality', e.target.value as 'REURB-S' | 'REURB-E')
+                }
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-bold text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
+              >
+                <option value="REURB-S">REURB-S</option>
+                <option value="REURB-E">REURB-E</option>
+              </select>
             </div>
 
-            <div className="col-span-2 space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <MapPin size={12} /> Localização / Núcleo
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Área
               </label>
               <input
-                required
                 type="text"
-                value={form.location}
-                onChange={(e) => setForm({ ...form, location: e.target.value })}
-                placeholder="Logradouro, Bairro - Cidade/UF"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+                value={form.area}
+                onChange={(e) => updateField('area', e.target.value)}
+                placeholder="Ex: 15400 m²"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Layers size={12} /> Modalidade
-              </label>
-              <div className="relative">
-                <select
-                  value={form.modality}
-                  onChange={(e) => setForm({ ...form, modality: e.target.value as any })}
-                  className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-black transition-all appearance-none"
-                >
-                  <option value="REURB-S">REURB-S (Social)</option>
-                  <option value="REURB-E">REURB-E (Específica)</option>
-                </select>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
-                  <ArrowRight size={14} className="rotate-90" />
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-400 uppercase ml-2 tracking-widest flex items-center gap-2">
-                <Ruler size={12} /> Área Est. (m²)
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Município
               </label>
               <input
-                type="number"
-                value={form.area}
-                onChange={(e) => setForm({ ...form, area: e.target.value })}
-                placeholder="Ex: 250"
-                className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-blue-50 focus:border-blue-200 focus:bg-white outline-none text-sm font-bold transition-all"
+                type="text"
+                value={form.municipio}
+                onChange={(e) => updateField('municipio', e.target.value)}
+                placeholder="Ex: São Luís"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
+              />
+            </div>
+
+            <div>
+              <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+                Estado
+              </label>
+              <input
+                type="text"
+                value={form.estado}
+                onChange={(e) => updateField('estado', e.target.value)}
+                placeholder="MA"
+                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
               />
             </div>
           </div>
 
-          <div className="pt-4">
+          <div>
+            <label className="block text-[11px] font-black uppercase tracking-widest text-slate-400 mb-2">
+              Responsável Técnico
+            </label>
+            <input
+              type="text"
+              value={form.responsible_name}
+              onChange={(e) => updateField('responsible_name', e.target.value)}
+              placeholder={currentUser?.name || 'Administrador'}
+              className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 text-sm font-medium text-slate-800 outline-none focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all"
+            />
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={loading}
+              className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-600 font-bold text-sm hover:bg-slate-200 transition-all disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+
             <button
               type="submit"
-              disabled={loading || searchingCep}
-              className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black text-sm uppercase tracking-widest shadow-2xl shadow-blue-100 hover:bg-blue-700 hover:-translate-y-1 active:translate-y-0 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:translate-y-0"
+              disabled={loading}
+              className="px-6 py-3 rounded-2xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-60 flex items-center gap-2"
             >
               {loading ? (
-                <Loader2 size={20} className="animate-spin" />
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Salvando...
+                </>
               ) : (
                 <>
-                  Gerar Novo Protocolo <ArrowRight size={20} />
+                  <Plus size={16} />
+                  Criar Processo
                 </>
               )}
             </button>
