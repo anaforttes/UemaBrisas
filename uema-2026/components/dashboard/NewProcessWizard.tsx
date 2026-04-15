@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 import { User } from '../../types/index';
+import { criarProcesso } from '../../services/processService';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
