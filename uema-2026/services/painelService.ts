@@ -1,27 +1,39 @@
+// painelService — versão local/mock
+// Todos os dados vêm do dbService (localStorage), sem chamada ao backend Django.
+
+import { dbService } from './databaseService';
+
 export async function buscarDashboard() {
-  const resposta = await fetch("http://127.0.0.1:8000/api/painel/dashboard/");
+  const processos = dbService.processes.selectAll();
 
-  if (!resposta.ok) {
-    throw new Error("Erro ao buscar dados do painel");
-  }
+  const ativos     = processos.filter(p => !['Concluído', 'Arquivado', 'Concluido'].includes(String(p.status))).length;
+  const em_revisao = processos.filter(p => String(p.status).toLowerCase().includes('revis')).length;
+  const concluidos = processos.filter(p => ['Concluído', 'Concluido'].includes(String(p.status))).length;
 
-  return resposta.json();
+  // Últimos 10 processos ordenados por data de atualização
+  const recentes = [...processos]
+    .sort((a, b) => new Date(b.updatedAt ?? b.createdAt ?? '').getTime()
+                  - new Date(a.updatedAt ?? a.createdAt ?? '').getTime())
+    .slice(0, 10);
+
+  return {
+    cards: { ativos, em_revisao, concluidos },
+    recentes,
+  };
 }
+
 export async function criarProcesso(data: any) {
-  const response = await fetch('http://127.0.0.1:8000/api/processos/', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(data),
+  // Salva localmente via dbService
+  const novoProcesso = dbService.processes.insert({
+    title:      data.titulo       ?? data.title      ?? 'Novo Processo',
+    applicant:  data.requerente   ?? data.applicant  ?? '',
+    modality:   data.modalidade   ?? data.modality   ?? 'REURB-S',
+    status:     data.status       ?? 'Em Andamento',
+    area:       data.area         ?? '',
+    municipio:  data.municipio    ?? '',
+    estado:     data.estado       ?? '',
+    progress:   10,
   });
 
-  const responseData = await response.json();
-
-  if (!response.ok) {
-    console.log('ERRO BACKEND:', responseData);
-    throw new Error(JSON.stringify(responseData));
-  }
-
-  return responseData;
+  return novoProcesso;
 }

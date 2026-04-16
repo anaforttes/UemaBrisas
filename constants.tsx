@@ -12,6 +12,7 @@ export const CURRENT_USER: User = {
 export const MOCK_PROCESSES: REURBProcess[] = [
   {
     id: 'PR-2024-001',
+    protocolado: true,
     title: 'Núcleo Habitacional Esperança',
     applicant: 'Associação de Moradores Vila Verde',
     modality: 'REURB-S',
@@ -25,6 +26,7 @@ export const MOCK_PROCESSES: REURBProcess[] = [
   },
   {
     id: 'PR-2024-005',
+    protocolado: true,
     title: 'Loteamento Jardim Aurora',
     applicant: 'Imobiliária Horizonte Ltda',
     modality: 'REURB-E',
@@ -38,6 +40,7 @@ export const MOCK_PROCESSES: REURBProcess[] = [
   },
   {
     id: 'PR-2023-089',
+    protocolado: true,
     title: 'Comunidade Santa Luzia',
     applicant: 'Secretaria de Habitação',
     modality: 'REURB-S',

@@ -58,8 +58,41 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
+
+    const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+
+    try {
+      // Tenta autenticar via Django API
+      const res = await fetch(`${API_URL}/api/autenticacao/login/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('reurb_access_token',  data.access);
+        localStorage.setItem('reurb_refresh_token', data.refresh);
+        const userPayload = parseJwt(data.access);
+        const apiUser = {
+          id:     String(userPayload?.user_id ?? userPayload?.sub ?? ''),
+          name:   data.nome   ?? data.name   ?? email.split('@')[0],
+          email:  data.email  ?? email,
+          role:   data.papel  ?? data.role   ?? 'Técnico',
+          avatar: data.avatar ?? '',
+        };
+        onLoginSuccess(apiUser);
+        navigate('/');
+        return;
+      }
+    } catch {
+      // API indisponível — tenta autenticação local abaixo
+    }
+
+    // Fallback: autenticação local (localStorage)
     const user = dbService.users.findByEmail(email);
     if (user && user.password === password) {
       const { password: _, ...safeUser } = user;

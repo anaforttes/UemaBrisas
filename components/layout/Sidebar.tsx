@@ -26,10 +26,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   }, []);
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Painel', path: '/' },
-    { icon: FolderKanban, label: 'Processos', path: '/processes' },
-    { icon: FileText, label: 'Modelos', path: '/templates' },
-    { icon: Users, label: 'Equipe', path: '/team' },
+    { icon: LayoutDashboard, label: 'Painel',        path: '/'          },
+    { icon: FolderKanban,    label: 'Processos',     path: '/processes' },
+    { icon: FileText,        label: 'Modelos',       path: '/templates' },
+    { icon: BarChart3,       label: 'Relatórios',    path: '/reports'   },
+    { icon: Users,           label: 'Equipe',        path: '/team'      },
+    { icon: Settings,        label: 'Configurações', path: '/settings'  },
   ];
 
   const quotaPercent = quota ? Math.min((quota.used / quota.limit) * 100, 100) : 0;

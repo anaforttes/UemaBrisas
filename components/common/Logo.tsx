@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { ShieldCheck, Home } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
@@ -45,20 +44,17 @@ export const Logo: React.FC<LogoProps> = ({ size = 'md', showText = true, light 
         
         <div className="relative">
           <ShieldCheck size={iconSizes[size]} strokeWidth={2.5} />
-          <div className="absolute -top-1 -right-1">
-             {/* Pequeno detalhe que remete a telhado/casa */}
-          </div>
         </div>
       </div>
 
       {showText && (
         <div className="flex flex-col leading-tight">
           <h1 className={`${textSizes[size]} font-black tracking-tighter ${light ? 'text-white' : 'text-slate-800'}`}>
-            REURB<span className="text-blue-600">Doc</span>
+            Regulariza<span className="text-blue-600">AI</span>
           </h1>
           {size !== 'sm' && (
             <span className={`text-[10px] font-bold uppercase tracking-[0.3em] ${light ? 'text-blue-200' : 'text-slate-400'}`}>
-              Flow Management
+              Regularização Fundiária
             </span>
           )}
         </div>

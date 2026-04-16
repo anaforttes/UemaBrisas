@@ -1,17 +1,64 @@
-
 import React, { useState, useEffect } from 'react';
-import { 
-  HashRouter as Router, Routes, Route, Navigate
+import {
+  HashRouter as Router, Routes, Route, Navigate, useParams,
 } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { User } from './types/index';
+import { User, REURBDocument } from './types/index';
 import { dbService } from './services/databaseService';
 import { Sidebar } from './components/layout/Sidebar';
 import { Dashboard } from './components/dashboard/Dashboard';
+import { Templates } from './components/dashboard/Templates';
+import { Reports } from './components/dashboard/Reports';
+import { Team } from './components/dashboard/Team';
+import { Configuracoes } from './components/dashboard/Configuracoes';
+import { ProcessManagement } from './components/dashboard/ProcessManagement';
 import Editor from './components/editor/Editor';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
+
+type DocumentStatus = 'Draft' | 'Review' | 'Approved' | 'Signed';
+
+// ─── EditorPage ───────────────────────────────────────────────────────────────
+
+interface EditorPageProps {
+  currentUser: User;
+}
+
+const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
+  const { docId } = useParams<{ docId: string }>();
+
+  const doc = docId ? (dbService.documents.findById(docId) ?? null) : null;
+
+  const titulo = doc?.title ?? 'Documento de Instauração';
+  const conteudo =
+    doc?.content ??
+    '<h1 style="text-align:center">PORTARIA DE INSTAURAÇÃO REURB</h1><p>Considerando a Lei Federal 13.465/2017...</p>';
+  const status = doc?.status ?? 'Draft';
+
+  const handleSave = (c: string, t: string, s?: string) => {
+    dbService.documents.upsert({
+      id: docId,
+      title: t,
+      content: c,
+      processId: doc?.processId ?? '',
+      status: (s || status) as DocumentStatus,
+    });
+  };
+
+  return (
+    <div className="h-full bg-slate-100 p-6">
+      <Editor
+        title={titulo}
+        status={status}
+        initialContent={conteudo}
+        onSave={handleSave}
+      />
+    </div>
+  );
+};
+
+// ─── App ──────────────────────────────────────────────────────────────────────
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -45,7 +92,7 @@ const App: React.FC = () => {
         <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={handleLogin} />} />
         <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
         <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
-        
+
         <Route path="/*" element={
           !user ? <Navigate to="/login" /> : (
             <div className="flex min-h-screen bg-slate-50 font-sans">
@@ -53,22 +100,12 @@ const App: React.FC = () => {
               <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
                 <Routes>
                   <Route path="/" element={<Dashboard user={user} />} />
-                  <Route path="/processes" element={<Dashboard user={user} />} />
-                  <Route path="/templates" element={<div className="p-10"><h2 className="text-2xl font-black">Modelos de Documentos</h2></div>} />
-                  <Route path="/settings" element={<div className="p-10"><h2 className="text-2xl font-black">Configurações</h2></div>} />
-                  <Route path="/edit/:docId" element={
-                    <div className="h-full bg-slate-100 p-6">
-                      <Editor 
-                        title="Documento de Instauração" 
-                        status="Draft"
-                        initialContent="<h1 style='text-align:center'>PORTARIA DE INSTAURAÇÃO REURB</h1><p>Considerando a Lei Federal 13.465/2017...</p>"
-                        onSave={(c, t) => {
-                          dbService.documents.upsert({ id: 'doc-1', title: t, content: c, processId: 'PR-2024-001' });
-                          alert('Documento salvo com sucesso!');
-                        }}
-                      />
-                    </div>
-                  } />
+                  <Route path="/processes" element={<ProcessManagement />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/team" element={<Team />} />
+                  <Route path="/settings" element={<Configuracoes />} />
+                  <Route path="/edit/:docId" element={<EditorPage currentUser={user} />} />
                 </Routes>
               </main>
             </div>
