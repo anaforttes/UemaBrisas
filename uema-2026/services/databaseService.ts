@@ -170,6 +170,27 @@ class SQLDatabase {
       const users = this.getStorage<User>('users');
       return users.find((u) => u.id === id);
     },
+
+    login: (email: string, password: string): { user: User } => {
+      const users = this.getStorage<User>('users');
+      const user = users.find((u) => u.email === email);
+
+      if (!user) {
+        throw new Error('Usuário não encontrado.');
+      }
+
+      if (user.password !== password) {
+        throw new Error('Senha incorreta.');
+      }
+
+      const idx = users.findIndex((u) => u.id === user.id);
+      users[idx].lastLogin = new Date().toISOString();
+      users[idx].status = 'Online';
+      localStorage.setItem('reurb_db_users', JSON.stringify(users));
+      localStorage.setItem('reurb_current_user', JSON.stringify(users[idx]));
+
+      return { user: users[idx] };
+    },
   };
 
   // ─── Processos ─────────────────────────────────────────────────────────────
