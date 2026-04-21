@@ -15,7 +15,8 @@ import {
   UserPlus,
   X,
 } from 'lucide-react';
-import { dbService as rawDbService } from '../../services/databaseService';
+
+// ─── Tipos ────────────────────────────────────────────────────────────────────
 
 export type UserRole =
   | 'Admin'
@@ -34,11 +35,6 @@ export interface UserFlags {
   usuarioExterno?: boolean;
 }
 
-export interface UserQuota {
-  used: number;
-  limit: number;
-}
-
 export interface User {
   id: string;
   name: string;
@@ -47,26 +43,14 @@ export interface User {
   role: UserRole;
   status?: UserStatus;
   lastLogin?: string;
-  quota?: UserQuota;
   flags?: UserFlags;
   permissions?: Record<string, boolean>;
 }
-
-type UsersService = {
-  users: { selectAll: () => User[] };
-};
-
-const dbService = rawDbService as unknown as UsersService;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const avatarFallback =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96"><rect width="96" height="96" rx="24" fill="%23e2e8f0"/><circle cx="48" cy="36" r="16" fill="%2394a3b8"/><path d="M20 80c4-14 17-22 28-22s24 8 28 22" fill="%2394a3b8"/></svg>';
-
-const safePercent = (used?: number, limit?: number) => {
-  if (!limit || limit <= 0) return 0;
-  return Math.max(0, Math.min(100, Math.round((Number(used || 0) / Number(limit)) * 100)));
-};
 
 const normalizeRole = (role?: string): UserRole => {
   switch (role) {
@@ -85,7 +69,9 @@ const formatLastSeen = (dateString?: string) => {
   if (!dateString) return 'Nunca acessou';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return 'Data inválida';
-  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
 };
 
 const getRoleBadge = (role: string) => {
@@ -104,10 +90,10 @@ const getRoleBadge = (role: string) => {
 
 const getFlagsBadges = (member: User) => {
   const badges: Array<{ label: string; cor: string }> = [];
-  if (member.flags?.superusuario)       badges.push({ label: 'Superusuário', cor: 'bg-purple-50 text-purple-700 border-purple-100' });
-  if (member.flags?.adminMunicipio)     badges.push({ label: 'Admin',        cor: 'bg-amber-50 text-amber-700 border-amber-100'   });
-  if (member.flags?.profissionalInterno) badges.push({ label: 'Profissional', cor: 'bg-blue-50 text-blue-700 border-blue-100'     });
-  if (member.flags?.usuarioExterno)     badges.push({ label: 'Externo',      cor: 'bg-slate-50 text-slate-500 border-slate-200'  });
+  if (member.flags?.superusuario)        badges.push({ label: 'Superusuário', cor: 'bg-purple-50 text-purple-700 border-purple-100' });
+  if (member.flags?.adminMunicipio)      badges.push({ label: 'Admin',        cor: 'bg-amber-50 text-amber-700 border-amber-100'   });
+  if (member.flags?.profissionalInterno) badges.push({ label: 'Profissional', cor: 'bg-blue-50 text-blue-700 border-blue-100'      });
+  if (member.flags?.usuarioExterno)      badges.push({ label: 'Externo',      cor: 'bg-slate-50 text-slate-500 border-slate-200'   });
   return badges;
 };
 
@@ -131,7 +117,7 @@ const gerarToken = () => {
   return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 };
 
-const salvarConvites  = (c: Convite[]) => localStorage.setItem(CONVITES_KEY, JSON.stringify(c));
+const salvarConvites   = (c: Convite[]) => localStorage.setItem(CONVITES_KEY, JSON.stringify(c));
 const carregarConvites = (): Convite[] => {
   try { const r = localStorage.getItem(CONVITES_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
 };
@@ -185,11 +171,11 @@ interface ModalConviteEquipeProps {
 }
 
 const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => {
-  const currentUser   = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
-  const [permissao, setPermissao]   = useState<'visualizar' | 'editar'>('visualizar');
-  const [expiraDias, setExpiraDias] = useState(7);
-  const [conviteGerado, setConviteGerado] = useState<Convite | null>(null);
-  const [copiado, setCopiado]       = useState(false);
+  const currentUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
+  const [permissao, setPermissao]           = useState<'visualizar' | 'editar'>('visualizar');
+  const [expiraDias, setExpiraDias]         = useState(7);
+  const [conviteGerado, setConviteGerado]   = useState<Convite | null>(null);
+  const [copiado, setCopiado]               = useState(false);
   const [convitesAtivos, setConvitesAtivos] = useState<Convite[]>(() =>
     carregarConvites().filter(c => !c.usado && new Date(c.expiraEm) > new Date())
   );
@@ -199,20 +185,15 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
     const link   = `${window.location.origin}${window.location.pathname}#/convite-equipe/${token}`;
     const agora  = new Date();
     const expira = new Date(agora.getTime() + expiraDias * 24 * 60 * 60 * 1000);
-
     const novo: Convite = {
-      id:         `conv-eq-${Date.now()}`,
-      token,
-      link,
-      permissao,
+      id: `conv-eq-${Date.now()}`,
+      token, link, permissao,
       criadoEm:  agora.toISOString(),
       expiraEm:  expira.toISOString(),
       criadoPor: currentUser.name || 'Administrador',
       usado:     false,
     };
-
-    const todos = carregarConvites();
-    salvarConvites([...todos, novo]);
+    salvarConvites([...carregarConvites(), novo]);
     setConviteGerado(novo);
     setConvitesAtivos(prev => [novo, ...prev]);
   };
@@ -225,9 +206,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
   };
 
   const revogarConvite = (id: string) => {
-    const todos       = carregarConvites();
-    const atualizados = todos.map(c => c.id === id ? { ...c, usado: true } : c);
-    salvarConvites(atualizados);
+    salvarConvites(carregarConvites().map(c => c.id === id ? { ...c, usado: true } : c));
     setConvitesAtivos(prev => prev.filter(c => c.id !== id));
     if (conviteGerado?.id === id) setConviteGerado(null);
   };
@@ -235,8 +214,6 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
-
-        {/* Header */}
         <div className="flex items-center gap-4 border-b border-slate-100 p-6 pb-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50">
             <UserPlus size={22} className="text-blue-600" />
@@ -253,20 +230,16 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
         <div className="space-y-5 p-6">
           {!conviteGerado ? (
             <>
-              {/* Permissão */}
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Nível de Acesso</p>
                 <div className="grid grid-cols-2 gap-2">
                   {(['visualizar', 'editar'] as const).map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setPermissao(p)}
+                    <button key={p} onClick={() => setPermissao(p)}
                       className={`rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${
                         permissao === p
                           ? 'border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-100'
                           : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200'
-                      }`}
-                    >
+                      }`}>
                       {p === 'visualizar' ? '👁 Somente Visualizar' : '✏️ Visualizar e Editar'}
                     </button>
                   ))}
@@ -278,27 +251,22 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 )}
               </div>
 
-              {/* Validade */}
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Validade do Convite</p>
                 <div className="flex gap-2">
                   {[1, 3, 7, 14, 30].map(d => (
-                    <button
-                      key={d}
-                      onClick={() => setExpiraDias(d)}
+                    <button key={d} onClick={() => setExpiraDias(d)}
                       className={`flex-1 rounded-xl border py-2 text-xs font-bold transition-all ${
                         expiraDias === d
                           ? 'border-blue-600 bg-blue-600 text-white'
                           : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-200'
-                      }`}
-                    >
+                      }`}>
                       {d}d
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Convites ativos */}
               {convitesAtivos.length > 0 && (
                 <div>
                   <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
@@ -311,10 +279,8 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                           <p className="text-[11px] font-bold capitalize text-slate-700">{c.permissao}</p>
                           <p className="text-[10px] text-slate-400">Expira: {formatarData(c.expiraEm)}</p>
                         </div>
-                        <button
-                          onClick={() => revogarConvite(c.id)}
-                          className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700"
-                        >
+                        <button onClick={() => revogarConvite(c.id)}
+                          className="rounded-lg px-2 py-1 text-[10px] font-bold text-red-500 transition-colors hover:bg-red-50 hover:text-red-700">
                           Revogar
                         </button>
                       </div>
@@ -323,16 +289,13 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 </div>
               )}
 
-              <button
-                onClick={gerarConvite}
-                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-              >
+              <button onClick={gerarConvite}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700">
                 <QrCode size={16} /> Gerar Convite com QR Code
               </button>
             </>
           ) : (
             <>
-              {/* QR Code */}
               <div className="flex flex-col items-center gap-4">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <QRCodeSVG value={conviteGerado.link} size={160} />
@@ -349,20 +312,16 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 </div>
               </div>
 
-              {/* Link */}
               <div>
                 <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Link do Convite</p>
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="flex-1 truncate font-mono text-[10px] text-slate-600">{conviteGerado.link}</p>
-                  <button
-                    onClick={copiarLink}
+                  <button onClick={copiarLink}
                     className={`shrink-0 rounded-lg p-1.5 transition-all ${
                       copiado
                         ? 'bg-green-100 text-green-600'
                         : 'border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
-                    }`}
-                    title="Copiar link"
-                  >
+                    }`} title="Copiar link">
                     {copiado ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                 </div>
@@ -371,21 +330,17 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
 
               <div className="rounded-xl border border-blue-100 bg-blue-50 p-3">
                 <p className="text-[11px] leading-relaxed text-blue-700">
-                  Compartilhe o QR Code ou o link. O convidado terá acesso ao sistema com permissão de <strong>{conviteGerado.permissao}</strong>.
+                  Compartilhe o QR Code ou o link. O convidado terá acesso com permissão de <strong>{conviteGerado.permissao}</strong>.
                 </p>
               </div>
 
               <div className="flex gap-3">
-                <button
-                  onClick={() => revogarConvite(conviteGerado.id)}
-                  className="flex-1 rounded-2xl border border-red-200 py-3 text-xs font-bold text-red-600 transition-colors hover:bg-red-50"
-                >
+                <button onClick={() => revogarConvite(conviteGerado.id)}
+                  className="flex-1 rounded-2xl border border-red-200 py-3 text-xs font-bold text-red-600 transition-colors hover:bg-red-50">
                   Revogar Convite
                 </button>
-                <button
-                  onClick={() => setConviteGerado(null)}
-                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-xs font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-                >
+                <button onClick={() => setConviteGerado(null)}
+                  className="flex-1 rounded-2xl bg-blue-600 py-3 text-xs font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700">
                   Novo Convite
                 </button>
               </div>
@@ -516,10 +471,10 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
   });
 
   const flagItems: Array<{ key: keyof UserFlags; label: string; desc: string }> = [
-    { key: 'superusuario',        label: 'Superusuário',        desc: 'Gerencia todos os municípios'         },
-    { key: 'adminMunicipio',      label: 'Admin do Município',  desc: 'Gerencia configurações locais'        },
-    { key: 'profissionalInterno', label: 'Profissional Interno',desc: 'Acessa processos e gera documentos'  },
-    { key: 'usuarioExterno',      label: 'Usuário Externo',     desc: 'Visualiza apenas seus processos'      },
+    { key: 'superusuario',        label: 'Superusuário',         desc: 'Gerencia todos os municípios'       },
+    { key: 'adminMunicipio',      label: 'Admin do Município',   desc: 'Gerencia configurações locais'      },
+    { key: 'profissionalInterno', label: 'Profissional Interno', desc: 'Acessa processos e gera documentos' },
+    { key: 'usuarioExterno',      label: 'Usuário Externo',      desc: 'Visualiza apenas seus processos'    },
   ];
 
   return (
@@ -531,7 +486,9 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
             <p className="truncate text-sm font-black text-slate-800">{member.name}</p>
             <p className="truncate text-xs font-medium text-slate-400">{member.email}</p>
           </div>
-          <button onClick={onCancel} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100"><X size={18} /></button>
+          <button onClick={onCancel} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100">
+            <X size={18} />
+          </button>
         </div>
 
         <div className="space-y-6 p-6">
@@ -540,7 +497,9 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
             <div className="grid grid-cols-3 gap-2">
               {CARGOS.map(c => (
                 <button key={c} onClick={() => setCargo(c)} className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
-                  cargo === c ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:text-blue-600'
+                  cargo === c
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
+                    : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:text-blue-600'
                 }`}>{c}</button>
               ))}
             </div>
@@ -596,6 +555,7 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
 export const Team: React.FC = () => {
   const [members, setMembers]               = useState<User[]>([]);
   const [searchTerm, setSearchTerm]         = useState('');
+  const [loading, setLoading]               = useState(true);
   const [editingId, setEditingId]           = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget]     = useState<{ id: string; name: string } | null>(null);
   const [permissoesTarget, setPermissoesTarget] = useState<User | null>(null);
@@ -603,26 +563,52 @@ export const Team: React.FC = () => {
 
   const fetchMembers = async () => {
     try {
-      const data = dbService.users.selectAll();
-      const normalized: User[] = Array.isArray(data)
-        ? data.map((member): User => ({
-            ...member,
-            role:   normalizeRole(member.role),
-            avatar: member.avatar || avatarFallback,
-            status: member.status === 'Online' ? 'Online' : 'Offline',
-            quota:  { used: member.quota?.used ?? 0, limit: member.quota?.limit ?? 0 },
-          }))
-        : [];
+      const token = localStorage.getItem('access_token');
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', { headers });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const data = await response.json();
+
+      const normalized: User[] = data.map((member: {
+        id: number | string;
+        name: string;
+        email: string;
+        role?: string;
+        status?: string;
+        last_access?: string | null;
+        access_flags?: Record<string, boolean>;
+      }) => ({
+        id: String(member.id),
+        name: member.name && member.name !== member.email
+          ? member.name
+          : member.email.split('@')[0],
+        email: member.email,
+        role: normalizeRole(member.role),
+        avatar: avatarFallback,
+        status: member.status === 'Online' ? 'Online' : 'Offline' as UserStatus,
+        lastLogin: member.last_access ?? undefined,
+        flags: {
+          superusuario:        member.access_flags?.superusuario        ?? false,
+          adminMunicipio:      member.access_flags?.adminMunicipio      ?? false,
+          profissionalInterno: member.access_flags?.profissionalInterno ?? false,
+          usuarioExterno:      member.access_flags?.usuarioExterno      ?? false,
+        },
+      }));
+
       setMembers(normalized);
     } catch (error) {
       console.error('Erro ao carregar membros:', error);
-      setMembers([]);
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
     void fetchMembers();
-    const interval = window.setInterval(() => void fetchMembers(), 10000);
+    const interval = window.setInterval(() => void fetchMembers(), 60_000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -639,9 +625,9 @@ export const Team: React.FC = () => {
   return (
     <div className="mx-auto max-w-[1600px] animate-in fade-in p-6 duration-500 lg:p-10">
 
-      {deleteTarget && <DeleteModal name={deleteTarget.name} onConfirm={handleConfirmDelete} onCancel={() => setDeleteTarget(null)} />}
+      {deleteTarget     && <DeleteModal     name={deleteTarget.name} onConfirm={handleConfirmDelete} onCancel={() => setDeleteTarget(null)} />}
       {permissoesTarget && <PermissoesModal member={permissoesTarget} onSave={handleSavePermissoes} onCancel={() => setPermissoesTarget(null)} />}
-      {mostrarConvite && <ModalConviteEquipe onFechar={() => setMostrarConvite(false)} />}
+      {mostrarConvite   && <ModalConviteEquipe onFechar={() => setMostrarConvite(false)} />}
 
       <header className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
@@ -678,17 +664,15 @@ export const Team: React.FC = () => {
                 <th className="px-6 py-5">Flags de Acesso</th>
                 <th className="px-6 py-5">Status</th>
                 <th className="px-6 py-5">Último Acesso</th>
-                <th className="px-6 py-5">Uso de IA</th>
                 <th className="px-8 py-5 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
-              {filteredMembers.map(member => {
-                const quotaPercent = safePercent(member.quota?.used, member.quota?.limit);
-                const flagBadges   = getFlagsBadges(member);
-
+              {!loading && filteredMembers.map(member => {
+                const flagBadges = getFlagsBadges(member);
                 return (
                   <tr key={member.id} className="group transition-all hover:bg-blue-50/20">
+
                     <td className="px-8 py-5">
                       <div className="flex items-center gap-4">
                         <div className="relative">
@@ -716,16 +700,21 @@ export const Team: React.FC = () => {
 
                     <td className="px-6 py-5">
                       <div className="flex flex-wrap gap-1">
-                        {flagBadges.length > 0 ? flagBadges.map((b, i) => (
-                          <span key={`${member.id}-${b.label}-${i}`} className={`rounded-md border px-2 py-0.5 text-[9px] font-black ${b.cor}`}>{b.label}</span>
-                        )) : <span className="text-[10px] font-medium text-slate-300">—</span>}
+                        {flagBadges.length > 0
+                          ? flagBadges.map((b, i) => (
+                              <span key={`${member.id}-${b.label}-${i}`} className={`rounded-md border px-2 py-0.5 text-[9px] font-black ${b.cor}`}>{b.label}</span>
+                            ))
+                          : <span className="text-[10px] font-medium text-slate-300">—</span>
+                        }
                       </div>
                     </td>
 
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2">
                         <span className={`h-2 w-2 rounded-full ${member.status === 'Online' ? 'bg-green-500' : 'bg-slate-300'}`} />
-                        <span className={`text-xs font-bold ${member.status === 'Online' ? 'text-green-600' : 'text-slate-400'}`}>{member.status || 'Offline'}</span>
+                        <span className={`text-xs font-bold ${member.status === 'Online' ? 'text-green-600' : 'text-slate-400'}`}>
+                          {member.status ?? 'Offline'}
+                        </span>
                       </div>
                     </td>
 
@@ -733,18 +722,6 @@ export const Team: React.FC = () => {
                       <div className="flex items-center gap-2 text-slate-500">
                         <Clock size={14} />
                         <span className="text-xs font-medium">{formatLastSeen(member.lastLogin)}</span>
-                      </div>
-                    </td>
-
-                    <td className="px-6 py-5">
-                      <div className="w-24">
-                        <div className="mb-1.5 flex items-center justify-between">
-                          <span className="text-[9px] font-black uppercase text-slate-400">Consumo</span>
-                          <span className={`text-[10px] font-bold ${quotaPercent > 80 ? 'text-red-500' : 'text-blue-600'}`}>{quotaPercent}%</span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                          <div className={`h-full transition-all duration-700 ${quotaPercent > 80 ? 'bg-red-500' : 'bg-blue-600'}`} style={{ width: `${quotaPercent}%` }} />
-                        </div>
                       </div>
                     </td>
 
@@ -771,7 +748,16 @@ export const Team: React.FC = () => {
           </table>
         </div>
 
-        {filteredMembers.length === 0 && (
+        {loading && (
+          <div className="py-20 text-center">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-200 border-t-blue-600" />
+            </div>
+            <p className="text-sm font-medium text-slate-400">Carregando colaboradores...</p>
+          </div>
+        )}
+
+        {!loading && filteredMembers.length === 0 && (
           <div className="py-20 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-slate-50 text-slate-200">
               <Search size={32} />
@@ -782,7 +768,9 @@ export const Team: React.FC = () => {
         )}
 
         <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50/50 p-6">
-          <p className="text-xs font-medium text-slate-400">Exibindo {filteredMembers.length} de {members.length} colaboradores cadastrados.</p>
+          <p className="text-xs font-medium text-slate-400">
+            Exibindo {filteredMembers.length} de {members.length} colaboradores cadastrados.
+          </p>
           <div className="flex gap-2">
             <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50" disabled>Anterior</button>
             <button className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50 disabled:opacity-50" disabled>Próximo</button>

@@ -10,6 +10,14 @@ import {
 } from '../types/index';
 import { MOCK_PROCESSES } from '../constants';
 
+export type UserRole =
+  | 'Admin'
+  | 'Gestor'
+  | 'Jurídico'
+  | 'Técnico'
+  | 'Auditor'
+  | 'Atendente';
+
 export { ProcessStatus, MOCK_PROCESSES };
 
 
@@ -29,10 +37,88 @@ class SQLDatabase {
     localStorage.setItem(`reurb_db_${key}`, JSON.stringify(data));
   }
 
+  // ─── Conexão com Django/PostgreSQL ─────────────────────────────────────────────
+
+  private async fetchFromDjango<T>(endpoint: string): Promise<T[]> {
+    try {
+      const token = localStorage.getItem('access_token');
+
+      const response = await fetch(`http://localhost:8000/api/${endpoint}/`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.warn(`Erro ao buscar dados do Django (${endpoint}):`, error);
+      return [];
+    }
+  }
+
+  // ─── Mapeamento de Cargos ────────────────────────────────────────────────────
+
+  private mapRole(role: string): UserRole {
+    const r = (role || '').toLowerCase();
+    if (r.includes('admin') || r.includes('super')) return 'Admin';
+    if (r.includes('gestor') || r.includes('gerente')) return 'Gestor';
+    if (r.includes('jurid') || r.includes('advog')) return 'Jurídico';
+    if (r.includes('tecn') || r.includes('engen') || r.includes('arquit')) return 'Técnico';
+    if (r.includes('audit')) return 'Auditor';
+    return 'Atendente';
+  }
+
   // ─── Usuários ───────────────────────────────────────────────────────────────
 
   users = {
-    selectAll: (): User[] => {
+    selectAll: async (): Promise<User[]> => {
+      try {
+        // Busca do Django/PostgreSQL (tabela autenticacao_customuser)
+        const djangoUsers = await this.fetchFromDjango<{
+          id: number | string;
+          name: string;
+          email: string;
+          role?: string;
+          status?: string;
+          is_active?: boolean;
+          last_access?: string | null;
+          access_flags?: Record<string, boolean>;
+        }>('autenticacao/usuarios');
+
+        if (Array.isArray(djangoUsers) && djangoUsers.length > 0) {
+          const mappedUsers: User[] = djangoUsers.map((cu) => ({
+            id: String(cu.id),
+            name: cu.name || 'Usuário sem nome',
+            email: cu.email || '',
+            role: this.mapRole(cu.role || 'Atendente'),
+            status: cu.status === 'Online' ? 'Online' : 'Offline',
+            lastLogin: cu.last_access ?? undefined,
+            flags: {
+              superusuario: cu.access_flags?.superusuario ?? false,
+              adminMunicipio: cu.access_flags?.adminMunicipio ?? false,
+              profissionalInterno: cu.access_flags?.profissionalInterno ?? false,
+              usuarioExterno: cu.access_flags?.usuarioExterno ?? false,
+            },
+            permissions: {
+              visualizar: true,
+              editor: cu.access_flags?.profissionalInterno ?? false,
+              comentar: cu.access_flags?.profissionalInterno ?? false,
+              aprovar: cu.access_flags?.adminMunicipio ?? false,
+              assinar: cu.access_flags?.adminMunicipio ?? false,
+              exportar: cu.access_flags?.profissionalInterno ?? false,
+            },
+          }));
+          return mappedUsers;
+        }
+      } catch (error) {
+        console.error('Erro ao buscar usuários do Django:', error);
+      }
+
+      // Fallback: localStorage
       return this.getStorage<User>('users');
     },
 
@@ -81,7 +167,6 @@ class SQLDatabase {
         email: data.email,
         password: data.password,
         role: (data.role as any) || 'Técnico',
-        avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`,
         status: 'Offline',
         lastLogin: new Date().toISOString(),
         quota: {
@@ -90,10 +175,10 @@ class SQLDatabase {
           resetAt: new Date(Date.now() + 86400000).toISOString(),
         },
         flags: {
-          superusuario:        false,
-          adminMunicipio:      false,
+          superusuario: false,
+          adminMunicipio: false,
           profissionalInterno: true,
-          usuarioExterno:      false,
+          usuarioExterno: false,
         },
         etapasPermitidas: [],
       };
@@ -118,27 +203,6 @@ class SQLDatabase {
           }
         }
       }
-    },
-
-    updateQuota: (userId: string, tokensUsed: number): User | null => {
-      const users = this.getStorage<User>('users');
-      const idx = users.findIndex((u) => u.id === userId);
-      if (idx !== -1) {
-        if (users[idx].quota) {
-          users[idx].quota!.used += tokensUsed;
-        }
-        this.setStorage('users', users);
-        const currentUserStr = localStorage.getItem('reurb_current_user');
-        if (currentUserStr) {
-          const currentUser = JSON.parse(currentUserStr);
-          if (currentUser.id === userId) {
-            currentUser.quota = users[idx].quota;
-            localStorage.setItem('reurb_current_user', JSON.stringify(currentUser));
-          }
-        }
-        return users[idx];
-      }
-      return null;
     },
 
     update: (userId: string, data: Partial<User>): User | null => {
@@ -424,31 +488,8 @@ export const dbService = new SQLDatabase();
 // ─── Inicialização ────────────────────────────────────────────────────────────
 
 const initDB = () => {
-  const usersData = localStorage.getItem('reurb_db_users');
-  if (!usersData || JSON.parse(usersData).length === 0) {
-    const defaultUsers = [
-      {
-        id: 'u-admin',
-        name: 'Administrador do Sistema',
-        email: 'admin@reurb.gov.br',
-        password: 'Admin123!',
-        role: 'Admin' as const,
-        tipoProfissional: 'Advogado',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
-        status: 'Offline' as const,
-        lastLogin: new Date().toISOString(),
-        quota: { limit: 50000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() },
-        flags: {
-          superusuario:        true,
-          adminMunicipio:      true,
-          profissionalInterno: true,
-          usuarioExterno:      false,
-        },
-        etapasPermitidas: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-      },
-    ];
-    localStorage.setItem('reurb_db_users', JSON.stringify(defaultUsers));
-  }
+  // Não cria usuários locais - apenas limpa o localStorage para garantir que só use o banco de dados
+  localStorage.removeItem('reurb_db_users');
 };
 
 initDB();

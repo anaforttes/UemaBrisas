@@ -1,6 +1,4 @@
 from django.conf import settings
-from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
 from django.utils.encoding import force_bytes, force_str
@@ -10,10 +8,11 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
+from .models import CustomUser
 
 
 def _buscar_usuario_por_email(email: str):
-    return User.objects.filter(email__iexact=email).first()
+    return CustomUser.objects.filter(email__iexact=email).first()
 
 
 def autenticar_usuario(email: str, senha: str) -> dict:
@@ -22,22 +21,20 @@ def autenticar_usuario(email: str, senha: str) -> dict:
     if not usuario_existente:
         raise AuthenticationFailed("Usuario nao encontrado.")
 
-    usuario = authenticate(username=usuario_existente.username, password=senha)
-
-    if not usuario:
+    # Verificar a senha usando check_password (já que CustomUser herda de AbstractBaseUser)
+    if not usuario_existente.check_password(senha):
         raise AuthenticationFailed("E-mail ou senha invalidos.")
 
-    if not usuario.is_active:
+    if not usuario_existente.is_active:
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
 
-    refresh = RefreshToken.for_user(usuario)
-    nome_completo = f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
-
+    refresh = RefreshToken.for_user(usuario_existente)
+    
     return {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
-        "email": usuario.email,
-        "name": nome_completo,
+        "email": usuario_existente.email,
+        "name": usuario_existente.name,
         "isNewUser": False,
     }
 
@@ -66,44 +63,30 @@ def autenticar_com_google(credential: str) -> dict:
     criado = False
 
     if not usuario:
-        usuario = User.objects.create_user(
-            username=email,
+        nome_completo = f"{dados_google.get('given_name', '')} {dados_google.get('family_name', '')}".strip() or email
+        usuario = CustomUser.objects.create_user(
             email=email,
-            first_name=dados_google.get("given_name") or "",
-            last_name=dados_google.get("family_name") or "",
+            name=nome_completo,
+            password=None,
         )
-        usuario.set_unusable_password()
-        usuario.save()
         criado = True
     else:
-        campos_para_atualizar = []
-
-        if not usuario.email:
-            usuario.email = email
-            campos_para_atualizar.append("email")
-
-        if not usuario.first_name and dados_google.get("given_name"):
-            usuario.first_name = dados_google.get("given_name") or ""
-            campos_para_atualizar.append("first_name")
-
-        if not usuario.last_name and dados_google.get("family_name"):
-            usuario.last_name = dados_google.get("family_name") or ""
-            campos_para_atualizar.append("last_name")
-
-        if campos_para_atualizar:
-            usuario.save(update_fields=campos_para_atualizar)
+        # Atualizar nome se vazio
+        if not usuario.name and (dados_google.get("given_name") or dados_google.get("family_name")):
+            nome_completo = f"{dados_google.get('given_name', '')} {dados_google.get('family_name', '')}".strip()
+            usuario.name = nome_completo
+            usuario.save(update_fields=['name'])
 
     if not usuario.is_active:
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
 
     refresh = RefreshToken.for_user(usuario)
-    nome_completo = f"{usuario.first_name} {usuario.last_name}".strip() or usuario.username
 
     return {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
         "email": usuario.email,
-        "name": nome_completo,
+        "name": usuario.name,
         "isNewUser": criado,
     }
 
@@ -126,13 +109,13 @@ def solicitar_recuperacao_senha(email: str) -> dict:
 
         assunto = "Recuperacao de Senha - Sistema REURB"
         corpo_texto = (
-            f"Ola {usuario.first_name or usuario.email},\n\n"
+            f"Ola {usuario.name},\n\n"
             "Recebemos uma solicitacao de recuperacao de senha.\n"
             f"Acesse o link: {link_recuperacao}\n\n"
             "Se nao solicitou, ignore este e-mail."
         )
         corpo_html = (
-            f"<p>Ola {usuario.first_name or usuario.email},</p>"
+            f"<p>Ola {usuario.name},</p>"
             "<p>Recebemos uma solicitacao de recuperacao de senha para a sua conta.</p>"
             f'<p><a href="{link_recuperacao}">Clique aqui para redefinir sua senha</a></p>'
             f"<p>Link direto: {link_recuperacao}</p>"
@@ -150,44 +133,37 @@ def solicitar_recuperacao_senha(email: str) -> dict:
         msg.send()
 
     return {
-        "message": "Se o e-mail estiver cadastrado, um link de recuperacao foi enviado."
+        "mensagem": "Se o e-mail existe em nosso sistema, você receberá um link para redefinir sua senha.",
     }
 
 
 def redefinir_senha(uid: str, token: str, nova_senha: str) -> dict:
-    print("\n=== REDEFINIR SENHA ===")
-    print(f"UID recebido: '{uid}'")
-    print(f"TOKEN recebido: '{token}'")
-    print("======================\n")
-
     try:
         usuario_id = force_str(urlsafe_base64_decode(uid))
-        usuario = User.objects.get(pk=usuario_id)
-    except (TypeError, ValueError, OverflowError, User.DoesNotExist):
-        raise ValidationError({"token": "Link invalido ou expirado."})
+        usuario = CustomUser.objects.get(pk=usuario_id)
+    except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+        raise ValidationError("Link de recuperacao invalido ou expirado.")
 
     if not default_token_generator.check_token(usuario, token):
-        raise ValidationError({"token": "Link invalido ou expirado."})
+        raise ValidationError("Token invalido ou expirado.")
 
     usuario.set_password(nova_senha)
-    usuario.save(update_fields=["password"])
+    usuario.save()
 
-    return {"message": "Senha atualizada com sucesso!"}
+    return {
+        "mensagem": "Senha redefinida com sucesso!",
+    }
 
 
-def criar_usuario(email: str, senha: str, nome: str = "") -> dict:
-    if _buscar_usuario_por_email(email):
-        raise ValidationError({"email": "Este e-mail ja esta cadastrado."})
+def criar_usuario(email: str, password: str, name: str, role: str) -> dict:
+    if CustomUser.objects.filter(email__iexact=email).exists():
+        raise ValidationError("Um usuario com este e-mail ja existe.")
 
-    primeiro_nome = nome.split()[0] if nome else ""
-    ultimo_nome = " ".join(nome.split()[1:]) if nome else ""
-
-    usuario = User.objects.create_user(
-        username=email,
+    usuario = CustomUser.objects.create_user(
         email=email,
-        password=senha,
-        first_name=primeiro_nome,
-        last_name=ultimo_nome,
+        name=name,
+        password=password,
+        role=role,
     )
 
     refresh = RefreshToken.for_user(usuario)
@@ -196,6 +172,6 @@ def criar_usuario(email: str, senha: str, nome: str = "") -> dict:
         "access": str(refresh.access_token),
         "refresh": str(refresh),
         "email": usuario.email,
-        "name": nome,
+        "name": usuario.name,
         "isNewUser": True,
     }

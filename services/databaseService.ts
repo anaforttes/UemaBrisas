@@ -32,8 +32,44 @@ class SQLDatabase {
   // ─── Usuários ───────────────────────────────────────────────────────────────
 
   users = {
-    selectAll: (): User[] => {
-      return this.getStorage<User>('users');
+    selectAll: async (): Promise<User[]> => {
+      try {
+        const token = localStorage.getItem('access_token');
+
+        const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro HTTP: ${response.status}`);
+        }
+
+        const data = await response.json();
+
+        return data.map((cu: any) => ({
+          id: cu.id,
+          name: cu.name,
+          email: cu.email,
+          role: cu.role,
+          status: 'Offline',
+          lastLogin: cu.last_access,
+          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cu.name)}`,
+          quota: { used: 0, limit: 10000 },
+          flags: {
+            superusuario: cu.is_superuser,
+            adminMunicipio: cu.is_staff,
+            profissionalInterno: true,
+            usuarioExterno: false,
+          },
+          permissions: {},
+        }));
+      } catch (error) {
+        console.error('Erro ao buscar usuários do Django:', error);
+        return [];
+      }
     },
 
     findByEmail: (email: string): User | undefined => {
@@ -90,10 +126,10 @@ class SQLDatabase {
           resetAt: new Date(Date.now() + 86400000).toISOString(),
         },
         flags: {
-          superusuario:        false,
-          adminMunicipio:      false,
+          superusuario: false,
+          adminMunicipio: false,
           profissionalInterno: true,
-          usuarioExterno:      false,
+          usuarioExterno: false,
         },
         etapasPermitidas: [],
       };
@@ -439,10 +475,10 @@ const initDB = () => {
         lastLogin: new Date().toISOString(),
         quota: { limit: 50000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() },
         flags: {
-          superusuario:        true,
-          adminMunicipio:      true,
+          superusuario: true,
+          adminMunicipio: true,
           profissionalInterno: true,
-          usuarioExterno:      false,
+          usuarioExterno: false,
         },
         etapasPermitidas: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
       },

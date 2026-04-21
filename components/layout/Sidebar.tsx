@@ -1,8 +1,8 @@
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { 
-  LayoutDashboard, FileText, FolderKanban, Users, Settings, LogOut, Zap, BarChart3
+  LayoutDashboard, FileText, FolderKanban, Users, Settings, LogOut, BarChart3
 } from 'lucide-react';
 import { User } from '../../types';
 import { Logo } from '../common/Logo';
@@ -14,16 +14,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   const location = useLocation();
-  // Pegamos a quota mais recente do localStorage para garantir sincronia
-  const [quota, setQuota] = useState(user.quota);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const updatedUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
-      if (updatedUser.quota) setQuota(updatedUser.quota);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Painel',        path: '/'          },
@@ -33,8 +23,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
     { icon: Users,           label: 'Equipe',        path: '/team'      },
     { icon: Settings,        label: 'Configurações', path: '/settings'  },
   ];
-
-  const quotaPercent = quota ? Math.min((quota.used / quota.limit) * 100, 100) : 0;
 
   return (
     <aside className="w-72 bg-white border-r border-slate-200 h-screen flex flex-col sticky top-0 z-20">
@@ -65,26 +53,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
       </div>
 
       <div className="mt-auto p-8 border-t border-slate-50 space-y-6">
-        {/* Minha Quota Individual */}
-        <div className="bg-blue-50/50 p-4 rounded-2xl border border-blue-100">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <BarChart3 size={14} className="text-blue-600" />
-              <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Minha Quota</span>
-            </div>
-          </div>
-          <div className="w-full bg-blue-100 h-1.5 rounded-full overflow-hidden mb-1">
-            <div 
-              className={`h-full transition-all duration-500 ${quotaPercent > 90 ? 'bg-red-500' : quotaPercent > 70 ? 'bg-amber-500' : 'bg-blue-600'}`} 
-              style={{ width: `${quotaPercent}%` }} 
-            />
-          </div>
-          <div className="flex justify-between items-center">
-             <p className="text-[9px] text-blue-400 font-bold">{Math.round(quota?.used || 0)} / {quota?.limit} tokens</p>
-             <p className="text-[9px] text-blue-300 font-medium">{Math.round(quotaPercent)}%</p>
-          </div>
-        </div>
-
         <div className="bg-slate-50/50 p-5 rounded-[24px] border border-slate-100">
           <p className="text-[10px] font-black text-slate-400 uppercase mb-3 tracking-widest">Operador</p>
           <div className="flex items-center gap-4">
