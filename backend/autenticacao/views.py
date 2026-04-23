@@ -1,9 +1,8 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny, IsAuthenticated
-from rest_framework.authentication import SessionAuthentication
-from rest_framework_simplejwt.authentication import JWTAuthentication
+from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework import status
 from .models import CustomUser
 import logging
 
@@ -16,7 +15,7 @@ from .serializadores import (
     SolicitarRecuperacaoSenhaSerializador,
     CadastroSerializador,
 )
-from .serializers import CustomUserSerializer
+from .serializers import CustomUserSerializer, AtualizarUsuarioSerializer
 
 from .servicos import (
     autenticar_usuario,
@@ -26,13 +25,13 @@ from .servicos import (
     criar_usuario,
 )
 
-# LOGIN
+
+# ── LOGIN ─────────────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
     serializador = LoginSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
-
     resposta = autenticar_usuario(
         serializador.validated_data['email'],
         serializador.validated_data['password'],
@@ -40,29 +39,24 @@ def login(request):
     return Response(resposta)
 
 
-# LOGIN GOOGLE
+# ── LOGIN GOOGLE ──────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def google_login(request):
     serializador = LoginGoogleSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
-
-    resposta = autenticar_com_google(
-        serializador.validated_data['credential']
-    )
+    resposta = autenticar_com_google(serializador.validated_data['credential'])
     return Response(resposta)
 
 
-# CADASTRO
+# ── CADASTRO ──────────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def cadastro(request):
     serializador = CadastroSerializador(data=request.data)
-
     if not serializador.is_valid():
         logger.error(f"Erro de validação: {serializador.errors}")
         return Response(serializador.errors, status=400)
-
     try:
         resposta = criar_usuario(
             serializador.validated_data['email'],
@@ -76,26 +70,22 @@ def cadastro(request):
         return Response({'erro': str(e)}, status=400)
 
 
-# ESQUECI SENHA
+# ── ESQUECI SENHA ─────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def solicitar_recuperacao_senha(request):
     serializador = SolicitarRecuperacaoSenhaSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
-
-    resposta = solicitar_recuperacao_senha_service(
-        serializador.validated_data['email']
-    )
+    resposta = solicitar_recuperacao_senha_service(serializador.validated_data['email'])
     return Response(resposta)
 
 
-# REDEFINIR SENHA
+# ── REDEFINIR SENHA ───────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def redefinir_senha(request):
     serializador = RedefinirSenhaSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
-
     resposta = redefinir_senha_service(
         serializador.validated_data['uid'],
         serializador.validated_data['token'],
@@ -104,11 +94,11 @@ def redefinir_senha(request):
     return Response(resposta)
 
 
-# LISTAR USUÁRIOS
-# authentication_classes=[] desabilita o JWTAuthentication globalmente
-# para esta view, evitando o 401 automático quando não há token.
-# AllowAny garante acesso público — proteja com IsAuthenticated se necessário.
+# ── LISTAR USUÁRIOS ───────────────────────────────────────────────────────────
 class CustomUserList(APIView):
+    """
+    GET  /api/autenticacao/usuarios/        → lista todos os usuários
+    """
     authentication_classes = []
     permission_classes = [AllowAny]
 
@@ -116,3 +106,25 @@ class CustomUserList(APIView):
         users = CustomUser.objects.all().order_by('name')
         serializer = CustomUserSerializer(users, many=True)
         return Response(serializer.data)
+
+
+# ── ATUALIZAR USUÁRIO ─────────────────────────────────────────────────────────
+class CustomUserDetail(APIView):
+    """
+    PATCH /api/autenticacao/usuarios/<id>/  → atualiza cargo, flags, permissões
+    """
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def patch(self, request, pk):
+        try:
+            user = CustomUser.objects.get(pk=pk)
+        except CustomUser.DoesNotExist:
+            return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = AtualizarUsuarioSerializer(user, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        updated_user = serializer.save()
+        return Response(CustomUserSerializer(updated_user).data)

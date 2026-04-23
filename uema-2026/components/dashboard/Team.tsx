@@ -1,31 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle,
-  Check,
-  CheckCircle2,
-  Clock,
-  Copy,
-  Edit2,
-  MoreVertical,
-  Plus,
-  QrCode,
-  Search,
-  Settings,
-  Trash2,
-  UserPlus,
-  X,
+  AlertTriangle, Check, CheckCircle2, Clock, Copy, Edit2,
+  MoreVertical, Plus, QrCode, Search, Settings, Trash2, UserPlus, X,
 } from 'lucide-react';
+import { authService } from '../../services/authService';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
-export type UserRole =
-  | 'Admin'
-  | 'Gestor'
-  | 'Jurídico'
-  | 'Técnico'
-  | 'Auditor'
-  | 'Atendente';
-
+export type UserRole = 'Admin' | 'Gestor' | 'Jurídico' | 'Técnico' | 'Auditor' | 'Atendente';
 export type UserStatus = 'Online' | 'Offline';
 
 export interface UserFlags {
@@ -54,14 +38,14 @@ const avatarFallback =
 
 const normalizeRole = (role?: string): UserRole => {
   switch (role) {
-    case 'Admin':     return 'Admin';
-    case 'Gestor':    return 'Gestor';
+    case 'Admin':    return 'Admin';
+    case 'Gestor':   return 'Gestor';
     case 'Jurídico':
-    case 'Juridico':  return 'Jurídico';
+    case 'Juridico': return 'Jurídico';
     case 'Técnico':
-    case 'Tecnico':   return 'Técnico';
-    case 'Auditor':   return 'Auditor';
-    default:          return 'Atendente';
+    case 'Tecnico':  return 'Técnico';
+    case 'Auditor':  return 'Auditor';
+    default:         return 'Atendente';
   }
 };
 
@@ -69,16 +53,12 @@ const formatLastSeen = (dateString?: string) => {
   if (!dateString) return 'Nunca acessou';
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return 'Data inválida';
-  return date.toLocaleDateString('pt-BR', {
-    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
-  });
+  return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
 const getRoleBadge = (role: string) => {
   switch (role) {
-    case 'Juridico':
     case 'Jurídico':  return 'bg-purple-50 text-purple-600 border-purple-100';
-    case 'Tecnico':
     case 'Técnico':   return 'bg-blue-50 text-blue-600 border-blue-100';
     case 'Gestor':    return 'bg-amber-50 text-amber-600 border-amber-100';
     case 'Admin':     return 'bg-red-50 text-red-600 border-red-100';
@@ -100,43 +80,32 @@ const getFlagsBadges = (member: User) => {
 // ─── Convite ──────────────────────────────────────────────────────────────────
 
 interface Convite {
-  id: string;
-  token: string;
-  link: string;
+  id: string; token: string; link: string;
   permissao: 'visualizar' | 'editar';
-  criadoEm: string;
-  expiraEm: string;
-  criadoPor: string;
-  usado: boolean;
+  criadoEm: string; expiraEm: string; criadoPor: string; usado: boolean;
 }
 
 const CONVITES_KEY = 'reurb_convites_equipe';
-
 const gerarToken = () => {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return Array.from({ length: 32 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 };
-
 const salvarConvites   = (c: Convite[]) => localStorage.setItem(CONVITES_KEY, JSON.stringify(c));
 const carregarConvites = (): Convite[] => {
   try { const r = localStorage.getItem(CONVITES_KEY); return r ? JSON.parse(r) : []; } catch { return []; }
 };
-
 const formatarData = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
-// ─── QR Code SVG ─────────────────────────────────────────────────────────────
+// ─── QR Code ──────────────────────────────────────────────────────────────────
 
 const QRCodeSVG: React.FC<{ value: string; size?: number }> = ({ value, size = 150 }) => {
-  const cells    = 25;
-  const cellSize = size / cells;
-
+  const cells = 25; const cellSize = size / cells;
   const getCell = (row: number, col: number): boolean => {
     const inFinder = (r: number, c: number) =>
       (r < 7 && c < 7) || (r < 7 && c >= cells - 7) || (r >= cells - 7 && c < 7);
     if (inFinder(row, col)) {
-      const isOuter =
-        row === 0 || row === 6 || col === 0 || col === 6 ||
+      const isOuter = row === 0 || row === 6 || col === 0 || col === 6 ||
         row === cells - 1 || row === cells - 7 || col === cells - 1 || col === cells - 7;
       const isInner =
         (row >= 2 && row <= 4 && col >= 2 && col <= 4) ||
@@ -144,12 +113,10 @@ const QRCodeSVG: React.FC<{ value: string; size?: number }> = ({ value, size = 1
         (row >= cells - 5 && row <= cells - 3 && col >= 2 && col <= 4);
       return isOuter || isInner;
     }
-    let hash = 0;
-    const str = value + row + col;
+    let hash = 0; const str = value + row + col;
     for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
     return Math.abs(hash) % 3 !== 0;
   };
-
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="rounded-xl border border-slate-200">
       <rect width={size} height={size} fill="white" />
@@ -166,32 +133,25 @@ const QRCodeSVG: React.FC<{ value: string; size?: number }> = ({ value, size = 1
 
 // ─── Modal Convidar ───────────────────────────────────────────────────────────
 
-interface ModalConviteEquipeProps {
-  onFechar: () => void;
-}
-
-const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => {
+const ModalConviteEquipe: React.FC<{ onFechar: () => void }> = ({ onFechar }) => {
   const currentUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
-  const [permissao, setPermissao]           = useState<'visualizar' | 'editar'>('visualizar');
-  const [expiraDias, setExpiraDias]         = useState(7);
-  const [conviteGerado, setConviteGerado]   = useState<Convite | null>(null);
-  const [copiado, setCopiado]               = useState(false);
+  const [permissao, setPermissao]         = useState<'visualizar' | 'editar'>('visualizar');
+  const [expiraDias, setExpiraDias]       = useState(7);
+  const [conviteGerado, setConviteGerado] = useState<Convite | null>(null);
+  const [copiado, setCopiado]             = useState(false);
   const [convitesAtivos, setConvitesAtivos] = useState<Convite[]>(() =>
     carregarConvites().filter(c => !c.usado && new Date(c.expiraEm) > new Date())
   );
 
   const gerarConvite = () => {
-    const token  = gerarToken();
-    const link   = `${window.location.origin}${window.location.pathname}#/convite-equipe/${token}`;
-    const agora  = new Date();
+    const token = gerarToken();
+    const link  = `${window.location.origin}${window.location.pathname}#/convite-equipe/${token}`;
+    const agora = new Date();
     const expira = new Date(agora.getTime() + expiraDias * 24 * 60 * 60 * 1000);
     const novo: Convite = {
-      id: `conv-eq-${Date.now()}`,
-      token, link, permissao,
-      criadoEm:  agora.toISOString(),
-      expiraEm:  expira.toISOString(),
-      criadoPor: currentUser.name || 'Administrador',
-      usado:     false,
+      id: `conv-eq-${Date.now()}`, token, link, permissao,
+      criadoEm: agora.toISOString(), expiraEm: expira.toISOString(),
+      criadoPor: currentUser.name || 'Administrador', usado: false,
     };
     salvarConvites([...carregarConvites(), novo]);
     setConviteGerado(novo);
@@ -201,8 +161,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
   const copiarLink = () => {
     if (!conviteGerado) return;
     navigator.clipboard.writeText(conviteGerado.link);
-    setCopiado(true);
-    setTimeout(() => setCopiado(false), 2000);
+    setCopiado(true); setTimeout(() => setCopiado(false), 2000);
   };
 
   const revogarConvite = (id: string) => {
@@ -222,9 +181,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
             <h3 className="text-base font-black text-slate-800">Convidar para a Equipe</h3>
             <p className="text-xs text-slate-400 mt-0.5">Gere um link de acesso ao sistema</p>
           </div>
-          <button onClick={onFechar} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100">
-            <X size={18} />
-          </button>
+          <button onClick={onFechar} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100"><X size={18} /></button>
         </div>
 
         <div className="space-y-5 p-6">
@@ -235,11 +192,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 <div className="grid grid-cols-2 gap-2">
                   {(['visualizar', 'editar'] as const).map(p => (
                     <button key={p} onClick={() => setPermissao(p)}
-                      className={`rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${
-                        permissao === p
-                          ? 'border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-100'
-                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200'
-                      }`}>
+                      className={`rounded-2xl border px-4 py-3 text-xs font-bold transition-all ${permissao === p ? 'border-blue-600 bg-blue-600 text-white shadow-lg shadow-blue-100' : 'border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200'}`}>
                       {p === 'visualizar' ? '👁 Somente Visualizar' : '✏️ Visualizar e Editar'}
                     </button>
                   ))}
@@ -256,11 +209,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 <div className="flex gap-2">
                   {[1, 3, 7, 14, 30].map(d => (
                     <button key={d} onClick={() => setExpiraDias(d)}
-                      className={`flex-1 rounded-xl border py-2 text-xs font-bold transition-all ${
-                        expiraDias === d
-                          ? 'border-blue-600 bg-blue-600 text-white'
-                          : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-200'
-                      }`}>
+                      className={`flex-1 rounded-xl border py-2 text-xs font-bold transition-all ${expiraDias === d ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-blue-200'}`}>
                       {d}d
                     </button>
                   ))}
@@ -269,9 +218,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
 
               {convitesAtivos.length > 0 && (
                 <div>
-                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">
-                    Convites Ativos ({convitesAtivos.length})
-                  </p>
+                  <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-slate-400">Convites Ativos ({convitesAtivos.length})</p>
                   <div className="space-y-2">
                     {convitesAtivos.slice(0, 3).map(c => (
                       <div key={c.id} className="flex items-center justify-between rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -301,11 +248,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                   <QRCodeSVG value={conviteGerado.link} size={160} />
                 </div>
                 <div className="text-center">
-                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase ${
-                    conviteGerado.permissao === 'editar'
-                      ? 'border-amber-200 bg-amber-50 text-amber-700'
-                      : 'border-blue-200 bg-blue-50 text-blue-700'
-                  }`}>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-black uppercase ${conviteGerado.permissao === 'editar' ? 'border-amber-200 bg-amber-50 text-amber-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}>
                     {conviteGerado.permissao === 'editar' ? '✏️ Visualizar e Editar' : '👁 Somente Visualizar'}
                   </span>
                   <p className="mt-2 text-[10px] text-slate-400">Expira em {formatarData(conviteGerado.expiraEm)}</p>
@@ -317,11 +260,8 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
                 <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <p className="flex-1 truncate font-mono text-[10px] text-slate-600">{conviteGerado.link}</p>
                   <button onClick={copiarLink}
-                    className={`shrink-0 rounded-lg p-1.5 transition-all ${
-                      copiado
-                        ? 'bg-green-100 text-green-600'
-                        : 'border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'
-                    }`} title="Copiar link">
+                    className={`shrink-0 rounded-lg p-1.5 transition-all ${copiado ? 'bg-green-100 text-green-600' : 'border border-slate-200 bg-white text-slate-500 hover:border-blue-200 hover:text-blue-600'}`}
+                    title="Copiar link">
                     {copiado ? <Check size={14} /> : <Copy size={14} />}
                   </button>
                 </div>
@@ -354,13 +294,7 @@ const ModalConviteEquipe: React.FC<ModalConviteEquipeProps> = ({ onFechar }) => 
 
 // ─── Delete Modal ─────────────────────────────────────────────────────────────
 
-interface DeleteModalProps {
-  name: string;
-  onConfirm: () => void;
-  onCancel: () => void;
-}
-
-const DeleteModal: React.FC<DeleteModalProps> = ({ name, onConfirm, onCancel }) => (
+const DeleteModal: React.FC<{ name: string; onConfirm: () => void; onCancel: () => void }> = ({ name, onConfirm, onCancel }) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
     <div className="mx-4 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl">
       <div className="flex flex-col items-center gap-4 text-center">
@@ -370,17 +304,12 @@ const DeleteModal: React.FC<DeleteModalProps> = ({ name, onConfirm, onCancel }) 
         <div>
           <h3 className="text-lg font-bold text-slate-800">Remover colaborador</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Tem certeza que deseja remover{' '}
-            <span className="font-semibold text-slate-700">&quot;{name}&quot;</span> da equipe? Esta ação não pode ser desfeita.
+            Tem certeza que deseja remover <span className="font-semibold text-slate-700">&quot;{name}&quot;</span> da equipe?
           </p>
         </div>
         <div className="flex w-full gap-3">
-          <button onClick={onCancel} className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50">
-            Cancelar
-          </button>
-          <button onClick={onConfirm} className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-600">
-            Remover
-          </button>
+          <button onClick={onCancel} className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50">Cancelar</button>
+          <button onClick={onConfirm} className="flex-1 rounded-xl bg-red-500 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-red-600">Remover</button>
         </div>
       </div>
     </div>
@@ -389,44 +318,25 @@ const DeleteModal: React.FC<DeleteModalProps> = ({ name, onConfirm, onCancel }) 
 
 // ─── Inline Edit ──────────────────────────────────────────────────────────────
 
-interface InlineEditProps {
-  value: string;
-  onSave: (newName: string) => void;
-  onCancel: () => void;
-}
-
-const InlineEdit: React.FC<InlineEditProps> = ({ value, onSave, onCancel }) => {
+const InlineEdit: React.FC<{ value: string; onSave: (v: string) => void; onCancel: () => void }> = ({ value, onSave, onCancel }) => {
   const [text, setText] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
-
   useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter')  onSave(text.trim() || value);
+    if (e.key === 'Enter') onSave(text.trim() || value);
     if (e.key === 'Escape') onCancel();
   };
-
   return (
     <div className="flex items-center gap-2">
       <input ref={inputRef} value={text} onChange={e => setText(e.target.value)} onKeyDown={handleKeyDown}
         className="w-44 rounded-lg border border-blue-400 px-2 py-0.5 text-sm font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
-      <button onClick={() => onSave(text.trim() || value)} className="p-1 text-green-600 transition-colors hover:text-green-700" title="Salvar">
-        <Check size={15} />
-      </button>
-      <button onClick={onCancel} className="p-1 text-slate-400 transition-colors hover:text-slate-600" title="Cancelar">
-        <X size={15} />
-      </button>
+      <button onClick={() => onSave(text.trim() || value)} className="p-1 text-green-600 transition-colors hover:text-green-700" title="Salvar"><Check size={15} /></button>
+      <button onClick={onCancel} className="p-1 text-slate-400 transition-colors hover:text-slate-600" title="Cancelar"><X size={15} /></button>
     </div>
   );
 };
 
 // ─── Permissões Modal ─────────────────────────────────────────────────────────
-
-interface PermissoesModalProps {
-  member: User;
-  onSave: (updated: User) => void;
-  onCancel: () => void;
-}
 
 const CARGOS: UserRole[] = ['Admin', 'Gestor', 'Jurídico', 'Técnico', 'Auditor', 'Atendente'];
 
@@ -439,43 +349,72 @@ const PERMISSOES = [
   { key: 'exportar',   label: 'Exportar'   },
 ] as const;
 
+const FLAG_ITEMS: Array<{ key: keyof UserFlags; label: string; desc: string }> = [
+  { key: 'superusuario',        label: 'Superusuário',         desc: 'Gerencia todos os municípios'       },
+  { key: 'adminMunicipio',      label: 'Admin do Município',   desc: 'Gerencia configurações locais'      },
+  { key: 'profissionalInterno', label: 'Profissional Interno', desc: 'Acessa processos e gera documentos' },
+  { key: 'usuarioExterno',      label: 'Usuário Externo',      desc: 'Visualiza apenas seus processos'    },
+];
+
+interface PermissoesModalProps {
+  member: User;
+  onSave: (updated: User) => void;
+  onCancel: () => void;
+}
+
 const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCancel }) => {
-  const [cargo, setCargo] = useState<UserRole>(member.role);
+  const [cargo, setCargo]       = useState<UserRole>(member.role);
+  const [saving, setSaving]     = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   const [flags, setFlags] = useState<UserFlags>({
     superusuario:        member.flags?.superusuario        ?? false,
     adminMunicipio:      member.flags?.adminMunicipio      ?? false,
-    profissionalInterno: member.flags?.profissionalInterno ?? true,
+    profissionalInterno: member.flags?.profissionalInterno ?? false,
     usuarioExterno:      member.flags?.usuarioExterno      ?? false,
   });
+
   const [permissoes, setPermissoes] = useState<Record<string, boolean>>({
     visualizar: member.permissions?.visualizar ?? true,
-    editor:     member.permissions?.editor     ?? (member.flags?.profissionalInterno ?? true),
-    comentar:   member.permissions?.comentar   ?? (member.flags?.profissionalInterno ?? true),
-    aprovar:    member.permissions?.aprovar    ?? (member.flags?.adminMunicipio      ?? false),
-    assinar:    member.permissions?.assinar    ?? (member.flags?.adminMunicipio      ?? false),
-    exportar:   member.permissions?.exportar   ?? (member.flags?.profissionalInterno ?? true),
+    editor:     member.permissions?.editor     ?? false,
+    comentar:   member.permissions?.comentar   ?? false,
+    aprovar:    member.permissions?.aprovar    ?? false,
+    assinar:    member.permissions?.assinar    ?? false,
+    exportar:   member.permissions?.exportar   ?? false,
   });
 
   const toggleFlag      = (key: keyof UserFlags) => setFlags(prev => ({ ...prev, [key]: !prev[key] }));
   const togglePermissao = (key: string)           => setPermissoes(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const handleSave = () => onSave({
-    ...member, role: cargo,
-    flags: {
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    const updatedFlags: UserFlags = {
       superusuario:        flags.superusuario        ?? false,
       adminMunicipio:      flags.adminMunicipio      ?? false,
       profissionalInterno: flags.profissionalInterno ?? false,
       usuarioExterno:      flags.usuarioExterno      ?? false,
-    },
-    permissions: permissoes,
-  });
+    };
+    try {
+      // Persiste no banco via PATCH /api/autenticacao/usuarios/<id>/
+      await authService.updateUser(member.id, {
+        role:         cargo,
+        access_flags: updatedFlags,
+        permissions:  permissoes,
+      });
 
-  const flagItems: Array<{ key: keyof UserFlags; label: string; desc: string }> = [
-    { key: 'superusuario',        label: 'Superusuário',         desc: 'Gerencia todos os municípios'       },
-    { key: 'adminMunicipio',      label: 'Admin do Município',   desc: 'Gerencia configurações locais'      },
-    { key: 'profissionalInterno', label: 'Profissional Interno', desc: 'Acessa processos e gera documentos' },
-    { key: 'usuarioExterno',      label: 'Usuário Externo',      desc: 'Visualiza apenas seus processos'    },
-  ];
+      onSave({
+        ...member,
+        role:        cargo,
+        flags:       updatedFlags,
+        permissions: permissoes,
+      });
+    } catch (err: any) {
+      setSaveError(err.message || 'Erro ao salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
@@ -486,35 +425,35 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
             <p className="truncate text-sm font-black text-slate-800">{member.name}</p>
             <p className="truncate text-xs font-medium text-slate-400">{member.email}</p>
           </div>
-          <button onClick={onCancel} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100">
-            <X size={18} />
-          </button>
+          <button onClick={onCancel} className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100"><X size={18} /></button>
         </div>
 
         <div className="space-y-6 p-6">
+          {/* Cargo */}
           <div>
             <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Cargo / Perfil</p>
             <div className="grid grid-cols-3 gap-2">
               {CARGOS.map(c => (
-                <button key={c} onClick={() => setCargo(c)} className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
-                  cargo === c
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
-                    : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                }`}>{c}</button>
+                <button key={c} onClick={() => setCargo(c)}
+                  className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${cargo === c ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:text-blue-600'}`}>
+                  {c}
+                </button>
               ))}
             </div>
           </div>
 
+          {/* Flags */}
           <div>
             <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Flags de acesso ao sistema</p>
             <div className="space-y-2">
-              {flagItems.map(({ key, label, desc }) => (
+              {FLAG_ITEMS.map(({ key, label, desc }) => (
                 <div key={key} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-3">
                   <div>
                     <p className="text-xs font-bold text-slate-800">{label}</p>
                     <p className="mt-0.5 text-[10px] text-slate-400">{desc}</p>
                   </div>
-                  <button onClick={() => toggleFlag(key)} className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-all duration-300 ${flags[key] ? 'bg-blue-600' : 'bg-slate-200'}`}>
+                  <button onClick={() => toggleFlag(key)}
+                    className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-all duration-300 ${flags[key] ? 'bg-blue-600' : 'bg-slate-200'}`}>
                     <div className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all duration-300 ${flags[key] ? 'left-6' : 'left-1'}`} />
                   </button>
                 </div>
@@ -522,28 +461,42 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
             </div>
           </div>
 
+          {/* Permissões */}
           <div>
             <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">Permissões por ação</p>
             <div className="grid grid-cols-2 gap-2">
               {PERMISSOES.map(({ key, label }) => (
-                <button key={key} onClick={() => togglePermissao(key)} className={`flex items-center justify-between rounded-xl border p-3 transition-all ${
-                  permissoes[key] ? 'border-green-200 bg-green-50 text-green-800' : 'border-slate-200 bg-slate-50 text-slate-400'
-                }`}>
+                <button key={key} onClick={() => togglePermissao(key)}
+                  className={`flex items-center justify-between rounded-xl border p-3 transition-all ${permissoes[key] ? 'border-green-200 bg-green-50 text-green-800' : 'border-slate-200 bg-slate-50 text-slate-400'}`}>
                   <span className="text-xs font-bold">{label}</span>
-                  {permissoes[key] ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                  ) : (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
-                  )}
+                  {permissoes[key]
+                    ? <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    : <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                  }
                 </button>
               ))}
             </div>
           </div>
+
+          {saveError && (
+            <p className="rounded-xl bg-red-50 px-4 py-3 text-xs font-bold text-red-600 border border-red-100">
+              {saveError}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-3 p-6 pt-0">
-          <button onClick={onCancel} className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50">Cancelar</button>
-          <button onClick={handleSave} className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700">Salvar permissões</button>
+          <button onClick={onCancel} disabled={saving}
+            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={handleSave} disabled={saving}
+            className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 disabled:opacity-60 flex items-center justify-center gap-2">
+            {saving
+              ? <><div className="h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" /> Salvando...</>
+              : 'Salvar permissões'
+            }
+          </button>
         </div>
       </div>
     </div>
@@ -563,44 +516,45 @@ export const Team: React.FC = () => {
 
   const fetchMembers = async () => {
     try {
-      const token = localStorage.getItem('access_token');
+      const token = localStorage.getItem('reurb_access_token') || localStorage.getItem('access_token');
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', { headers });
+      const response = await fetch(`${API_URL}/api/autenticacao/usuarios/`, { headers });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
 
-      const normalized: User[] = data.map((member: {
-        id: number | string;
-        name: string;
-        email: string;
-        role?: string;
-        status?: string;
-        last_access?: string | null;
+      const normalized: User[] = data.map((m: {
+        id: number | string; name: string; email: string;
+        role?: string; status?: string; last_access?: string | null;
         access_flags?: Record<string, boolean>;
+        permissions?: Record<string, boolean>;
       }) => ({
-        id: String(member.id),
-        name: member.name && member.name !== member.email
-          ? member.name
-          : member.email.split('@')[0],
-        email: member.email,
-        role: normalizeRole(member.role),
-        avatar: avatarFallback,
-        status: member.status === 'Online' ? 'Online' : 'Offline' as UserStatus,
-        lastLogin: member.last_access ?? undefined,
+        id:        String(m.id),
+        name:      m.name && m.name !== m.email ? m.name : m.email.split('@')[0],
+        email:     m.email,
+        role:      normalizeRole(m.role),
+        avatar:    avatarFallback,
+        // status vem calculado pelo backend (is_online = last_access < 5 min)
+        status:    m.status === 'Online' ? 'Online' : 'Offline' as UserStatus,
+        // last_access vem do banco — atualizado pelo middleware a cada request JWT
+        lastLogin: m.last_access ?? undefined,
         flags: {
-          superusuario:        member.access_flags?.superusuario        ?? false,
-          adminMunicipio:      member.access_flags?.adminMunicipio      ?? false,
-          profissionalInterno: member.access_flags?.profissionalInterno ?? false,
-          usuarioExterno:      member.access_flags?.usuarioExterno      ?? false,
+          superusuario:        m.access_flags?.superusuario        ?? false,
+          adminMunicipio:      m.access_flags?.adminMunicipio      ?? false,
+          profissionalInterno: m.access_flags?.profissionalInterno ?? false,
+          usuarioExterno:      m.access_flags?.usuarioExterno      ?? false,
+        },
+        permissions: m.permissions ?? {
+          visualizar: true, editor: false, comentar: false,
+          aprovar: false, assinar: false, exportar: false,
         },
       }));
 
       setMembers(normalized);
-    } catch (error) {
-      console.error('Erro ao carregar membros:', error);
+    } catch (err) {
+      console.error('Erro ao carregar membros:', err);
     } finally {
       setLoading(false);
     }
@@ -608,7 +562,8 @@ export const Team: React.FC = () => {
 
   useEffect(() => {
     void fetchMembers();
-    const interval = window.setInterval(() => void fetchMembers(), 60_000);
+    // Atualiza a cada 30 s para refletir mudanças de status online/offline
+    const interval = window.setInterval(() => void fetchMembers(), 30_000);
     return () => window.clearInterval(interval);
   }, []);
 
@@ -618,9 +573,22 @@ export const Team: React.FC = () => {
     return m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term);
   });
 
-  const handleSaveName       = (id: string, newName: string) => { setMembers(prev => prev.map(m => m.id === id ? { ...m, name: newName } : m)); setEditingId(null); };
-  const handleConfirmDelete  = () => { if (!deleteTarget) return; setMembers(prev => prev.filter(m => m.id !== deleteTarget.id)); setDeleteTarget(null); };
-  const handleSavePermissoes = (updated: User) => { setMembers(prev => prev.map(m => m.id === updated.id ? updated : m)); setPermissoesTarget(null); };
+  const handleSaveName = (id: string, newName: string) => {
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, name: newName } : m));
+    setEditingId(null);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteTarget) return;
+    setMembers(prev => prev.filter(m => m.id !== deleteTarget.id));
+    setDeleteTarget(null);
+  };
+
+  // Após salvar no banco, atualiza o estado local imediatamente
+  const handleSavePermissoes = (updated: User) => {
+    setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+    setPermissoesTarget(null);
+  };
 
   return (
     <div className="mx-auto max-w-[1600px] animate-in fade-in p-6 duration-500 lg:p-10">
@@ -637,18 +605,12 @@ export const Team: React.FC = () => {
         <div className="flex items-center gap-3">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <input
-              type="text"
-              placeholder="Buscar colaborador..."
-              value={searchTerm}
+            <input type="text" placeholder="Buscar colaborador..." value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm shadow-sm outline-none transition-all focus:ring-2 focus:ring-blue-500"
-            />
+              className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm shadow-sm outline-none transition-all focus:ring-2 focus:ring-blue-500" />
           </div>
-          <button
-            onClick={() => setMostrarConvite(true)}
-            className="flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-          >
+          <button onClick={() => setMostrarConvite(true)}
+            className="flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700">
             <Plus size={18} /> <span className="hidden sm:inline">Convidar</span>
           </button>
         </div>
@@ -682,11 +644,10 @@ export const Team: React.FC = () => {
                           </div>
                         </div>
                         <div>
-                          {editingId === member.id ? (
-                            <InlineEdit value={member.name} onSave={name => handleSaveName(member.id, name)} onCancel={() => setEditingId(null)} />
-                          ) : (
-                            <p className="mb-1 text-sm font-black leading-none text-slate-800">{member.name}</p>
-                          )}
+                          {editingId === member.id
+                            ? <InlineEdit value={member.name} onSave={name => handleSaveName(member.id, name)} onCancel={() => setEditingId(null)} />
+                            : <p className="mb-1 text-sm font-black leading-none text-slate-800">{member.name}</p>
+                          }
                           <p className="text-xs font-medium text-slate-400">{member.email}</p>
                         </div>
                       </div>
@@ -727,13 +688,16 @@ export const Team: React.FC = () => {
 
                     <td className="px-8 py-5 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                        <button title="Gerenciar permissões" onClick={() => setPermissoesTarget(member)} className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600">
+                        <button title="Gerenciar permissões" onClick={() => setPermissoesTarget(member)}
+                          className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600">
                           <Settings size={16} />
                         </button>
-                        <button title="Editar nome" onClick={() => setEditingId(member.id)} className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600">
+                        <button title="Editar nome" onClick={() => setEditingId(member.id)}
+                          className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600">
                           <Edit2 size={16} />
                         </button>
-                        <button title="Remover colaborador" onClick={() => setDeleteTarget({ id: member.id, name: member.name })} className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600">
+                        <button title="Remover colaborador" onClick={() => setDeleteTarget({ id: member.id, name: member.name })}
+                          className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600">
                           <Trash2 size={16} />
                         </button>
                       </div>

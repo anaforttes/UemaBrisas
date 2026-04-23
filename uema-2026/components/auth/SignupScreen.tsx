@@ -2,30 +2,45 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ShieldCheck, AlertCircle, Check, ArrowRight, Eye, EyeOff,
-  User, Mail, Briefcase, Lock, ChevronLeft
+  User, Mail, Briefcase, Lock, ChevronLeft,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { Logo } from '../common/Logo';
 
+// Cargos idênticos ao modelo CustomUser e à tela Equipe
+const CARGOS = [
+  { value: 'Admin',     label: 'Administrador'         },
+  { value: 'Gestor',    label: 'Gestor Municipal'       },
+  { value: 'Jurídico',  label: 'Jurídico / Procuradoria'},
+  { value: 'Técnico',   label: 'Técnico / Agrimensura'  },
+  { value: 'Auditor',   label: 'Auditor'                },
+  { value: 'Atendente', label: 'Atendente / Assistente' },
+] as const;
+
+type CargoValue = typeof CARGOS[number]['value'];
+
 export const SignupScreen = () => {
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Técnico' });
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [form, setForm] = useState<{
+    name: string; email: string; password: string; role: CargoValue
+  }>({ name: '', email: '', password: '', role: 'Técnico' });
+
+  const [confirmPassword, setConfirmPassword]     = useState('');
+  const [showPassword, setShowPassword]           = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [success, setSuccess]   = useState(false);
+  const [error, setError]       = useState('');
+  const [loading, setLoading]   = useState(false);
   const navigate = useNavigate();
 
   const checks = {
-    length: form.password.length >= 8,
-    upper: /[A-Z]/.test(form.password),
-    number: /[0-9]/.test(form.password),
+    length:  form.password.length >= 8,
+    upper:   /[A-Z]/.test(form.password),
+    number:  /[0-9]/.test(form.password),
     special: /[!@#$%^&*(),.?":{}|<>]/.test(form.password),
   };
 
   const isPasswordValid = Object.values(checks).every(Boolean);
-  const passwordsMatch = form.password === confirmPassword && confirmPassword.length > 0;
+  const passwordsMatch  = form.password === confirmPassword && confirmPassword.length > 0;
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +50,6 @@ export const SignupScreen = () => {
       setError('A senha deve atender aos requisitos de segurança.');
       return;
     }
-
     if (!passwordsMatch) {
       setError('As senhas não coincidem.');
       return;
@@ -43,7 +57,8 @@ export const SignupScreen = () => {
 
     setLoading(true);
     try {
-      await authService.register(form.email, form.password, form.name);
+      // Passa o cargo selecionado para o backend
+      await authService.register(form.email, form.password, form.name, form.role);
       setSuccess(true);
       setTimeout(() => navigate('/login'), 2500);
     } catch (err: any) {
@@ -82,6 +97,7 @@ export const SignupScreen = () => {
 
             <form onSubmit={handleSignup} className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Nome */}
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">
                     Nome Completo
@@ -92,13 +108,14 @@ export const SignupScreen = () => {
                       type="text"
                       required
                       value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      onChange={e => setForm({ ...form, name: e.target.value })}
                       className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm"
                       placeholder="Nome do Operador"
                     />
                   </div>
                 </div>
 
+                {/* Cargo */}
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">
                     Perfil Funcional
@@ -107,18 +124,18 @@ export const SignupScreen = () => {
                     <Briefcase className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-300" size={18} />
                     <select
                       value={form.role}
-                      onChange={(e) => setForm({ ...form, role: e.target.value as any })}
+                      onChange={e => setForm({ ...form, role: e.target.value as CargoValue })}
                       className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm appearance-none"
                     >
-                      <option value="Técnico">Técnico / Agrimensura</option>
-                      <option value="Jurídico">Jurídico / Procuradoria</option>
-                      <option value="Gestor">Gestor Municipal</option>
-                      <option value="Atendente">Assistente Social</option>
+                      {CARGOS.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
               </div>
 
+              {/* E-mail */}
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">
                   E-mail Institucional
@@ -129,13 +146,14 @@ export const SignupScreen = () => {
                     type="email"
                     required
                     value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    onChange={e => setForm({ ...form, email: e.target.value })}
                     className="w-full pl-14 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 focus:border-blue-200 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm"
                     placeholder="servidor@municipio.gov.br"
                   />
                 </div>
               </div>
 
+              {/* Senhas */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[11px] font-black text-slate-400 uppercase ml-4 tracking-[0.2em]">
@@ -147,15 +165,12 @@ export const SignupScreen = () => {
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={form.password}
-                      onChange={(e) => setForm({ ...form, password: e.target.value })}
+                      onChange={e => setForm({ ...form, password: e.target.value })}
                       className="w-full pl-14 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm"
                       placeholder="••••••••"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
-                    >
+                    <button type="button" onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
@@ -171,38 +186,31 @@ export const SignupScreen = () => {
                       type={showConfirmPassword ? 'text' : 'password'}
                       required
                       value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      onChange={e => setConfirmPassword(e.target.value)}
                       className="w-full pl-14 pr-12 py-4 bg-slate-50 border border-slate-100 rounded-2xl focus:bg-white focus:ring-4 focus:ring-blue-50 outline-none text-sm font-bold text-slate-700 transition-all shadow-sm"
                       placeholder="••••••••"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors"
-                    >
+                    <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-blue-600 transition-colors">
                       {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
                 </div>
               </div>
 
+              {/* Checklist de senha */}
               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 grid grid-cols-2 gap-4">
-                <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${checks.length ? 'text-green-600' : 'text-slate-400'}`}>
-                  {checks.length ? <Check size={14} className="stroke-[3]" /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full mx-1.5" />}
-                  8+ Caracteres
-                </div>
-                <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${checks.upper ? 'text-green-600' : 'text-slate-400'}`}>
-                  {checks.upper ? <Check size={14} className="stroke-[3]" /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full mx-1.5" />}
-                  Letra Maiúscula
-                </div>
-                <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${checks.number ? 'text-green-600' : 'text-slate-400'}`}>
-                  {checks.number ? <Check size={14} className="stroke-[3]" /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full mx-1.5" />}
-                  Número
-                </div>
-                <div className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${checks.special ? 'text-green-600' : 'text-slate-400'}`}>
-                  {checks.special ? <Check size={14} className="stroke-[3]" /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full mx-1.5" />}
-                  Símbolo (@#$)
-                </div>
+                {[
+                  { ok: checks.length,  label: '8+ Caracteres'  },
+                  { ok: checks.upper,   label: 'Letra Maiúscula' },
+                  { ok: checks.number,  label: 'Número'          },
+                  { ok: checks.special, label: 'Símbolo (@#$)'   },
+                ].map(({ ok, label }) => (
+                  <div key={label} className={`flex items-center gap-2 text-[10px] font-black uppercase tracking-widest ${ok ? 'text-green-600' : 'text-slate-400'}`}>
+                    {ok ? <Check size={14} className="stroke-[3]" /> : <div className="w-1.5 h-1.5 bg-slate-200 rounded-full mx-1.5" />}
+                    {label}
+                  </div>
+                ))}
               </div>
 
               {error && (
