@@ -302,3 +302,16 @@ class CustomUserDetail(APIView):
         _sse_broadcast('user_updated', CustomUserSerializer(updated_user).data)
 
         return Response(CustomUserSerializer(updated_user).data)
+
+    def delete(self, request, pk):
+        try:
+            user = CustomUser.objects.get(pk=pk)
+        except CustomUser.DoesNotExist:
+            return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        user_data = CustomUserSerializer(user).data
+        user.delete()
+
+        _sse_broadcast('user_removed', {'id': pk})
+
+        return Response(user_data, status=status.HTTP_200_OK)

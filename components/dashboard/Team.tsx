@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useStatusStream } from '../../hooks/useStatusStream';
 import {
   AlertTriangle,
   Check,
@@ -561,13 +562,31 @@ export const Team: React.FC = () => {
   const [permissoesTarget, setPermissoesTarget] = useState<User | null>(null);
   const [mostrarConvite, setMostrarConvite] = useState(false);
 
+  const getToken = () => localStorage.getItem('reurb_access_token') ?? '';
+
+  const apiPatch = async (pk: string, body: object) => {
+    const res = await fetch(`http://localhost:8000/api/autenticacao/usuarios/${pk}/`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`PATCH falhou: ${res.status}`);
+    return res.json();
+  };
+
+  const apiDelete = async (pk: string) => {
+    const res = await fetch(`http://localhost:8000/api/autenticacao/usuarios/${pk}/`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${getToken()}` },
+    });
+    if (!res.ok) throw new Error(`DELETE falhou: ${res.status}`);
+  };
+
   const fetchMembers = async () => {
     try {
-      const token = localStorage.getItem('access_token');
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (token) headers['Authorization'] = `Bearer ${token}`;
-
-      const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', { headers });
+      const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const data = await response.json();
@@ -580,6 +599,7 @@ export const Team: React.FC = () => {
         status?: string;
         last_access?: string | null;
         access_flags?: Record<string, boolean>;
+        permissions?: Record<string, boolean>;
       }) => ({
         id: String(member.id),
         name: member.name && member.name !== member.email
@@ -596,6 +616,7 @@ export const Team: React.FC = () => {
           profissionalInterno: member.access_flags?.profissionalInterno ?? false,
           usuarioExterno:      member.access_flags?.usuarioExterno      ?? false,
         },
+        permissions: member.permissions ?? {},
       }));
 
       setMembers(normalized);
@@ -612,15 +633,80 @@ export const Team: React.FC = () => {
     return () => window.clearInterval(interval);
   }, []);
 
+  const handleStatusUpdate = useCallback(
+    ({ id, status }: { id: number | string; status: 'Online' | 'Offline' }) => {
+      setMembers(prev =>
+        prev.map(m => m.id === String(id) ? { ...m, status } : m),
+      );
+    },
+    [],
+  );
+
+  const handleSnapshot = useCallback(
+    (updates: { id: number | string; status: 'Online' | 'Offline' }[]) => {
+      setMembers(prev =>
+        prev.map(m => {
+          const found = updates.find(u => String(u.id) === m.id);
+          return found ? { ...m, status: found.status } : m;
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleUserRemoved = useCallback(
+    ({ id }: { id: number | string }) => {
+      setMembers(prev => prev.filter(m => m.id !== String(id)));
+    },
+    [],
+  );
+
+  useStatusStream({
+    onStatusUpdate: handleStatusUpdate,
+    onSnapshot:     handleSnapshot,
+    onUserRemoved:  handleUserRemoved,
+  });
+
   const filteredMembers = members.filter(m => {
     const term = searchTerm.trim().toLowerCase();
     if (!term) return true;
     return m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term);
   });
 
-  const handleSaveName       = (id: string, newName: string) => { setMembers(prev => prev.map(m => m.id === id ? { ...m, name: newName } : m)); setEditingId(null); };
-  const handleConfirmDelete  = () => { if (!deleteTarget) return; setMembers(prev => prev.filter(m => m.id !== deleteTarget.id)); setDeleteTarget(null); };
-  const handleSavePermissoes = (updated: User) => { setMembers(prev => prev.map(m => m.id === updated.id ? updated : m)); setPermissoesTarget(null); };
+  const handleSaveName = async (id: string, newName: string) => {
+    setMembers(prev => prev.map(m => m.id === id ? { ...m, name: newName } : m));
+    setEditingId(null);
+    try {
+      await apiPatch(id, { name: newName });
+    } catch {
+      await fetchMembers();
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setMembers(prev => prev.filter(m => m.id !== deleteTarget.id));
+    setDeleteTarget(null);
+    try {
+      await apiDelete(deleteTarget.id);
+    } catch {
+      await fetchMembers();
+    }
+  };
+
+  const handleSavePermissoes = async (updated: User) => {
+    setMembers(prev => prev.map(m => m.id === updated.id ? updated : m));
+    setPermissoesTarget(null);
+    try {
+      await apiPatch(updated.id, {
+        role:         updated.role,
+        access_flags: updated.flags ?? {},
+        permissions:  updated.permissions ?? {},
+      });
+    } catch {
+      await fetchMembers();
+    }
+  };
 
   return (
     <div className="mx-auto max-w-[1600px] animate-in fade-in p-6 duration-500 lg:p-10">

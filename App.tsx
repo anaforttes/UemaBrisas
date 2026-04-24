@@ -16,6 +16,7 @@ import Editor from './components/editor/Editor';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
+import { useHeartbeat } from './hooks/useHeartbeat';
 
 type DocumentStatus = 'Draft' | 'Review' | 'Approved' | 'Signed';
 
@@ -60,6 +61,35 @@ const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
 
 // ─── App ──────────────────────────────────────────────────────────────────────
 
+const AppInner: React.FC<{ user: User | null; onLogin: (u: User) => void; onLogout: () => void }> = ({ user, onLogin, onLogout }) => {
+  useHeartbeat(!!user);
+  return (
+    <Routes>
+      <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={onLogin} />} />
+      <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
+      <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
+      <Route path="/*" element={
+        !user ? <Navigate to="/login" /> : (
+          <div className="flex min-h-screen bg-slate-50 font-sans">
+            <Sidebar user={user} onLogout={onLogout} />
+            <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
+              <Routes>
+                <Route path="/" element={<Dashboard user={user} />} />
+                <Route path="/processes" element={<ProcessManagement />} />
+                <Route path="/templates" element={<Templates />} />
+                <Route path="/reports" element={<Reports />} />
+                <Route path="/team" element={<Team />} />
+                <Route path="/settings" element={<Configuracoes />} />
+                <Route path="/edit/:docId" element={<EditorPage currentUser={user} />} />
+              </Routes>
+            </main>
+          </div>
+        )
+      } />
+    </Routes>
+  );
+};
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,30 +118,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
-      <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={handleLogin} />} />
-        <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
-        <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
-
-        <Route path="/*" element={
-          !user ? <Navigate to="/login" /> : (
-            <div className="flex min-h-screen bg-slate-50 font-sans">
-              <Sidebar user={user} onLogout={handleLogout} />
-              <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
-                <Routes>
-                  <Route path="/" element={<Dashboard user={user} />} />
-                  <Route path="/processes" element={<ProcessManagement />} />
-                  <Route path="/templates" element={<Templates />} />
-                  <Route path="/reports" element={<Reports />} />
-                  <Route path="/team" element={<Team />} />
-                  <Route path="/settings" element={<Configuracoes />} />
-                  <Route path="/edit/:docId" element={<EditorPage currentUser={user} />} />
-                </Routes>
-              </main>
-            </div>
-          )
-        } />
-      </Routes>
+      <AppInner user={user} onLogin={handleLogin} onLogout={handleLogout} />
     </Router>
   );
 };

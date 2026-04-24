@@ -9,8 +9,30 @@ function getToken(): string | null {
   return localStorage.getItem('reurb_access_token');
 }
 
-function authHeaders(): HeadersInit {
-  const token = getToken();
+function getRefreshToken(): string | null {
+  return localStorage.getItem('reurb_refresh_token');
+}
+
+async function refreshAccessToken(): Promise<string | null> {
+  const refresh = getRefreshToken();
+  if (!refresh) return null;
+  try {
+    const res = await fetch(`${API_BASE}/api/autenticacao/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    localStorage.setItem('reurb_access_token', data.access);
+    if (data.refresh) localStorage.setItem('reurb_refresh_token', data.refresh);
+    return data.access;
+  } catch {
+    return null;
+  }
+}
+
+function buildHeaders(token: string | null): HeadersInit {
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -18,10 +40,22 @@ function authHeaders(): HeadersInit {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  let token = getToken();
+  let res = await fetch(`${API_BASE}${path}`, {
     ...init,
-    headers: { ...authHeaders(), ...(init?.headers ?? {}) },
+    headers: { ...buildHeaders(token), ...(init?.headers ?? {}) },
   });
+
+  // Token expirado → tenta renovar e refaz a requisição uma vez
+  if (res.status === 401) {
+    token = await refreshAccessToken();
+    if (token) {
+      res = await fetch(`${API_BASE}${path}`, {
+        ...init,
+        headers: { ...buildHeaders(token), ...(init?.headers ?? {}) },
+      });
+    }
+  }
 
   if (!res.ok) {
     const erro = await res.json().catch(() => ({}));

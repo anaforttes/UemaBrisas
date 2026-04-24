@@ -3,11 +3,11 @@ import {
   Search, Filter, Plus, LayoutGrid, List,
   FileText, MapPin, Calendar,
   ChevronRight, MoreHorizontal, Activity,
-  AlertCircle, CheckCircle2, Clock, Download
+  AlertCircle, CheckCircle2, Clock, Download, Trash2, AlertTriangle
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { dbService } from '../../services/databaseService';
-import { listarProcessos, atualizarProcesso } from '../../services/painelService';
+import { listarProcessos, atualizarProcesso, deletarProcesso } from '../../services/painelService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
@@ -22,6 +22,8 @@ export const ProcessManagement: React.FC = () => {
   const [filterStatus, setFilterStatus]               = useState<string>('all');
   const [processoSelecionado, setProcessoSelecionado] = useState<REURBProcess | null>(null);
   const [menuAberto, setMenuAberto]                   = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget]               = useState<REURBProcess | null>(null);
+  const [deletando, setDeletando]                     = useState(false);
   const menuRef                                       = useRef<HTMLDivElement>(null);
   const navigate                                      = useNavigate();
   const { pode }                                      = usePermissoes();
@@ -119,6 +121,26 @@ export const ProcessManagement: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setDeletando(true);
+    const idNumerico = /^\d+$/.test(deleteTarget.id);
+    try {
+      if (idNumerico) {
+        await deletarProcesso(deleteTarget.id);
+      }
+      // ID mock (proc-001...) ou real — remove da lista local
+      setProcesses(prev => prev.filter(p => p.id !== deleteTarget.id));
+    } catch {
+      // API falhou — ainda remove da UI e recarrega para sincronizar
+      setProcesses(prev => prev.filter(p => p.id !== deleteTarget.id));
+      await fetchData();
+    } finally {
+      setDeletando(false);
+      setDeleteTarget(null);
+    }
+  };
+
   const filteredProcesses = processes.filter(p => {
     const matchesSearch =
       (p.applicant || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -135,6 +157,48 @@ export const ProcessManagement: React.FC = () => {
 
   return (
     <div className="p-6 lg:p-10 max-w-[1600px] mx-auto animate-in fade-in duration-700">
+
+      {/* Modal confirmação de exclusão */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <div className="flex flex-col items-center gap-4 text-center">
+              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle size={28} className="text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-800">Excluir processo</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Tem certeza que deseja excluir o processo de{' '}
+                  <span className="font-semibold text-slate-700">{deleteTarget.applicant}</span>?
+                  Esta ação não pode ser desfeita.
+                </p>
+              </div>
+              <div className="flex w-full gap-3">
+                <button
+                  onClick={() => setDeleteTarget(null)}
+                  disabled={deletando}
+                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deletando}
+                  className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {deletando ? (
+                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Trash2 size={14} />
+                  )}
+                  {deletando ? 'Excluindo...' : 'Excluir'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
@@ -319,6 +383,13 @@ export const ProcessManagement: React.FC = () => {
                           className="flex items-center gap-2 w-full px-4 py-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
                         >
                           <Download size={14} /> Baixar Pacote ZIP
+                        </button>
+                        <div className="my-1 border-t border-slate-100" />
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setDeleteTarget(proc); setMenuAberto(null); }}
+                          className="flex items-center gap-2 w-full px-4 py-2.5 text-xs font-bold text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          <Trash2 size={14} /> Excluir Processo
                         </button>
                       </div>
                     )}
