@@ -4,7 +4,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 
 ---
 
-## Integrações realizadas
+## Integrações realizadas ate o momento 
 
 ### Login e Autenticação — Keven
 - Cadastro e login integrados com o banco de dados (Neon PostgreSQL) via `POST /api/autenticacao/cadastro/` e `/login/`
@@ -21,6 +21,8 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Status Online/Offline em tempo real via SSE (Server-Sent Events) + heartbeat a cada 25s
 - Editar nome, salvar permissões e remover colaborador via `PATCH | DELETE /api/autenticacao/usuarios/<pk>/`
 - Último acesso atualizado automaticamente no banco
+
+### Faltam = Carolina e Isabel
 
 ---
 
