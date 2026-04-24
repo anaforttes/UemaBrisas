@@ -21,6 +21,8 @@ def obter_dashboard():
         recentes.append({
             "id": processo.id,
             "nome": processo.title,
+            "applicant": processo.applicant,
+            "requerente": processo.applicant,
             "modalidade": processo.modality,
             "status": processo.get_status_display(),
             "progresso": processo.progress,
