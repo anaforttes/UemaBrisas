@@ -34,7 +34,7 @@ class SQLDatabase {
   users = {
     selectAll: async (): Promise<User[]> => {
       try {
-        const token = localStorage.getItem('access_token');
+        const token = localStorage.getItem('reurb_access_token');
 
         const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', {
           headers: {

@@ -2,16 +2,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, Plus, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
-import { dbService } from '../../services/databaseService';
 import { MOCK_MODELS } from '../../constants';
 import { User, REURBProcess, ProcessStatus } from '../../types';
 import { ProcessTable } from './ProcessTable';
+import { listarProcessos } from '../../services/painelService';
 
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
 
   useEffect(() => {
-    setProcesses(dbService.processes.selectAll());
+    listarProcessos().then(setProcesses).catch(() => setProcesses([]));
   }, []);
 
   const stats = [

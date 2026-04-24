@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BarChart3, TrendingUp, FileText, Users, Calendar, Send, MessageSquare, X, Minus } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 import { MOCK_PROCESSES } from '../../constants';
-import { ProcessStatus } from '../../types/index';
+import { ProcessStatus, User } from '../../types/index';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -44,8 +44,8 @@ const formatarData = (iso: string) =>
 
 const ChatFlutuante: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
-  const membros     = dbService.users.selectAll();
 
+  const [membros, setMembros]     = useState<User[]>([]);
   const [aberto, setAberto]       = useState(false);
   const [minimizado, setMinimizado] = useState(false);
   const [mensagens, setMensagens] = useState<Mensagem[]>(carregarMensagens);
@@ -53,6 +53,10 @@ const ChatFlutuante: React.FC = () => {
   const [naoLidas, setNaoLidas]   = useState(0);
   const fimRef                    = useRef<HTMLDivElement>(null);
   const prevLen                   = useRef(mensagens.length);
+
+  useEffect(() => {
+    dbService.users.selectAll().then(setMembros).catch(() => setMembros([]));
+  }, []);
 
   useEffect(() => {
     if (aberto && !minimizado) {

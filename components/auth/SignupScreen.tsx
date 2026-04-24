@@ -2,13 +2,15 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ShieldCheck, AlertCircle, Check, ArrowRight } from 'lucide-react';
-import { dbService } from '../../services/databaseService';
+
+const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
 
 export const SignupScreen = () => {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'Técnico' });
   const [confirmPassword, setConfirmPassword] = useState('');
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
   const checks = {
@@ -21,15 +23,9 @@ export const SignupScreen = () => {
   const isPasswordValid = Object.values(checks).every(Boolean);
   const passwordsMatch = form.password === confirmPassword && confirmPassword.length > 0;
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    
-    const existingUser = dbService.users.findByEmail(form.email);
-    if (existingUser) {
-      setError('Usuário já cadastrado em nosso sistema.');
-      return;
-    }
 
     if (!isPasswordValid) {
       setError('A senha não atende aos requisitos de segurança.');
@@ -41,9 +37,34 @@ export const SignupScreen = () => {
       return;
     }
 
-    dbService.users.insert(form);
-    setSuccess(true);
-    setTimeout(() => navigate('/login'), 2000);
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/autenticacao/cadastro/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: form.name,
+          email: form.email,
+          password: form.password,
+          role: form.role,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        const msg = data?.email?.[0] ?? data?.detail ?? data?.erro ?? 'Erro ao criar conta.';
+        setError(msg);
+        return;
+      }
+
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 2000);
+    } catch {
+      setError('Não foi possível conectar ao servidor. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -143,12 +164,12 @@ export const SignupScreen = () => {
                 </div>
               )}
 
-              <button 
-                type="submit" 
-                disabled={(!isPasswordValid || !passwordsMatch) && (form.password.length > 0 || confirmPassword.length > 0)}
-                className={`w-full mt-4 py-4 ${isPasswordValid && passwordsMatch ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-300 cursor-not-allowed'} text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-100`}
+              <button
+                type="submit"
+                disabled={loading || ((!isPasswordValid || !passwordsMatch) && (form.password.length > 0 || confirmPassword.length > 0))}
+                className={`w-full mt-4 py-4 ${isPasswordValid && passwordsMatch && !loading ? 'bg-slate-800 hover:bg-slate-900' : 'bg-slate-300 cursor-not-allowed'} text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-100`}
               >
-                Concluir Cadastro <ArrowRight size={18} />
+                {loading ? 'Criando conta...' : <><span>Concluir Cadastro</span> <ArrowRight size={18} /></>}
               </button>
             </form>
 
