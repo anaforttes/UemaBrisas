@@ -4,6 +4,7 @@ import {
   MoreVertical, Plus, QrCode, Search, Settings, Trash2, UserPlus, X,
 } from 'lucide-react';
 import { authService } from '../../services/authService';
+import { useStatusStream } from '../../hooks/useStatusStream';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -560,10 +561,39 @@ export const Team: React.FC = () => {
     }
   };
 
+  // SSE: recebe mudanças de status em tempo real sem re-buscar a lista inteira
+  useStatusStream({
+    // Snapshot ao conectar — sincroniza todos de uma vez
+    onSnapshot: (updates) => {
+      setMembers(prev => prev.map(m => {
+        const u = updates.find(x => String(x.id) === m.id);
+        return u ? { ...m, status: u.status } : m;
+      }));
+    },
+    // Evento pontual: só o usuário que mudou de Online ↔ Offline
+    onStatusUpdate: ({ id, status: newStatus }) => {
+      setMembers(prev => prev.map(m =>
+        m.id === String(id) ? { ...m, status: newStatus } : m
+      ));
+    },
+    // Cargo / permissões alterados pela engrenagem
+    onUserUpdated: (updated) => {
+      setMembers(prev => prev.map(m => {
+        if (m.id !== String(updated.id)) return m;
+        return {
+          ...m,
+          role:        normalizeRole(updated.role as string),
+          flags:       (updated.access_flags as UserFlags) ?? m.flags,
+          permissions: (updated.permissions as Record<string, boolean>) ?? m.permissions,
+        };
+      }));
+    },
+  });
+
   useEffect(() => {
     void fetchMembers();
-    // Atualiza a cada 30 s para refletir mudanças de status online/offline
-    const interval = window.setInterval(() => void fetchMembers(), 30_000);
+    // Fallback leve: re-busca completa a cada 60 s caso o SSE perca algum evento
+    const interval = window.setInterval(() => void fetchMembers(), 60_000);
     return () => window.clearInterval(interval);
   }, []);
 

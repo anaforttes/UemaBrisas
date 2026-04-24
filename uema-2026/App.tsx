@@ -18,6 +18,7 @@ import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
 import { NewProcessWizard } from './components/dashboard/NewProcessWizard';
 import { Configuracoes } from './components/dashboard/Configuracoes';
 import { Reports } from './components/dashboard/Reports';
+import { useHeartbeat } from './hooks/useHeartbeat';
 
 type DocumentStatus = 'Draft' | 'Review' | 'Approved' | 'Signed';
 
@@ -75,6 +76,7 @@ const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  useHeartbeat();
 
   useEffect(() => {
     const savedUser = localStorage.getItem('reurb_current_user');
@@ -88,9 +90,30 @@ const App: React.FC = () => {
     localStorage.setItem('reurb_current_user', JSON.stringify(u));
   };
 
-  const handleLogout = () => {
-    setUser(null);
+  const handleLogout = async () => {
+    // Notifica o backend para marcar Offline imediatamente via SSE
+    const token =
+      localStorage.getItem('reurb_access_token') ||
+      localStorage.getItem('access_token') || '';
+    if (token) {
+      try {
+        await fetch(
+          `${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/api/autenticacao/logout-status/`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+      } catch { /* falha silenciosa */ }
+    }
+    localStorage.removeItem('reurb_access_token');
+    localStorage.removeItem('reurb_refresh_token');
+    localStorage.removeItem('access_token');
     localStorage.removeItem('reurb_current_user');
+    setUser(null);
   };
 
   if (loading) {

@@ -8,6 +8,7 @@ from google.auth.transport import requests
 from google.oauth2 import id_token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.utils import timezone
 from .models import CustomUser
 
 
@@ -28,8 +29,18 @@ def autenticar_usuario(email: str, senha: str) -> dict:
     if not usuario_existente.is_active:
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
 
+    # Marca online imediatamente e notifica via SSE
+    usuario_existente.last_access = timezone.now()
+    usuario_existente.save(update_fields=['last_access'])
+
+    from autenticacao.views import _sse_broadcast
+    _sse_broadcast('status_update', {
+        'id':     usuario_existente.id,
+        'status': 'Online',
+    })
+
     refresh = RefreshToken.for_user(usuario_existente)
-    
+
     return {
         "access": str(refresh.access_token),
         "refresh": str(refresh),
@@ -79,6 +90,15 @@ def autenticar_com_google(credential: str) -> dict:
 
     if not usuario.is_active:
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
+
+    usuario.last_access = timezone.now()
+    usuario.save(update_fields=['last_access'])
+
+    from autenticacao.views import _sse_broadcast
+    _sse_broadcast('status_update', {
+        'id':     usuario.id,
+        'status': 'Online',
+    })
 
     refresh = RefreshToken.for_user(usuario)
 

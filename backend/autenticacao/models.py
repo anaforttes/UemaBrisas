@@ -53,8 +53,14 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_online(self) -> bool:
-        """Considera online se acessou nos últimos 5 minutos."""
+        """
+        Fallback para o snapshot inicial do SSE.
+        Considera online se o último heartbeat foi há menos de 35 segundos
+        (intervalo do heartbeat é 25 s + margem de 10 s).
+        last_access NÃO é apagado no logout — é registro histórico.
+        O status em tempo real é controlado pelo SSE (logout_status / heartbeat).
+        """
         if self.last_access:
             delta = timezone.now() - self.last_access
-            return delta.total_seconds() < 300
+            return delta.total_seconds() < 35
         return False
