@@ -4,36 +4,37 @@
 import { dbService } from './databaseService';
 
 export async function buscarDashboard() {
-  const processos = dbService.processes.selectAll();
+  const resposta = await fetch("http://127.0.0.1:8000/api/painel/dashboard/");
 
-  const ativos     = processos.filter(p => !['Concluído', 'Arquivado', 'Concluido'].includes(String(p.status))).length;
-  const em_revisao = processos.filter(p => String(p.status).toLowerCase().includes('revis')).length;
-  const concluidos = processos.filter(p => ['Concluído', 'Concluido'].includes(String(p.status))).length;
+  if (!resposta.ok) {
+    throw new Error("Erro ao buscar dados do painel");
+  }
 
-  // Últimos 10 processos ordenados por data de atualização
-  const recentes = [...processos]
-    .sort((a, b) => new Date(b.updatedAt ?? b.createdAt ?? '').getTime()
-                  - new Date(a.updatedAt ?? a.createdAt ?? '').getTime())
-    .slice(0, 10);
-
-  return {
-    cards: { ativos, em_revisao, concluidos },
-    recentes,
-  };
+  return resposta.json();
 }
 
 export async function criarProcesso(data: any) {
-  // Salva localmente via dbService
-  const novoProcesso = dbService.processes.insert({
-    title:      data.titulo       ?? data.title      ?? 'Novo Processo',
-    applicant:  data.requerente   ?? data.applicant  ?? '',
-    modality:   data.modalidade   ?? data.modality   ?? 'REURB-S',
-    status:     data.status       ?? 'Em Andamento',
-    area:       data.area         ?? '',
-    municipio:  data.municipio    ?? '',
-    estado:     data.estado       ?? '',
-    progress:   10,
+  const token = localStorage.getItem("reurb_access_token");
+
+  if (!token) {
+    throw new Error("Usuário não autenticado.");
+  }
+
+  const response = await fetch("http://127.0.0.1:8000/api/processos/", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
   });
 
-  return novoProcesso;
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    console.log("ERRO BACKEND:", responseData);
+    throw new Error(JSON.stringify(responseData));
+  }
+
+  return responseData;
 }

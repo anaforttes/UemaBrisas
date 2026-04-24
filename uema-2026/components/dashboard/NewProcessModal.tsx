@@ -73,41 +73,47 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErro('');
+  e.preventDefault();
+  setErro('');
 
-    const erroValidacao = validarFormulario();
-    if (erroValidacao) {
-      setErro(erroValidacao);
-      return;
-    }
+  const erroValidacao = validarFormulario();
+  if (erroValidacao) {
+    setErro(erroValidacao);
+    return;
+  }
 
-    setLoading(true);
+  setLoading(true);
 
-    try {
-      await criarProcesso({
-        title: form.title,
-        applicant: form.applicant,
-        location: form.location || `${form.municipio} - ${form.estado}`.trim(),
-        modality: form.modality,
-        area: form.area,
-        responsible_name: form.responsible_name || currentUser?.name || 'Administrador',
-        municipio: form.municipio,
-        estado: form.estado,
-        technician_id: Number(currentUser?.id) || 1,
-        legal_id: Number(currentUser?.id) || 1,
-      });
+  try {
+    await criarProcesso({
+      title: form.title,
+      applicant: form.applicant,
+      location: form.location || `${form.municipio} - ${form.estado}`.trim(),
+      modality: form.modality,
+      area: form.area,
+      municipio: form.municipio,
+      estado: form.estado,
+      responsible_name:
+        form.responsible_name || currentUser?.name || 'Administrador',
 
-      limparFormulario();
-      onSuccess();
-      onClose();
-    } catch (error) {
-      console.error(error);
-      setErro('Erro ao criar processo. Verifique os dados e tente novamente.');
-    } finally {
-      setLoading(false);
-    }
-  };
+      status: 'Em Andamento',
+      progress: 0,
+
+      technician_id: 1,
+      legal_id: 1,
+    });
+
+    limparFormulario();
+    onSuccess();
+    onClose();
+  } catch (error) {
+    console.error(error);
+    setErro('Erro ao criar processo. Verifique os dados e tente novamente.');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">

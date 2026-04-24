@@ -114,20 +114,24 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   const naoLidas = NOTIFICACOES_MOCK.filter(n => !n.lida).length;
 
-  useEffect(() => {
-    async function carregarDashboard() {
-      try {
-        const dados = await buscarDashboard();
-        setDadosPainel(dados);
-      } catch (e) {
-        setErro('Erro ao carregar painel');
-      } finally {
-        setLoading(false);
-      }
-    }
+  const carregarDashboard = async () => {
+  try {
+    setLoading(true);
+    setErro('');
 
-    carregarDashboard();
-  }, []);
+    const dados = await buscarDashboard();
+    setDadosPainel(dados);
+  } catch (e) {
+    console.error(e);
+    setErro('Erro ao carregar painel');
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  carregarDashboard();
+}, []);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -176,7 +180,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       <header className="mb-12 flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tight">
-            Bem-vindo, {user.name.split(' ')[0]}
+            Bem-vindo TESTE, {user.name.split(' ')[0]}
           </h2>
           <p className="text-slate-500 mt-2 font-medium">
             Controle central de regularização fundiária municipal.
@@ -304,7 +308,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       <NewProcessModal
         isOpen={showNewProcessModal}
         onClose={() => setShowNewProcessModal(false)}
-        onSuccess={() => window.location.reload()}
+        onSuccess={carregarDashboard}
         currentUser={user}
       />
     </div>
