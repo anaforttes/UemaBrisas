@@ -146,23 +146,5 @@ export async function deletarProcesso(id: string | number) {
 }
 
 export async function buscarDashboard() {
-  const [processos, stats] = await Promise.all([
-    listarProcessos(),
-    request<{ total: number; ativos: number; concluidos: number; em_revisao: number }>(
-      '/api/processos/stats/'
-    ),
-  ]);
-
-  const recentes = [...processos]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 10);
-
-  return {
-    cards: {
-      ativos:     stats.ativos,
-      em_revisao: stats.em_revisao,
-      concluidos: stats.concluidos,
-    },
-    recentes,
-  };
-}
+  return request('/api/painel/dashboard/');
+}q
