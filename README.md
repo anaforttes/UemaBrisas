@@ -9,18 +9,24 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 ### Login e Autenticação — Keven
 - Cadastro e login integrados com o banco de dados (Neon PostgreSQL) via `POST /api/autenticacao/cadastro/` e `/login/`
 - Autenticação com JWT (access token + refresh token automático ao expirar)
-- Recuperação de senha funcional
+- Recuperação de senha funcional com e-mail HTML responsivo e estilizado
+- Login exige conta real no banco — sem fallback para autenticação local
 
 ### Processos — Andre
 - Listagem, criação e exclusão de processos integrados com o banco via `GET | POST | DELETE /api/processos/`
 - Botão de exclusão com modal de confirmação, comunicando diretamente com o banco Neon
 - Refresh automático de token sem logout forçado
+- Listagem carrega apenas dados do banco (sem fallback para localStorage)
 
 ### Equipe — Leandro
 - Listagem de membros integrada com o banco via `GET /api/autenticacao/usuarios/`
 - Status Online/Offline em tempo real via SSE (Server-Sent Events) + heartbeat a cada 25s
 - Editar nome, salvar permissões e remover colaborador via `PATCH | DELETE /api/autenticacao/usuarios/<pk>/`
 - Último acesso atualizado automaticamente no banco
+
+### Permissões — feature/brisa
+- `permissoes/servicos.py`: função `obter_permissoes_usuario()` que retorna roles, flags e ações do usuário
+- Usa diretamente os campos `CustomUser.role`, `access_flags` e `permissions_data` (sem model extra)
 
 ---
 
@@ -37,7 +43,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Python 3.13 + Django 6
 - Django REST Framework
 - SimpleJWT (autenticação JWT)
-- PostgreSQL (produção) / SQLite (desenvolvimento)
+- PostgreSQL — Neon (produção) / SQLite (desenvolvimento)
 - django-cors-headers
 
 ---
@@ -79,8 +85,8 @@ Crie um arquivo `.env` dentro de `backend/`:
 # SQLite (padrão para desenvolvimento — não precisa configurar)
 # DATABASE_URL=sqlite:///db.sqlite3
 
-# PostgreSQL (produção)
-DATABASE_URL=postgresql://usuario:senha@localhost:5432/uemabrisas
+# PostgreSQL (produção — Neon)
+DATABASE_URL=postgresql://usuario:senha@host/neondb
 
 # Google OAuth2 (opcional)
 GOOGLE_OAUTH2_CLIENT_ID=seu_client_id
@@ -140,11 +146,16 @@ Frontend disponível em `http://localhost:5173`
 | POST | `/api/autenticacao/login/` | Login — retorna JWT | Não |
 | POST | `/api/autenticacao/cadastro/` | Criar conta | Não |
 | POST | `/api/autenticacao/esqueci-senha/` | Recuperar senha | Não |
+| POST | `/api/autenticacao/heartbeat/` | Atualizar status online | JWT |
+| GET | `/api/autenticacao/status-stream/` | Stream SSE de status | JWT |
+| GET | `/api/autenticacao/usuarios/` | Listar membros da equipe | JWT |
+| PATCH | `/api/autenticacao/usuarios/<pk>/` | Editar membro | JWT |
+| DELETE | `/api/autenticacao/usuarios/<pk>/` | Remover membro | JWT |
 | GET | `/api/processos/` | Listar processos | JWT |
 | POST | `/api/processos/` | Criar processo | JWT |
-| GET | `/api/processos/{id}/` | Detalhe do processo | JWT |
-| PATCH | `/api/processos/{id}/` | Atualizar processo | JWT |
-| DELETE | `/api/processos/{id}/` | Excluir processo | JWT |
+| GET | `/api/processos/<id>/` | Detalhe do processo | JWT |
+| PATCH | `/api/processos/<id>/` | Atualizar processo | JWT |
+| DELETE | `/api/processos/<id>/` | Excluir processo | JWT |
 | GET | `/api/processos/stats/` | Estatísticas do painel | JWT |
 
 **Autenticação:** Bearer Token no header `Authorization: Bearer <access_token>`
@@ -158,15 +169,17 @@ Frontend disponível em `http://localhost:5173`
 | Email | `admin@reurb.gov.br` |
 | Senha | `Admin123!` |
 
+> **Atenção:** o login exige conta cadastrada no banco Django. Usuários criados antes da integração (apenas no localStorage) precisam ser recriados via cadastro ou pelo admin do Django.
+
 ---
 
 ## Funcionalidades
 
 - **Painel:** visão geral de processos ativos, em revisão e concluídos
-- **Processos:** Central de Processos com listagem, filtros, criação e protocolo
+- **Processos:** Central de Processos com listagem, filtros, criação e exclusão integradas ao banco
 - **Modelos:** biblioteca de documentos REURB (Portaria, Notificação, Relatório, etc.)
 - **Relatórios:** gráficos de produtividade, modalidade e status
-- **Equipe:** gestão de membros com permissões por papel
+- **Equipe:** gestão de membros com status online/offline em tempo real e controle de permissões
 - **Configurações:** tema, fonte, acessibilidade
 
 ---
