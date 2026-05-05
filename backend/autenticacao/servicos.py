@@ -1,3 +1,4 @@
+from html import escape
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
@@ -10,6 +11,92 @@ from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
 from .models import CustomUser
+
+
+def _montar_email_recuperacao_texto(nome_exibicao: str, link_recuperacao: str) -> str:
+    return (
+        f"Ola {nome_exibicao},\n\n"
+        "Recebemos uma solicitacao de recuperacao de senha para a sua conta na RegularizaAI.\n\n"
+        "Para criar uma nova senha, acesse o link abaixo:\n"
+        f"{link_recuperacao}\n\n"
+        "Se voce nao solicitou essa recuperacao, ignore este e-mail. "
+        "Nenhuma alteracao sera feita sem a sua acao.\n"
+    )
+
+
+def _montar_email_recuperacao_html(nome_exibicao: str, link_recuperacao: str) -> str:
+    nome_seguro = escape(nome_exibicao)
+    link_seguro = escape(link_recuperacao, quote=True)
+
+    return f"""
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Recuperacao de Senha - RegularizaAI</title>
+</head>
+<body style="margin:0; padding:0; background-color:#f8fafc; font-family:'Segoe UI', Arial, sans-serif; color:#0f172a;">
+  <div style="padding:32px 16px; background-color:#f8fafc;">
+    <div style="max-width:560px; margin:0 auto; background-color:#ffffff; border:1px solid #e2e8f0; border-radius:24px; overflow:hidden; box-shadow:0 20px 45px rgba(15,23,42,0.08);">
+      <div style="background:linear-gradient(135deg, #2563eb, #1d4ed8); padding:36px 32px 28px; text-align:center;">
+        <div style="width:64px; height:64px; margin:0 auto 16px; border-radius:18px; background:rgba(255,255,255,0.14); color:#ffffff; font-size:30px; line-height:64px; text-align:center;">
+          &#128274;
+        </div>
+        <div style="font-size:28px; font-weight:800; line-height:1.1; letter-spacing:-0.03em; color:#ffffff;">
+          Regulariza<span style="color:#bfdbfe;">AI</span>
+        </div>
+        <div style="margin-top:6px; font-size:12px; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:rgba(255,255,255,0.74);">
+          Regularizacao Fundiaria
+        </div>
+        <div style="margin-top:18px; font-size:20px; font-weight:700; color:#ffffff;">
+          Recuperacao de Senha
+        </div>
+      </div>
+
+      <div style="padding:36px 32px;">
+        <p style="margin:0 0 12px; font-size:16px; font-weight:700; color:#0f172a;">
+          Ola, {nome_seguro}!
+        </p>
+        <p style="margin:0 0 24px; font-size:14px; line-height:1.75; color:#475569;">
+          Recebemos uma solicitacao de <strong>recuperacao de senha</strong> para a sua conta.
+          Clique no botao abaixo para definir uma nova senha com seguranca.
+        </p>
+
+        <div style="text-align:center; margin:0 0 24px;">
+          <a href="{link_seguro}" style="display:inline-block; background:linear-gradient(135deg, #2563eb, #1d4ed8); color:#ffffff; text-decoration:none; font-size:15px; font-weight:700; padding:15px 30px; border-radius:14px; letter-spacing:0.02em;">
+            Redefinir minha senha
+          </a>
+        </div>
+
+        <div style="margin:0 0 24px; padding:14px 16px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:14px;">
+          <p style="margin:0 0 8px; font-size:12px; color:#64748b;">
+            Se o botao nao funcionar, copie e cole este link no navegador:
+          </p>
+          <a href="{link_seguro}" style="font-size:12px; color:#2563eb; text-decoration:none; word-break:break-all;">
+            {link_seguro}
+          </a>
+        </div>
+
+        <div style="padding:14px 16px; background:#fff7ed; border:1px solid #fed7aa; border-left:4px solid #f59e0b; border-radius:14px;">
+          <p style="margin:0; font-size:13px; line-height:1.65; color:#9a3412;">
+            <strong>Nao solicitou a recuperacao?</strong> Ignore este e-mail.
+            Sua senha atual permanecera a mesma enquanto nenhuma acao for concluida por voce.
+          </p>
+        </div>
+      </div>
+
+      <div style="padding:20px 32px; background:#f8fafc; border-top:1px solid #e2e8f0; text-align:center;">
+        <p style="margin:0; font-size:12px; line-height:1.7; color:#64748b;">
+          Este e-mail foi enviado automaticamente pela <strong style="color:#334155;">RegularizaAI</strong>.<br />
+          Por favor, nao responda esta mensagem.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+""".strip()
 
 
 def _buscar_usuario_por_email(email: str):
@@ -127,20 +214,9 @@ def solicitar_recuperacao_senha(email: str) -> dict:
         print(link_recuperacao)
         print("================================\n")
 
-        assunto = "Recuperacao de Senha - Sistema REURB"
-        corpo_texto = (
-            f"Ola {usuario.name},\n\n"
-            "Recebemos uma solicitacao de recuperacao de senha.\n"
-            f"Acesse o link: {link_recuperacao}\n\n"
-            "Se nao solicitou, ignore este e-mail."
-        )
-        corpo_html = (
-            f"<p>Ola {usuario.name},</p>"
-            "<p>Recebemos uma solicitacao de recuperacao de senha para a sua conta.</p>"
-            f'<p><a href="{link_recuperacao}">Clique aqui para redefinir sua senha</a></p>'
-            f"<p>Link direto: {link_recuperacao}</p>"
-            "<p>Se voce nao solicitou a recuperacao, ignore este e-mail.</p>"
-        )
+        assunto = "Recuperacao de Senha - RegularizaAI"
+        corpo_texto = _montar_email_recuperacao_texto(usuario.name, link_recuperacao)
+        corpo_html  = _montar_email_recuperacao_html(usuario.name, link_recuperacao)
 
         msg = EmailMultiAlternatives(
             subject=assunto,

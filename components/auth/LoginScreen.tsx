@@ -65,15 +65,15 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
 
     try {
-      // Tenta autenticar via Django API
       const res = await fetch(`${API_URL}/api/autenticacao/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       });
 
+      const data = await res.json();
+
       if (res.ok) {
-        const data = await res.json();
         localStorage.setItem('reurb_access_token',  data.access);
         localStorage.setItem('reurb_refresh_token', data.refresh);
         const userPayload = parseJwt(data.access);
@@ -88,18 +88,10 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
         navigate('/');
         return;
       }
-    } catch {
-      // API indisponível — tenta autenticação local abaixo
-    }
 
-    // Fallback: autenticação local (localStorage)
-    const user = dbService.users.findByEmail(email);
-    if (user && user.password === password) {
-      const { password: _, ...safeUser } = user;
-      onLoginSuccess(safeUser);
-      navigate('/');
-    } else {
-      setError('Credenciais inválidas ou usuário não encontrado.');
+      setError(data.detail ?? data.message ?? 'Credenciais inválidas.');
+    } catch {
+      setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.');
     }
   };
 

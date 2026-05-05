@@ -47,17 +47,15 @@ export const ProcessManagement: React.FC = () => {
       const data = await listarProcessos();
       setProcesses(data as any);
     } catch {
-      // fallback para localStorage se não autenticado ainda
-      const data = dbService.processes.selectAll();
-      setProcesses(data);
+      setProcesses([]);
     }
   };
 
   const handleProtocolar = async (proc: REURBProcess) => {
     try {
       await atualizarProcesso(proc.id, { protocolado: true, status: 'Em Andamento' });
-    } catch {
-      dbService.processes.update(proc.id, { protocolado: true, status: 'Em Andamento' as any });
+    } catch (e) {
+      console.error('Erro ao protocolar processo:', e);
     }
     fetchData();
   };
