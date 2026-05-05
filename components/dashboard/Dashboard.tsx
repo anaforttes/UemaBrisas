@@ -1,38 +1,113 @@
-
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Plus, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
+import { buscarDashboard } from '../../services/painelService';
 import { MOCK_MODELS } from '../../constants';
-import { User, REURBProcess, ProcessStatus } from '../../types';
+import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
-import { listarProcessos } from '../../services/painelService';
+import { NewProcessModal } from './NewProcessModal';
 
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
-  const [processes, setProcesses] = useState<REURBProcess[]>([]);
+  const [showNewProcessModal, setShowNewProcessModal] = useState(false);
+  const [dadosPainel, setDadosPainel]               = useState<any>(null);
+  const [loading, setLoading]                        = useState(true);
+  const [erro, setErro]                              = useState('');
+  const [showNotificacoes, setShowNotificacoes]      = useState(false);
+  const notificacoesRef                              = useRef<HTMLDivElement>(null);
+  const navigate                                     = useNavigate();
+
+  const carregarDashboard = async () => {
+    try {
+      setLoading(true);
+      setErro('');
+      const dados = await buscarDashboard();
+      setDadosPainel(dados);
+    } catch (e) {
+      console.error(e);
+      setErro('Erro ao carregar painel');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    listarProcessos().then(setProcesses).catch(() => setProcesses([]));
+    carregarDashboard();
+
+    const handler = (e: MouseEvent) => {
+      if (notificacoesRef.current && !notificacoesRef.current.contains(e.target as Node)) {
+        setShowNotificacoes(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
   }, []);
 
   const stats = [
-    { label: 'Processos Ativos', value: processes.length.toString(), change: '+2', icon: Briefcase, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Em Revisão', value: processes.filter(p => p.status === ProcessStatus.ANALISE_JURIDICA).length.toString(), change: '0', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Concluídos', value: processes.filter(p => p.status === ProcessStatus.FINALIZADO).length.toString(), change: '+1', icon: FileText, color: 'text-green-600', bg: 'bg-green-50' },
+    { label: 'Processos Ativos', value: String(dadosPainel?.cards?.ativos    ?? 0), change: '+2', icon: Briefcase, color: 'text-blue-600',  bg: 'bg-blue-50'  },
+    { label: 'Em Revisão',       value: String(dadosPainel?.cards?.em_revisao ?? 0), change: '0',  icon: Clock,     color: 'text-amber-600', bg: 'bg-amber-50' },
+    { label: 'Concluídos',       value: String(dadosPainel?.cards?.concluidos  ?? 0), change: '+1', icon: FileText,  color: 'text-green-600', bg: 'bg-green-50' },
   ];
+
+  if (loading) {
+    return (
+      <div className="p-10 flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
+          <span className="text-sm font-medium">Carregando painel...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (erro) {
+    return (
+      <div className="p-10 flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <p className="text-red-500 font-semibold">{erro}</p>
+          <button onClick={carregarDashboard} className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-10 max-w-7xl mx-auto animate-in fade-in duration-700">
       <header className="mb-12 flex justify-between items-end">
         <div>
-          <h2 className="text-4xl font-black text-slate-800 tracking-tight">Bem-vindo, {user.name.split(' ')[0]}</h2>
-          <p className="text-slate-500 mt-2 font-medium">Controle central de regularização fundiária municipal.</p>
+          <h2 className="text-4xl font-black text-slate-800 tracking-tight">
+            Bem-vindo, {user.name.split(' ')[0]}
+          </h2>
+          <p className="text-slate-500 mt-2 font-medium">
+            Controle central de regularização fundiária municipal.
+          </p>
         </div>
+
         <div className="flex items-center gap-4">
-          <button className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 relative hover:shadow-md transition-all">
-            <Bell size={22} />
-            <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-[3px] border-white"></span>
-          </button>
-          <button className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all">
+          <div className="relative" ref={notificacoesRef}>
+            <button
+              type="button"
+              onClick={() => setShowNotificacoes(!showNotificacoes)}
+              className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 relative hover:shadow-md transition-all"
+            >
+              <Bell size={22} />
+              <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-[3px] border-white" />
+            </button>
+
+            {showNotificacoes && (
+              <div className="absolute right-0 top-14 w-80 bg-white rounded-2xl border border-slate-100 shadow-xl p-5 z-50">
+                <h3 className="font-black text-slate-800 mb-2">Notificações</h3>
+                <p className="text-sm text-slate-400">Nenhuma notificação no momento.</p>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowNewProcessModal(true)}
+            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all"
+          >
             <Plus size={20} /> Novo Processo
           </button>
         </div>
@@ -63,7 +138,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
               Ver Todos <ArrowUpRight size={16} />
             </Link>
           </div>
-          <ProcessTable processes={processes.slice(0, 5)} />
+          <ProcessTable processes={dadosPainel?.recentes || []} />
         </div>
 
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden h-fit">
@@ -72,7 +147,10 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           </div>
           <div className="p-6 space-y-4">
             {MOCK_MODELS.slice(0, 4).map((model) => (
-              <div key={model.id} className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-white transition-all group flex items-center justify-between cursor-pointer">
+              <div
+                key={model.id}
+                className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-white transition-all group flex items-center justify-between cursor-pointer"
+              >
                 <div className="flex items-center gap-4">
                   <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:border-blue-100 transition-all">
                     <FileText size={20} />
@@ -82,7 +160,11 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                     <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Versão {model.version}</p>
                   </div>
                 </div>
-                <button className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200">
+                <button
+                  type="button"
+                  onClick={() => navigate('/templates')}
+                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200"
+                >
                   <Plus size={18} />
                 </button>
               </div>
@@ -90,6 +172,13 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      <NewProcessModal
+        isOpen={showNewProcessModal}
+        onClose={() => setShowNewProcessModal(false)}
+        onSuccess={carregarDashboard}
+        currentUser={user}
+      />
     </div>
   );
 };
