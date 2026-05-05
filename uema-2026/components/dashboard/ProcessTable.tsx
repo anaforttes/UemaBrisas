@@ -1,17 +1,23 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Database } from 'lucide-react';
-import { REURBProcess, ProcessStatus } from '../../types/index';
-
+import { REURBProcess, ProcessStatus, User } from '../../types/index';
 import { ProcessDrawer } from './ProcessDrawer';
 
 interface ProcessTableProps {
   processes: REURBProcess[];
+  user: User;
 }
 
-export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
+export const ProcessTable: React.FC<ProcessTableProps> = ({ processes, user }) => {
   const [selectedProcess, setSelectedProcess] = useState<REURBProcess | null>(null);
+
+  // 🔥 CORREÇÃO SIMPLES E GARANTIDA
+  const admin =
+    user?.username === "admin" ||
+    user?.name === "admin" ||
+    user?.is_staff === true ||
+    user?.is_superuser === true;
 
   const getStatusStyles = (status: ProcessStatus) => {
     switch (status) {
@@ -47,6 +53,7 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
                 <th className="px-6 py-6 text-right">Ações</th>
               </tr>
             </thead>
+
             <tbody className="divide-y divide-slate-50">
               {processes.length === 0 ? (
                 <tr>
@@ -59,41 +66,76 @@ export const ProcessTable: React.FC<ProcessTableProps> = ({ processes }) => {
                 </tr>
               ) : (
                 processes.map((proc) => (
-                  <tr key={proc.id} className="hover:bg-slate-50/40 transition-all group cursor-pointer" onClick={() => setSelectedProcess(proc)}>
+                  <tr
+                    key={proc.id}
+                    className="hover:bg-slate-50/40 transition-all group cursor-pointer"
+                    onClick={() => setSelectedProcess(proc)}
+                  >
                     <td className="px-6 py-6">
                       <button
                         onClick={() => setSelectedProcess(proc)}
-                        className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline transition-all"
+                        className="text-sm font-bold text-blue-600 hover:text-blue-800 hover:underline"
                       >
                         {proc.protocol || proc.id}
                       </button>
                     </td>
+
                     <td className="px-6 py-6">
-                      <div className="text-sm font-bold text-slate-800">{proc.applicant}</div>
-                      <div className="text-[11px] text-slate-400 font-medium mt-0.5">{proc.location}</div>
+                      <div className="text-sm font-bold text-slate-800">
+                        {proc.applicant}
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5">
+                        {proc.location}
+                      </div>
                     </td>
+
                     <td className="px-6 py-6">
-                      <span className={`text-[9px] px-2.5 py-1 rounded-md font-black tracking-wider border ${proc.modality === 'REURB-S' ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
+                      <span className={`text-[9px] px-2.5 py-1 rounded-md font-black border ${
+                        proc.modality === 'REURB-S'
+                          ? 'bg-blue-50 text-blue-600 border-blue-100'
+                          : 'bg-purple-50 text-purple-600 border-purple-100'
+                      }`}>
                         {proc.modality}
                       </span>
                     </td>
+
                     <td className="px-6 py-6">
                       <span className={`text-[10px] px-3 py-1 rounded-full font-bold border ${getStatusStyles(proc.status)}`}>
                         {proc.status}
                       </span>
                     </td>
+
                     <td className="px-6 py-6">
-                      <span className="text-sm text-slate-500 font-medium">
+                      <span className="text-sm text-slate-500">
                         {proc.responsibleName || 'Não atribuído'}
                       </span>
                     </td>
+
+                    {/* 🔥 AÇÕES */}
                     <td className="px-6 py-6 text-right">
-                      <Link
-                        to="/templates"
-                        className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                      >
-                        Gerar Documento
-                      </Link>
+                      <div className="flex justify-end gap-3">
+
+                        <Link
+                          to="/templates"
+                          className="text-sm font-bold text-blue-600 hover:text-blue-800"
+                        >
+                          Gerar Documento
+                        </Link>
+
+                        {/* 🔐 ADMIN */}
+                        {admin && (
+                          <button className="text-sm font-bold text-amber-600">
+                            Editar
+                          </button>
+                        )}
+
+                        {admin && (
+                          <button className="text-sm font-bold text-red-600">
+                            Excluir
+                          </button>
+                        )}
+
+                      </div>
                     </td>
                   </tr>
                 ))

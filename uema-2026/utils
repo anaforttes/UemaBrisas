@@ -1,0 +1,7 @@
+export const isAdmin = (user: any) => {
+  return (
+    user?.is_staff ||
+    user?.is_superuser ||
+    user?.groups?.includes?.('Admin')
+  );
+};
