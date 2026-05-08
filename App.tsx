@@ -16,6 +16,7 @@ import Editor from './components/editor/Editor';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
+import ConviteAcceptPage from './components/editor/ConviteAcceptPage';
 import { useHeartbeat } from './hooks/useHeartbeat';
 
 type DocumentStatus = 'Draft' | 'Review' | 'Approved' | 'Signed';
@@ -54,6 +55,8 @@ const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
         status={status}
         initialContent={conteudo}
         onSave={handleSave}
+        currentUser={currentUser}
+        docLocalId={docId}
       />
     </div>
   );
@@ -68,6 +71,7 @@ const AppInner: React.FC<{ user: User | null; onLogin: (u: User) => void; onLogo
       <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={onLogin} />} />
       <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
       <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
+      <Route path="/convite/:code" element={<ConviteAcceptPage currentUser={user} />} />
       <Route path="/*" element={
         !user ? <Navigate to="/login" /> : (
           <div className="flex min-h-screen bg-slate-50 font-sans">
