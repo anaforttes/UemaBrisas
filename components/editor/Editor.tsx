@@ -3,8 +3,9 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 // ─── TipTap ───────────────────────────────────────────────────────────────────
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { Extension, Node, mergeAttributes } from '@tiptap/core';
+import { Node, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
+import FontSize from './extensions/FontSize';
 import { Underline } from '@tiptap/extension-underline';
 import { TextAlign } from '@tiptap/extension-text-align';
 import { Highlight } from '@tiptap/extension-highlight';
@@ -20,32 +21,21 @@ import { CharacterCount } from '@tiptap/extension-character-count';
 
 // ─── Ícones ───────────────────────────────────────────────────────────────────
 import {
-  Bold, Italic, Underline as UnderlineIcon, Strikethrough,
-  AlignLeft, AlignCenter, AlignRight, AlignJustify,
-  List, ListOrdered, Heading1, Heading2, Heading3,
-  Table2, Image as ImageIcon, Link as LinkIcon, Minus,
-  Highlighter, Undo, Redo, Save, FileDown,
-  MessageSquare, Clock, CheckCircle2, X,
-  RefreshCw, Shield, FileCheck, CheckCheck, ChevronDown,
-  Quote, Code, Users, AlertTriangle,
+  Save, FileDown, MessageSquare, Clock, CheckCircle2, X,
+  RefreshCw, Shield, CheckCheck, ChevronDown, Users, AlertTriangle,
 } from 'lucide-react';
 
 // ─── Serviços e tipos ─────────────────────────────────────────────────────────
-import {
-  Document, Packer, Paragraph, TextRun,
-  Table as DocxTable, TableRow as DocxTableRow, TableCell as DocxTableCell,
-  HeadingLevel, AlignmentType, WidthType, BorderStyle,
-  ShadingType, VerticalAlign, Header, Footer, PageNumber, LevelFormat,
-} from 'docx';
-import { saveAs } from 'file-saver';
 import { User } from '../../types/index';
 import { dbService } from '../../services/databaseService';
 import { documentoService, DocDetalhe } from '../../services/documentoService';
+import { exportarPDF, exportarDOCX } from '../../services/exportService';
 import { SignatureModal } from './SignatureModal';
 import type { SignatureRecord } from '../../services/assinaturaService';
 import PainelComentarios from './PainelComentarios';
 import PainelColaboradores from './PainelColaboradores';
 import HistoricoVersoes, { Versao, EventoAuditoria } from './components/HistoricoVersoes';
+import EditorToolbar from './EditorToolbar';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 interface EditorProps {
@@ -62,46 +52,6 @@ type AbaAtiva = 'comentarios' | 'historico' | 'participantes';
 
 const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-// ─── Extensão FontSize customizada ───────────────────────────────────────────
-
-const FontSize = Extension.create({
-  name: 'fontSize',
-
-  addOptions() {
-    return { types: ['textStyle'] };
-  },
-
-  addGlobalAttributes() {
-    return [
-      {
-        types: this.options.types,
-        attributes: {
-          fontSize: {
-            default: null,
-            parseHTML: (element: HTMLElement) => element.style.fontSize || null,
-            renderHTML: (attributes: any) => {
-              if (!attributes.fontSize) return {};
-              return { style: `font-size: ${attributes.fontSize}` };
-            },
-          },
-        },
-      },
-    ];
-  },
-
-  addCommands() {
-    return {
-      setFontSize:
-        (size: string) =>
-        ({ chain }: any) =>
-          chain().setMark('textStyle', { fontSize: size }).run(),
-      unsetFontSize:
-        () =>
-        ({ chain }: any) =>
-          chain().setMark('textStyle', { fontSize: null }).run(),
-    } as any;
-  },
-});
 
 // ─── Componente React da Imagem ───────────────────────────────────────────────
 
@@ -219,89 +169,6 @@ const ImagemCustomizada = Node.create({
   },
 });
 
-// ─── Exportar PDF ─────────────────────────────────────────────────────────────
-
-const exportarPDF = (titulo: string, conteudoHtml: string, record?: SignatureRecord | null): Promise<void> => {
-  const carregarScript = (): Promise<void> => new Promise((resolve) => {
-    if ((window as any).html2pdf) { resolve(); return; }
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-    script.onload = () => resolve();
-    document.head.appendChild(script);
-  });
-  return carregarScript().then(() => {
-    const wrapper = document.createElement('div');
-    wrapper.innerHTML = `
-      <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:20px;">
-        <h1 style="font-size:14pt;font-weight:bold;margin:0;">PREFEITURA MUNICIPAL</h1>
-        <p style="margin:0;">SECRETARIA DE REGULARIZAÇÃO FUNDIÁRIA – REURB</p>
-        <p style="font-weight:bold;margin-top:6pt;">${titulo || 'DOCUMENTO OFICIAL'}</p>
-      </div>
-      <div style="font-family:'Times New Roman';font-size:12pt;line-height:1.5;">${conteudoHtml}</div>
-      ${record ? `<div style="margin-top:20pt;border-top:2pt solid #1e3a8a;padding-top:12pt;"><strong style="color:#1e3a8a;">✓ REGISTRO DE ASSINATURAS DIGITAIS</strong><br/><span style="color:#3b82f6;font-size:9pt;">Protocolo: ${record.protocol}</span>${record.signers.map((s, i) => `<div style="margin-top:6pt;padding:6pt;border:1pt solid #dcfce7;border-radius:4pt;"><strong>${i + 1}. ${s.name} — ${s.role}</strong><br/><span style="font-size:8pt;">Assinado em: ${s.signedAt ? new Date(s.signedAt).toLocaleString('pt-BR') : '-'}</span></div>`).join('')}</div>` : ''}
-    `;
-    return (window as any).html2pdf().set({ margin: [2, 2, 2, 2], filename: `${titulo || 'documento'}.pdf`, html2canvas: { scale: 2, useCORS: true }, jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' } }).from(wrapper).save();
-  });
-};
-
-// ─── Exportar DOCX ────────────────────────────────────────────────────────────
-
-const exportarDOCX = async (titulo: string, conteudoHtml: string): Promise<void> => {
-  const borda = { style: BorderStyle.SINGLE, size: 1, color: '999999' };
-  const bordasCelula = { top: borda, bottom: borda, left: borda, right: borda };
-  const parseNo = (no: ChildNode): any[] => {
-    if (no.nodeType === 3) { const texto = no.textContent || ''; if (!texto.trim()) return []; return [new TextRun({ text: texto, size: 24, font: 'Times New Roman' })]; }
-    if (no.nodeType !== 1) return [];
-    const el = no as HTMLElement;
-    const filhos = () => Array.from(el.childNodes).flatMap(parseNo);
-    switch (el.tagName?.toLowerCase()) {
-      case 'b': case 'strong': return filhos().map((r: any) => new TextRun({ ...r.options, bold: true }));
-      case 'i': case 'em': return filhos().map((r: any) => new TextRun({ ...r.options, italics: true }));
-      case 'br': return [new TextRun({ text: '', break: 1 })];
-      default: return filhos();
-    }
-  };
-  const parseBloco = (el: Element): any[] => {
-    const tag = el.tagName?.toLowerCase();
-    const filhos = Array.from(el.childNodes).flatMap(parseNo);
-    switch (tag) {
-      case 'h1': return [new Paragraph({ heading: HeadingLevel.HEADING_1, alignment: AlignmentType.CENTER, children: [new TextRun({ text: el.textContent || '', bold: true, size: 28, font: 'Times New Roman' })] })];
-      case 'h2': return [new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: el.textContent || '', bold: true, size: 26, font: 'Times New Roman' })] })];
-      case 'p': return [new Paragraph({ alignment: AlignmentType.JUSTIFIED, spacing: { after: 160 }, children: filhos.length ? filhos : [new TextRun({ text: '', size: 24 })] })];
-      case 'ul': case 'ol': return Array.from(el.querySelectorAll('li')).map((li) => new Paragraph({ numbering: { reference: tag === 'ol' ? 'numeros' : 'marcadores', level: 0 }, children: [new TextRun({ text: li.textContent || '', size: 24, font: 'Times New Roman' })] }));
-      case 'table': {
-        const linhas = Array.from(el.querySelectorAll('tr'));
-        const maxCols = Math.max(...linhas.map((r) => r.querySelectorAll('th,td').length));
-        if (maxCols === 0) return [];
-        const largura = Math.floor(9026 / maxCols);
-        return [new DocxTable({ width: { size: 9026, type: WidthType.DXA }, columnWidths: Array(maxCols).fill(largura), rows: linhas.map((linha, idx) => new DocxTableRow({ tableHeader: idx === 0, children: Array.from(linha.querySelectorAll('th,td')).map((celula) => { const ehCabecalho = celula.tagName.toLowerCase() === 'th'; return new DocxTableCell({ borders: bordasCelula, shading: ehCabecalho ? { fill: 'D9D9D9', type: ShadingType.CLEAR } : undefined, verticalAlign: VerticalAlign.CENTER, children: [new Paragraph({ alignment: ehCabecalho ? AlignmentType.CENTER : AlignmentType.LEFT, children: [new TextRun({ text: celula.textContent || '', bold: ehCabecalho, size: 22, font: 'Times New Roman' })] })] }); }) })) })];
-      }
-      default: return filhos.length ? [new Paragraph({ alignment: AlignmentType.JUSTIFIED, children: filhos })] : [];
-    }
-  };
-  const temp = document.createElement('div');
-  temp.innerHTML = conteudoHtml;
-  const conteudo: any[] = [
-    new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'PREFEITURA MUNICIPAL', bold: true, size: 26, font: 'Times New Roman' })] }),
-    new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: (titulo || 'DOCUMENTO OFICIAL').toUpperCase(), bold: true, size: 28, font: 'Times New Roman' })] }),
-  ];
-  Array.from(temp.children).forEach((el) => conteudo.push(...parseBloco(el)));
-  const doc = new Document({
-    numbering: { config: [{ reference: 'marcadores', levels: [{ level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] }, { reference: 'numeros', levels: [{ level: 0, format: LevelFormat.DECIMAL, text: '%1.', alignment: AlignmentType.LEFT, style: { paragraph: { indent: { left: 720, hanging: 360 } } } }] }] },
-    styles: { default: { document: { run: { font: 'Times New Roman', size: 24 } } } },
-    sections: [{ properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1134, right: 1134, bottom: 1134, left: 1134 } } }, headers: { default: new Header({ children: [new Paragraph({ alignment: AlignmentType.RIGHT, border: { bottom: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 4 } }, children: [new TextRun({ text: `REURBDoc | ${titulo}`, size: 18, color: '888888', font: 'Arial', italics: true })] })] }) }, footers: { default: new Footer({ children: [new Paragraph({ alignment: AlignmentType.CENTER, border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'CCCCCC', space: 4 } }, children: [new TextRun({ text: 'Lei nº 13.465/2017  |  Página ', size: 18, color: '888888', font: 'Arial' }), new TextRun({ children: [PageNumber.CURRENT], size: 18, color: '888888', font: 'Arial' }), new TextRun({ text: ' de ', size: 18, color: '888888', font: 'Arial' }), new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 18, color: '888888', font: 'Arial' })] })] }) }, children: conteudo }],
-  });
-  const blob = await Packer.toBlob(doc);
-  saveAs(blob, `${titulo || 'documento'}.docx`);
-};
-
-// ─── Botão da toolbar ─────────────────────────────────────────────────────────
-
-const BotaoToolbar: React.FC<{ onClick: () => void; title: string; ativo?: boolean; disabled?: boolean; children: React.ReactNode; className?: string }> = ({ onClick, title, ativo, disabled, children, className = '' }) => (
-  <button onClick={onClick} title={title} disabled={disabled} className={`flex items-center justify-center w-7 h-7 rounded-md transition-all text-sm ${ativo ? 'bg-blue-100 text-blue-700' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'} ${disabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} ${className}`}>{children}</button>
-);
-
-const Sep = () => <div className="w-px h-5 bg-slate-200 mx-0.5" />;
 
 // ─── Bloco de assinatura ──────────────────────────────────────────────────────
 
@@ -784,71 +651,23 @@ const Editor: React.FC<EditorProps> = ({ initialContent, title, onSave, status, 
         </div>
 
         {/* TOOLBAR */}
-        <div className="flex items-center gap-0.5 px-3 py-1.5 border-b border-slate-100 bg-white flex-wrap">
-          <BotaoToolbar onClick={() => editor.chain().focus().undo().run()} title="Desfazer" disabled={!editor.can().undo()}><Undo size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().redo().run()} title="Refazer"  disabled={!editor.can().redo()}><Redo  size={14} /></BotaoToolbar>
-          <Sep />
-          <select value={tamanhoFonte} onChange={(e) => { setTamanhoFonte(e.target.value); (editor.chain().focus() as any).setFontSize(`${e.target.value}pt`).run(); }} disabled={somenteLeitura} className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16">
-            {[8,9,10,11,12,14,16,18,20,24,28,32,36,48,72].map((t) => <option key={t} value={t}>{t}pt</option>)}
-          </select>
-          <select value={fonteFamilia} onChange={(e) => setFonteFamilia(e.target.value)} disabled={somenteLeitura} className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-36 ml-1" style={{ fontFamily: fonteFamilia }}>
-            <option value="Times New Roman" style={{ fontFamily: 'Times New Roman' }}>Times New Roman</option>
-            <option value="Arial" style={{ fontFamily: 'Arial' }}>Arial</option>
-          </select>
-          <select value={espacamento} onChange={(e) => setEspacamento(e.target.value)} disabled={somenteLeitura} title="Espaçamento entre linhas" className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-16 ml-1">
-            <option value="1">1.0</option><option value="1.15">1.15</option><option value="1.5">1.5</option><option value="2">2.0</option>
-          </select>
-          <select onChange={(e) => { const v = e.target.value; if (v==='p') editor.chain().focus().setParagraph().run(); if (v==='h1') editor.chain().focus().toggleHeading({level:1}).run(); if (v==='h2') editor.chain().focus().toggleHeading({level:2}).run(); if (v==='h3') editor.chain().focus().toggleHeading({level:3}).run(); }} value={editor.isActive('heading',{level:1})?'h1':editor.isActive('heading',{level:2})?'h2':editor.isActive('heading',{level:3})?'h3':'p'} disabled={somenteLeitura} className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-blue-400 focus:outline-none w-24 ml-1">
-            <option value="p">Normal</option><option value="h1">Título 1</option><option value="h2">Título 2</option><option value="h3">Título 3</option>
-          </select>
-          <Sep />
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleBold().run()}      title="Negrito"    ativo={editor.isActive('bold')}      disabled={somenteLeitura}><Bold          size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleItalic().run()}    title="Itálico"    ativo={editor.isActive('italic')}    disabled={somenteLeitura}><Italic        size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleUnderline().run()} title="Sublinhado" ativo={editor.isActive('underline')} disabled={somenteLeitura}><UnderlineIcon size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleStrike().run()}    title="Tachado"    ativo={editor.isActive('strike')}    disabled={somenteLeitura}><Strikethrough size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleHighlight().run()} title="Destacar"   ativo={editor.isActive('highlight')} disabled={somenteLeitura} className="text-yellow-500"><Highlighter size={14} /></BotaoToolbar>
-          <Sep />
-          <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('left').run()}    title="Esquerda"   ativo={editor.isActive({textAlign:'left'})}    disabled={somenteLeitura}><AlignLeft    size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('center').run()}  title="Centro"     ativo={editor.isActive({textAlign:'center'})}  disabled={somenteLeitura}><AlignCenter  size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('right').run()}   title="Direita"    ativo={editor.isActive({textAlign:'right'})}   disabled={somenteLeitura}><AlignRight   size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().setTextAlign('justify').run()} title="Justificar" ativo={editor.isActive({textAlign:'justify'})} disabled={somenteLeitura}><AlignJustify size={14} /></BotaoToolbar>
-          <Sep />
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleBulletList().run()}  title="Lista"          ativo={editor.isActive('bulletList')}  disabled={somenteLeitura}><List        size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleOrderedList().run()} title="Lista numerada" ativo={editor.isActive('orderedList')} disabled={somenteLeitura}><ListOrdered size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleBlockquote().run()}  title="Citação"        ativo={editor.isActive('blockquote')}  disabled={somenteLeitura}><Quote       size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleCodeBlock().run()}   title="Código"         ativo={editor.isActive('codeBlock')}   disabled={somenteLeitura}><Code        size={14} /></BotaoToolbar>
-          <Sep />
-          <BotaoToolbar onClick={inserirTabela} title="Inserir tabela" disabled={somenteLeitura} className="text-emerald-600"><Table2    size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={inserirImagem} title="Inserir imagem" disabled={somenteLeitura} className="text-purple-600"><ImageIcon size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={inserirLink}   title="Inserir link"   disabled={somenteLeitura} className="text-blue-600"  ><LinkIcon  size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().setHorizontalRule().run()} title="Linha divisória" disabled={somenteLeitura}><Minus size={14} /></BotaoToolbar>
-          <Sep />
-          {editor.isActive('table') && (
-            <>
-              <BotaoToolbar onClick={() => editor.chain().focus().mergeCells().run()}      title="Mesclar células" disabled={somenteLeitura||!editor.can().mergeCells()} className="text-emerald-600"><span className="text-[10px] font-bold">⊞</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().splitCell().run()}       title="Dividir célula"  disabled={somenteLeitura||!editor.can().splitCell()}  className="text-emerald-600"><span className="text-[10px] font-bold">⊟</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().addColumnBefore().run()} title="Coluna antes"    disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">+|</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().addColumnAfter().run()}  title="Coluna depois"   disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">|+</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().addRowBefore().run()}    title="Linha acima"     disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">+—</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().addRowAfter().run()}     title="Linha abaixo"    disabled={somenteLeitura} className="text-slate-500"><span className="text-[10px] font-bold">—+</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().deleteColumn().run()}    title="Deletar coluna"  disabled={somenteLeitura} className="text-rose-500"><span className="text-[10px] font-bold">✕|</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().deleteRow().run()}       title="Deletar linha"   disabled={somenteLeitura} className="text-rose-500"><span className="text-[10px] font-bold">✕—</span></BotaoToolbar>
-              <BotaoToolbar onClick={() => editor.chain().focus().deleteTable().run()}     title="Deletar tabela"  disabled={somenteLeitura} className="text-rose-600"><span className="text-[10px] font-bold">✕⊞</span></BotaoToolbar>
-              <Sep />
-            </>
-          )}
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({level:1}).run()} title="H1" ativo={editor.isActive('heading',{level:1})} disabled={somenteLeitura}><Heading1 size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({level:2}).run()} title="H2" ativo={editor.isActive('heading',{level:2})} disabled={somenteLeitura}><Heading2 size={14} /></BotaoToolbar>
-          <BotaoToolbar onClick={() => editor.chain().focus().toggleHeading({level:3}).run()} title="H3" ativo={editor.isActive('heading',{level:3})} disabled={somenteLeitura}><Heading3 size={14} /></BotaoToolbar>
-          <div className="flex items-center gap-2 ml-auto">
-            <button onClick={() => setMostrarModalAssinatura(true)} disabled={!!registroAssinatura||documentoFinalizado} className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold disabled:opacity-50">
-              <FileCheck size={14} /> {registroAssinatura ? '✓ Assinado' : 'Assinar'}
-            </button>
-            <button onClick={handleFinalizarFluxo} disabled={documentoFinalizado} className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs font-bold disabled:opacity-50">
-              <CheckCheck size={14} /> {documentoFinalizado ? '✓ Finalizado' : 'Finalizar Fluxo'}
-            </button>
-          </div>
-        </div>
+        <EditorToolbar
+          editor={editor}
+          somenteLeitura={somenteLeitura}
+          tamanhoFonte={tamanhoFonte}
+          setTamanhoFonte={setTamanhoFonte}
+          fonteFamilia={fonteFamilia}
+          setFonteFamilia={setFonteFamilia}
+          espacamento={espacamento}
+          setEspacamento={setEspacamento}
+          inserirTabela={inserirTabela}
+          inserirImagem={inserirImagem}
+          inserirLink={inserirLink}
+          registroAssinatura={registroAssinatura}
+          documentoFinalizado={documentoFinalizado}
+          onAbrirModalAssinatura={() => setMostrarModalAssinatura(true)}
+          onFinalizarFluxo={handleFinalizarFluxo}
+        />
 
         {/* ÁREA DO DOCUMENTO + SIDEBAR */}
         <div className="flex flex-1 overflow-hidden">

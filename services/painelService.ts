@@ -1,72 +1,5 @@
-// painelService — integração com a API Django
-// Todos os dados vêm de http://localhost:8000/api/processos/
-
-import { dbService } from './databaseService';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-function getToken(): string | null {
-  return localStorage.getItem('reurb_access_token');
-}
-
-function getRefreshToken(): string | null {
-  return localStorage.getItem('reurb_refresh_token');
-}
-
-async function refreshAccessToken(): Promise<string | null> {
-  const refresh = getRefreshToken();
-  if (!refresh) return null;
-  try {
-    const res = await fetch(`${API_BASE}/api/autenticacao/token/refresh/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh }),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    localStorage.setItem('reurb_access_token', data.access);
-    if (data.refresh) localStorage.setItem('reurb_refresh_token', data.refresh);
-    return data.access;
-  } catch {
-    return null;
-  }
-}
-
-function buildHeaders(token: string | null): HeadersInit {
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
-}
-
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  let token = getToken();
-  let res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { ...buildHeaders(token), ...(init?.headers ?? {}) },
-  });
-
-  // Token expirado → tenta renovar e refaz a requisição uma vez
-  if (res.status === 401) {
-    token = await refreshAccessToken();
-    if (token) {
-      res = await fetch(`${API_BASE}${path}`, {
-        ...init,
-        headers: { ...buildHeaders(token), ...(init?.headers ?? {}) },
-      });
-    }
-  }
-
-  if (!res.ok) {
-    const erro = await res.json().catch(() => ({}));
-    throw new Error(
-      (erro as any).detail ?? (erro as any).message ?? `Erro ${res.status}`
-    );
-  }
-
-  if (res.status === 204) return undefined as T;
-  return res.json() as Promise<T>;
-}
+import { request } from '../shared/services/apiClient';
+import { REURBProcess, ProcessStatus } from '../types/index';
 
 // ─── Tipos locais (mapeamento backend → frontend) ─────────────────────────────
 
@@ -90,8 +23,7 @@ export interface ProcessoAPI {
   updated_at: string;
 }
 
-// Converte o formato da API para o formato que o frontend (REURBProcess) espera
-function apiParaFrontend(p: ProcessoAPI) {
+function apiParaFrontend(p: ProcessoAPI): REURBProcess {
   return {
     id:              String(p.id),
     protocol:        p.protocol,
@@ -99,7 +31,7 @@ function apiParaFrontend(p: ProcessoAPI) {
     title:           p.title,
     applicant:       p.applicant,
     modality:        p.modality,
-    status:          p.status as any,
+    status:          p.status as ProcessStatus,
     progress:        p.progress,
     location:        p.location,
     municipio:       p.municipio,
@@ -113,16 +45,29 @@ function apiParaFrontend(p: ProcessoAPI) {
   };
 }
 
+interface PaginatedResponse<T> {
+  count: number;
+  next: string | null;
+  previous: string | null;
+  results: T[];
+}
+
 // ─── API pública ──────────────────────────────────────────────────────────────
 
-export async function listarProcessos(params?: { search?: string; status?: string }) {
+export async function listarProcessos(params?: { search?: string; status?: string; page?: number }) {
   const qs = new URLSearchParams();
   if (params?.search) qs.set('search', params.search);
   if (params?.status) qs.set('status', params.status);
+  if (params?.page) qs.set('page', String(params.page));
   const query = qs.toString() ? `?${qs}` : '';
 
-  const dados = await request<ProcessoAPI[]>(`/api/processos/${query}`);
-  return dados.map(apiParaFrontend);
+  const dados = await request<PaginatedResponse<ProcessoAPI>>(`/api/processos/${query}`);
+  return {
+    count: dados.count,
+    next: dados.next,
+    previous: dados.previous,
+    results: dados.results.map(apiParaFrontend),
+  };
 }
 
 export async function obterProcesso(id: string | number) {
@@ -142,24 +87,6 @@ export async function criarProcesso(data: {
   technician_id?: number | null;
   legal_id?: number | null;
 }) {
-  if (!getToken()) {
-    // Sem token JWT — usa localStorage como fallback
-    const p = dbService.processes.insert({
-      title:           data.title,
-      applicant:       data.applicant,
-      modality:        data.modality as any,
-      location:        data.location    ?? '',
-      municipio:       data.municipio   ?? '',
-      estado:          data.estado      ?? '',
-      area:            data.area        ?? '',
-      responsibleName: data.responsible_name ?? '',
-      protocolado:     false,
-      progress:        0,
-      status:          'Pendente' as any,
-    });
-    return p;
-  }
-
   const dado = await request<ProcessoAPI>('/api/processos/', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -175,19 +102,28 @@ export async function atualizarProcesso(id: string | number, patch: Partial<Proc
   return apiParaFrontend(dado);
 }
 
-export async function deletarProcesso(id: string | number) {
+export async function deletarProcesso(id: string | number): Promise<void> {
   await request<void>(`/api/processos/${id}/`, { method: 'DELETE' });
 }
 
+export interface ProcessoMeu extends ReturnType<typeof apiParaFrontend> {
+  meus_papeis: string[];
+}
+
+export async function meusProcessos(): Promise<ProcessoMeu[]> {
+  const dados = await request<(ProcessoAPI & { meus_papeis: string[] })[]>('/api/processos/meus/');
+  return dados.map(p => ({ ...apiParaFrontend(p), meus_papeis: p.meus_papeis }));
+}
+
 export async function buscarDashboard() {
-  const [processos, stats] = await Promise.all([
+  const [paginado, stats] = await Promise.all([
     listarProcessos(),
     request<{ total: number; ativos: number; concluidos: number; em_revisao: number }>(
       '/api/processos/stats/'
     ),
   ]);
 
-  const recentes = [...processos]
+  const recentes = [...paginado.results]
     .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
     .slice(0, 10);
 

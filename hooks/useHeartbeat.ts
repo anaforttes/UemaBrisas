@@ -1,29 +1,26 @@
 import { useEffect } from 'react';
+import { API_BASE, getToken } from '../shared/services/apiClient';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 const INTERVAL_MS = 25_000;
-
-function getToken(): string {
-  return localStorage.getItem('reurb_access_token') || '';
-}
 
 async function sendHeartbeat() {
   const token = getToken();
   if (!token) return;
   try {
-    await fetch(`${API_URL}/api/autenticacao/heartbeat/`, {
+    await fetch(`${API_BASE}/api/autenticacao/heartbeat/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ token }),
     });
-  } catch { /* falha silenciosa */ }
+  } catch {
+    // falha silenciosa — sessão continua ativa até o próximo ciclo
+  }
 }
 
 function sendOffline() {
   const token = getToken();
   if (!token) return;
   const blob = new Blob([JSON.stringify({ token })], { type: 'application/json' });
-  navigator.sendBeacon(`${API_URL}/api/autenticacao/logout-status/`, blob);
+  navigator.sendBeacon(`${API_BASE}/api/autenticacao/logout-status/`, blob);
 }
 
 export function useHeartbeat(active = true) {

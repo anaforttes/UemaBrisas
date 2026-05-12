@@ -1,5 +1,6 @@
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 
 class Processo(models.Model):
@@ -43,8 +44,26 @@ class Processo(models.Model):
 
     # Responsáveis
     responsible_name = models.CharField(max_length=255, blank=True, default="")
-    technician_id    = models.IntegerField(blank=True, null=True)
-    legal_id         = models.IntegerField(blank=True, null=True)
+    technician_id    = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='processos_tecnico',
+        db_column='technician_id',
+    )
+    legal_id         = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='processos_juridico',
+        db_column='legal_id',
+    )
+    criado_por       = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='processos_criados',
+    )
 
     # Datas
     created_at = models.DateTimeField(auto_now_add=True)

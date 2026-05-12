@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import {
-  HashRouter as Router, Routes, Route, Navigate, useParams,
-} from 'react-router-dom';
+import React from 'react';
+import { HashRouter as Router, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import { User, REURBDocument } from './types/index';
+import { REURBDocument } from './types/index';
 import { dbService } from './services/databaseService';
+import { AuthProvider, useAuth } from './shared/contexts/AuthContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Dashboard } from './components/dashboard/Dashboard';
 import { Templates } from './components/dashboard/Templates';
@@ -13,6 +12,7 @@ import { Team } from './components/dashboard/Team';
 import { Configuracoes } from './components/dashboard/Configuracoes';
 import { ProcessManagement } from './components/dashboard/ProcessManagement';
 import Editor from './components/editor/Editor';
+import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
@@ -23,14 +23,11 @@ type DocumentStatus = 'Draft' | 'Review' | 'Approved' | 'Signed';
 
 // ─── EditorPage ───────────────────────────────────────────────────────────────
 
-interface EditorPageProps {
-  currentUser: User;
-}
-
-const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
+const EditorPage: React.FC = () => {
   const { docId } = useParams<{ docId: string }>();
+  const { user } = useAuth();
 
-  const doc = docId ? (dbService.documents.findById(docId) ?? null) : null;
+  const doc: REURBDocument | null = docId ? (dbService.documents.findById(docId) ?? null) : null;
 
   const titulo = doc?.title ?? 'Documento de Instauração';
   const conteudo =
@@ -48,43 +45,57 @@ const EditorPage: React.FC<EditorPageProps> = ({ currentUser }) => {
     });
   };
 
+  if (!user) return null;
+
   return (
     <div className="h-full bg-slate-100 p-6">
-      <Editor
-        title={titulo}
-        status={status}
-        initialContent={conteudo}
-        onSave={handleSave}
-        currentUser={currentUser}
-        docLocalId={docId}
-      />
+      <ErrorBoundary>
+        <Editor
+          title={titulo}
+          status={status}
+          initialContent={conteudo}
+          onSave={handleSave}
+          currentUser={user}
+          docLocalId={docId}
+        />
+      </ErrorBoundary>
     </div>
   );
 };
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// ─── AppInner ─────────────────────────────────────────────────────────────────
 
-const AppInner: React.FC<{ user: User | null; onLogin: (u: User) => void; onLogout: () => void }> = ({ user, onLogin, onLogout }) => {
+const AppInner: React.FC = () => {
+  const { user, loading, login, logout } = useAuth();
   useHeartbeat(!!user);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 size={40} className="text-blue-600 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={onLogin} />} />
-      <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
+      <Route path="/login"          element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={login} />} />
+      <Route path="/signup"         element={user ? <Navigate to="/" /> : <SignupScreen />} />
       <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
-      <Route path="/convite/:code" element={<ConviteAcceptPage currentUser={user} />} />
+      <Route path="/convite/:code"  element={<ConviteAcceptPage currentUser={user} />} />
       <Route path="/*" element={
         !user ? <Navigate to="/login" /> : (
           <div className="flex min-h-screen bg-slate-50 font-sans">
-            <Sidebar user={user} onLogout={onLogout} />
+            <Sidebar user={user} onLogout={logout} />
             <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
               <Routes>
-                <Route path="/" element={<Dashboard user={user} />} />
+                <Route path="/"          element={<Dashboard user={user} />} />
                 <Route path="/processes" element={<ProcessManagement />} />
                 <Route path="/templates" element={<Templates />} />
-                <Route path="/reports" element={<Reports />} />
-                <Route path="/team" element={<Team />} />
-                <Route path="/settings" element={<Configuracoes />} />
-                <Route path="/edit/:docId" element={<EditorPage currentUser={user} />} />
+                <Route path="/reports"   element={<Reports />} />
+                <Route path="/team"      element={<Team />} />
+                <Route path="/settings"  element={<Configuracoes />} />
+                <Route path="/edit/:docId" element={<EditorPage />} />
               </Routes>
             </main>
           </div>
@@ -94,37 +105,14 @@ const AppInner: React.FC<{ user: User | null; onLogin: (u: User) => void; onLogo
   );
 };
 
-const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+// ─── App ──────────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    const savedUser = localStorage.getItem('reurb_current_user');
-    if (savedUser) setUser(JSON.parse(savedUser));
-    setLoading(false);
-  }, []);
-
-  const handleLogin = (u: User) => {
-    setUser(u);
-    localStorage.setItem('reurb_current_user', JSON.stringify(u));
-  };
-
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('reurb_current_user');
-  };
-
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50">
-      <Loader2 size={40} className="text-blue-600 animate-spin" />
-    </div>
-  );
-
-  return (
+const App: React.FC = () => (
+  <AuthProvider>
     <Router>
-      <AppInner user={user} onLogin={handleLogin} onLogout={handleLogout} />
+      <AppInner />
     </Router>
-  );
-};
+  </AuthProvider>
+);
 
 export default App;

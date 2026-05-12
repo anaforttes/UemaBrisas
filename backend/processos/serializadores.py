@@ -21,7 +21,23 @@ class ProcessoSerializer(serializers.ModelSerializer):
             "responsible_name",
             "technician_id",
             "legal_id",
+            "criado_por_id",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "protocol", "created_at", "updated_at"]
+        read_only_fields = ["id", "protocol", "criado_por_id", "created_at", "updated_at"]
+
+    def validate_title(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("O título do processo é obrigatório.")
+        return value.strip()
+
+    def validate_applicant(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError("O requerente é obrigatório.")
+        return value.strip()
+
+    def validate_progress(self, value):
+        if not (0 <= value <= 100):
+            raise serializers.ValidationError("O progresso deve estar entre 0 e 100.")
+        return value

@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronRight, Database } from 'lucide-react';
-import { REURBProcess, ProcessStatus } from '../../types';
+import { REURBProcess, ProcessStatus } from '../../types/index';
 
 interface ProcessTableProps {
   processes: REURBProcess[];

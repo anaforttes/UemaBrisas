@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+import { API_BASE, getToken } from '../shared/services/apiClient';
 
 type StatusUpdate = { id: number | string; status: 'Online' | 'Offline' };
 type UserUpdated  = Record<string, unknown> & { id: number | string };
@@ -18,10 +17,10 @@ export function useStatusStream({ onStatusUpdate, onSnapshot, onUserUpdated, onU
     let retryTimeout: ReturnType<typeof setTimeout>;
 
     const connect = () => {
-      const token = localStorage.getItem('reurb_access_token') || '';
+      const token = getToken() ?? '';
       const url = token
-        ? `${API_URL}/api/autenticacao/status-stream/?token=${token}`
-        : `${API_URL}/api/autenticacao/status-stream/`;
+        ? `${API_BASE}/api/autenticacao/status-stream/?token=${token}`
+        : `${API_BASE}/api/autenticacao/status-stream/`;
 
       es = new EventSource(url);
 

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useStatusStream } from '../../hooks/useStatusStream';
+import { API_BASE, getToken } from '../../shared/services/apiClient';
 import {
   AlertTriangle,
   Check,
@@ -562,12 +563,10 @@ export const Team: React.FC = () => {
   const [permissoesTarget, setPermissoesTarget] = useState<User | null>(null);
   const [mostrarConvite, setMostrarConvite] = useState(false);
 
-  const getToken = () => localStorage.getItem('reurb_access_token') ?? '';
-
   const apiPatch = async (pk: string, body: object) => {
-    const res = await fetch(`http://localhost:8000/api/autenticacao/usuarios/${pk}/`, {
+    const res = await fetch(`${API_BASE}/api/autenticacao/usuarios/${pk}/`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken()}` },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getToken() ?? ''}` },
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`PATCH falhou: ${res.status}`);
@@ -575,17 +574,17 @@ export const Team: React.FC = () => {
   };
 
   const apiDelete = async (pk: string) => {
-    const res = await fetch(`http://localhost:8000/api/autenticacao/usuarios/${pk}/`, {
+    const res = await fetch(`${API_BASE}/api/autenticacao/usuarios/${pk}/`, {
       method: 'DELETE',
-      headers: { Authorization: `Bearer ${getToken()}` },
+      headers: { Authorization: `Bearer ${getToken() ?? ''}` },
     });
     if (!res.ok) throw new Error(`DELETE falhou: ${res.status}`);
   };
 
   const fetchMembers = async () => {
     try {
-      const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', {
-        headers: { Authorization: `Bearer ${getToken()}` },
+      const response = await fetch(`${API_BASE}/api/autenticacao/usuarios/`, {
+        headers: { Authorization: `Bearer ${getToken() ?? ''}` },
       });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 

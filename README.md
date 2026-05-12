@@ -13,10 +13,18 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Login exige conta real no banco — sem fallback para autenticação local
 
 ### Processos — Andre
-- Listagem, criação e exclusão de processos integrados com o banco via `GET | POST | DELETE /api/processos/`
-- Botão de exclusão com modal de confirmação, comunicando diretamente com o banco Neon
-- Refresh automático de token sem logout forçado
-- Listagem carrega apenas dados do banco (sem fallback para localStorage)
+- Listagem, criação, edição e exclusão de processos integradas com o banco via `/api/processos/`
+- Modal de confirmação antes de excluir, com atualização imediata do painel
+- Protocolar processo muda status para "Em Andamento" via PATCH
+- Download de pacote ZIP com metadados + documentos do processo
+- Tags de papel ("Criador", "Técnico", "Jurídico", "Colaborador") nos cards da Central de Processos
+- Datas formatadas como DD/MM/AAAA no grid de processos
+
+### Painel (Dashboard) — Carol / Andre
+- Integração completa com `/api/processos/stats/` e `/api/processos/`
+- Cache inteligente com TTL de 30s — sem spinner em toda navegação, dados frescos em background
+- Invalidação automática de cache ao deletar ou protocolar um processo
+- Processos recentes ordenados por `updated_at`
 
 ### Equipe — Leandro
 - Listagem de membros integrada com o banco via `GET /api/autenticacao/usuarios/`
@@ -24,9 +32,48 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Editar nome, salvar permissões e remover colaborador via `PATCH | DELETE /api/autenticacao/usuarios/<pk>/`
 - Último acesso atualizado automaticamente no banco
 
-### Permissões — feature/brisa
-- `permissoes/servicos.py`: função `obter_permissoes_usuario()` que retorna roles, flags e ações do usuário
-- Usa diretamente os campos `CustomUser.role`, `access_flags` e `permissions_data` (sem model extra)
+### Colaboração em Documentos — Carol
+- Geração de link de convite para co-edição de documentos
+- Aceite de convite via `/convite/:code` — adiciona colaborador com papel definido
+- SSE centralizado em `autenticacao/sse.py` para broadcast de status em tempo real
+
+### Permissões
+- `GET /api/permissoes/` retorna roles, flags e ações permitidas para o usuário autenticado
+- Botões e menus ocultados no frontend conforme permissão (`pode.criarProcesso`, `pode.verMenuAcoes`)
+- FKs de responsável técnico e jurídico nos processos apontam para `CustomUser` (integridade referencial)
+
+---
+
+## Refatoração (branch `feature/andre`)
+
+### Backend — Camada de Serviço
+- `processos/servicos.py` — lógica de negócio extraída de `views.py`
+- `documentos/servicos.py` — criar documento, salvar versão, colaboradores, assinaturas, convites
+- `autenticacao/sse.py` — SSE centralizado (views não importam mais de views)
+- `processos/constantes.py` — listas de status compartilhadas
+- Migration `0004`: `technician_id` e `legal_id` convertidos de `IntegerField` para `ForeignKey(CustomUser)`
+- `autenticacao/serializers.py` removido — classes consolidadas em `serializadores.py`
+
+### Frontend — Decomposição de Componentes
+- `components/editor/EditorToolbar.tsx` — toolbar extraída do Editor (redução de ~200 linhas)
+- `components/editor/extensions/FontSize.ts` — extensão TipTap extraída
+- `services/exportService.ts` — `exportarPDF` e `exportarDOCX` extraídos do Editor
+- `components/dashboard/DeleteProcessModal.tsx` — modal de confirmação extraído
+- `hooks/useProcesses.ts` — lógica de fetch, delete, protocolar e download ZIP
+- `shared/components/ErrorBoundary.tsx` — captura erros de renderização no Editor
+- `shared/components/StatusBadge.tsx` — badge de status reutilizável
+- `hooks/useGeolocalizacao.ts` — movido de `components/editor/components/`
+
+### Shared Kernel
+- `shared/services/apiClient.ts` — URL da API, token refresh, `request<T>()` centralizados
+- `shared/contexts/AuthContext.tsx` — contexto de autenticação (elimina prop drilling)
+- `shared/utils/date.ts` — helpers de formatação de data
+- `types/index.ts` e `constants/index.tsx` — fontes únicas de tipos e constantes
+
+### Organização
+- Removidos arquivos órfãos: `components/AuthScreens.tsx`, `components/Editor.tsx`, `scratch/`
+- Barrel exports em `hooks/index.ts` e `shared/components/index.ts`
+- Aliases de path no Vite e tsconfig (`@/`, `@shared/`, `@features/`)
 
 ---
 
@@ -34,9 +81,10 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 
 **Frontend**
 - React 18 + TypeScript
-- Vite
+- Vite 6
 - Tailwind CSS
-- React Router DOM
+- React Router DOM (HashRouter)
+- TipTap 3 (editor rich text)
 - Lucide React
 
 **Backend**
@@ -52,18 +100,28 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 
 ```
 UemaBrisas/
-├── backend/               # API Django
-│   ├── autenticacao/      # Login, cadastro, JWT, OAuth2 Google
-│   ├── processos/         # CRUD de processos REURB
-│   ├── painel/            # Dados do dashboard
-│   ├── equipe/            # Gestão de usuários/equipe
+├── backend/
+│   ├── autenticacao/      # Login, cadastro, JWT, SSE, CustomUser
+│   ├── processos/         # CRUD processos REURB + permissoes + constantes
+│   ├── documentos/        # Documentos, versões, assinaturas, convites
+│   ├── painel/            # Dashboard e estatísticas
+│   ├── equipe/            # Gestão de membros
 │   ├── permissoes/        # Controle de acesso
 │   └── configuracao/      # Settings, URLs, WSGI
-├── components/            # Componentes React
-├── services/              # Serviços (API, banco local)
-├── types/                 # Tipos TypeScript
-├── hooks/                 # Hooks React
-└── uema-2026/             # Versão estendida do frontend
+├── components/
+│   ├── auth/              # LoginScreen, SignupScreen, ForgotPasswordScreen
+│   ├── dashboard/         # Dashboard, ProcessManagement, Templates, Equipe…
+│   ├── editor/            # Editor TipTap + EditorToolbar + extensões
+│   └── layout/            # Sidebar
+├── hooks/                 # useProcesses, useHeartbeat, usePermissoes, useGeolocalizacao…
+├── services/              # painelService, databaseService, exportService…
+├── shared/
+│   ├── components/        # ErrorBoundary, StatusBadge
+│   ├── contexts/          # AuthContext
+│   ├── services/          # apiClient (fetch centralizado)
+│   └── utils/             # date helpers
+├── types/                 # Tipos TypeScript (fonte única)
+└── constants/             # Constantes e modelos mock (fonte única)
 ```
 
 ---
@@ -82,9 +140,6 @@ pip install django djangorestframework djangorestframework-simplejwt \
 
 Crie um arquivo `.env` dentro de `backend/`:
 ```env
-# SQLite (padrão para desenvolvimento — não precisa configurar)
-# DATABASE_URL=sqlite:///db.sqlite3
-
 # PostgreSQL (produção — Neon)
 DATABASE_URL=postgresql://usuario:senha@host/neondb
 
@@ -151,12 +206,20 @@ Frontend disponível em `http://localhost:5173`
 | GET | `/api/autenticacao/usuarios/` | Listar membros da equipe | JWT |
 | PATCH | `/api/autenticacao/usuarios/<pk>/` | Editar membro | JWT |
 | DELETE | `/api/autenticacao/usuarios/<pk>/` | Remover membro | JWT |
-| GET | `/api/processos/` | Listar processos | JWT |
+| GET | `/api/processos/` | Listar processos (paginado) | JWT |
 | POST | `/api/processos/` | Criar processo | JWT |
 | GET | `/api/processos/<id>/` | Detalhe do processo | JWT |
 | PATCH | `/api/processos/<id>/` | Atualizar processo | JWT |
 | DELETE | `/api/processos/<id>/` | Excluir processo | JWT |
+| GET | `/api/processos/meus/` | Processos do usuário logado | JWT |
 | GET | `/api/processos/stats/` | Estatísticas do painel | JWT |
+| GET | `/api/permissoes/` | Permissões do usuário | JWT |
+| GET | `/api/documentos/` | Listar documentos | JWT |
+| POST | `/api/documentos/` | Criar documento | JWT |
+| POST | `/api/documentos/<id>/versao/` | Salvar versão | JWT |
+| POST | `/api/documentos/<id>/colaboradores/` | Adicionar colaborador | JWT |
+| POST | `/api/documentos/<id>/convite/` | Gerar link de convite | JWT |
+| GET/POST | `/api/documentos/convite/<codigo>/` | Aceitar convite | JWT |
 
 **Autenticação:** Bearer Token no header `Authorization: Bearer <access_token>`
 
@@ -169,19 +232,20 @@ Frontend disponível em `http://localhost:5173`
 | Email | `admin@reurb.gov.br` |
 | Senha | `Admin123!` |
 
-> **Atenção:** o login exige conta cadastrada no banco Django. Usuários criados antes da integração (apenas no localStorage) precisam ser recriados via cadastro ou pelo admin do Django.
-
 ---
 
 ## Funcionalidades
 
-- **Painel:** visão geral de processos ativos, em revisão e concluídos
-- **Processos:** Central de Processos com listagem, filtros, criação e exclusão integradas ao banco
-- **Modelos:** biblioteca de documentos REURB (Portaria, Notificação, Relatório, etc.)
+- **Painel:** visão geral de processos ativos, em revisão e concluídos com cache inteligente
+- **Processos:** Central de Processos com grid/tabela, filtros, criação, exclusão e protocolo; tags de papel do usuário em cada card
+- **Modelos:** biblioteca de documentos REURB (Portaria, Notificação, Relatório, Demarcação, Título)
+- **Editor:** editor rich text TipTap com auto-save, histórico de versões, comentários e assinatura digital
+- **Colaboração:** convite por link para co-edição de documentos com papéis definidos
 - **Relatórios:** gráficos de produtividade, modalidade e status
-- **Equipe:** gestão de membros com status online/offline em tempo real e controle de permissões
+- **Equipe:** gestão de membros com status online/offline em tempo real
+- **Permissões:** controle granular por role — menus e ações ocultos conforme perfil do usuário
 - **Configurações:** tema, fonte, acessibilidade
 
 ---
 
-*Desenvolvido para gestão pública de regularização fundiária municipal.*
+*Desenvolvido para gestão pública de regularização fundiária municipal — UEMA 2026.*

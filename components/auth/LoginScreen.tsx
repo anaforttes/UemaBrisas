@@ -2,8 +2,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, AlertCircle } from 'lucide-react';
-import { dbService } from '../../services/databaseService';
 import { Logo } from '../common/Logo';
+import { API_BASE } from '../../shared/services/apiClient';
+import type { User } from '../../types/index';
 
 const parseJwt = (token: string) => {
   try {
@@ -18,7 +19,9 @@ const parseJwt = (token: string) => {
   }
 };
 
-export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) => void }) => {
+type LoginSuccessCallback = (user: User, tokens?: { access: string; refresh: string }) => void;
+
+export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCallback }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -30,7 +33,7 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
       try {
         // @ts-ignore
         google.accounts.id.initialize({
-          client_id: "777000000000-sampleid.apps.googleusercontent.com",
+          client_id: (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ?? '',
           callback: handleGoogleResponse,
         });
         // @ts-ignore
@@ -47,11 +50,12 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
   const handleGoogleResponse = (response: any) => {
     const userData = parseJwt(response.credential);
     if (userData) {
-      const googleUser = {
-        name: userData.name,
-        email: userData.email,
-        role: 'Jurídico',
-        avatar: userData.picture
+      const googleUser: User = {
+        id:     userData.sub ?? '',
+        name:   userData.name,
+        email:  userData.email,
+        role:   'Técnico',
+        avatar: userData.picture,
       };
       onLoginSuccess(googleUser);
       navigate('/');
@@ -62,10 +66,8 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     e.preventDefault();
     setError('');
 
-    const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-
     try {
-      const res = await fetch(`${API_URL}/api/autenticacao/login/`, {
+      const res = await fetch(`${API_BASE}/api/autenticacao/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -74,17 +76,15 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
       const data = await res.json();
 
       if (res.ok) {
-        localStorage.setItem('reurb_access_token',  data.access);
-        localStorage.setItem('reurb_refresh_token', data.refresh);
         const userPayload = parseJwt(data.access);
-        const apiUser = {
+        const apiUser: User = {
           id:     String(userPayload?.user_id ?? userPayload?.sub ?? ''),
           name:   data.nome   ?? data.name   ?? email.split('@')[0],
           email:  data.email  ?? email,
           role:   data.papel  ?? data.role   ?? 'Técnico',
           avatar: data.avatar ?? '',
         };
-        onLoginSuccess(apiUser);
+        onLoginSuccess(apiUser, { access: data.access, refresh: data.refresh });
         navigate('/');
         return;
       }

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { BarChart3, TrendingUp, FileText, Users, Calendar, Send, MessageSquare, X, Minus } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
-import { MOCK_PROCESSES } from '../../constants';
+import { MOCK_PROCESSES } from '../../constants/index';
 import { ProcessStatus, User } from '../../types/index';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────

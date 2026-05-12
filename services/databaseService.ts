@@ -8,7 +8,8 @@ import {
   ProcessStatus,
   ETAPAS_PADRAO,
 } from '../types/index';
-import { MOCK_PROCESSES } from '../constants';
+import { MOCK_PROCESSES } from '../constants/index';
+import { API_BASE, getToken } from '../shared/services/apiClient';
 
 export { ProcessStatus, MOCK_PROCESSES };
 
@@ -34,11 +35,9 @@ class SQLDatabase {
   users = {
     selectAll: async (): Promise<User[]> => {
       try {
-        const token = localStorage.getItem('reurb_access_token');
-
-        const response = await fetch('http://localhost:8000/api/autenticacao/usuarios/', {
+        const response = await fetch(`${API_BASE}/api/autenticacao/usuarios/`, {
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${getToken() ?? ''}`,
             'Content-Type': 'application/json',
           },
         });
@@ -80,27 +79,6 @@ class SQLDatabase {
     findById: (id: string): User | undefined => {
       const users = this.getStorage<User>('users');
       return users.find((u) => u.id === id);
-    },
-
-    login: (email: string, password: string): { user: User } => {
-      const users = this.getStorage<User>('users');
-      const user = users.find((u) => u.email === email);
-
-      if (!user) {
-        throw new Error('Usuário não encontrado.');
-      }
-
-      if (user.password !== password) {
-        throw new Error('Senha incorreta.');
-      }
-
-      const idx = users.findIndex((u) => u.id === user.id);
-      users[idx].lastLogin = new Date().toISOString();
-      users[idx].status = 'Online';
-      localStorage.setItem('reurb_db_users', JSON.stringify(users));
-      localStorage.setItem('reurb_current_user', JSON.stringify(users[idx]));
-
-      return { user: users[idx] };
     },
 
     insert: (data: { name: string; email: string; password: string; role: string }): User => {
@@ -456,35 +434,3 @@ class SQLDatabase {
 }
 
 export const dbService = new SQLDatabase();
-
-// ─── Inicialização ────────────────────────────────────────────────────────────
-
-const initDB = () => {
-  const usersData = localStorage.getItem('reurb_db_users');
-  if (!usersData || JSON.parse(usersData).length === 0) {
-    const defaultUsers = [
-      {
-        id: 'u-admin',
-        name: 'Administrador do Sistema',
-        email: 'admin@reurb.gov.br',
-        password: 'Admin123!',
-        role: 'Admin' as const,
-        tipoProfissional: 'Advogado',
-        avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=admin',
-        status: 'Offline' as const,
-        lastLogin: new Date().toISOString(),
-        quota: { limit: 50000, used: 0, resetAt: new Date(Date.now() + 86400000).toISOString() },
-        flags: {
-          superusuario: true,
-          adminMunicipio: true,
-          profissionalInterno: true,
-          usuarioExterno: false,
-        },
-        etapasPermitidas: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14],
-      },
-    ];
-    localStorage.setItem('reurb_db_users', JSON.stringify(defaultUsers));
-  }
-};
-
-initDB();

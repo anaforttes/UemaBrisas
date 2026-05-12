@@ -1,4 +1,7 @@
+import logging
 from html import escape
+
+logger = logging.getLogger(__name__)
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.core.mail import EmailMultiAlternatives
@@ -210,9 +213,7 @@ def solicitar_recuperacao_senha(email: str) -> dict:
             f"{settings.FRONTEND_URL}/#/login?uid={uid_safe}&token={token_safe}&action=reset"
         )
 
-        print("\n=== LINK DE RECUPERACAO LIMPO ===")
-        print(link_recuperacao)
-        print("================================\n")
+        logger.info("Link de recuperação gerado para: %s", usuario.email)
 
         assunto = "Recuperacao de Senha - RegularizaAI"
         corpo_texto = _montar_email_recuperacao_texto(usuario.name, link_recuperacao)
@@ -251,23 +252,19 @@ def redefinir_senha(uid: str, token: str, nova_senha: str) -> dict:
     }
 
 
-def criar_usuario(email: str, password: str, name: str, role: str) -> dict:
+def criar_usuario(email: str, password: str, name: str, role: str = 'Atendente') -> dict:
     if CustomUser.objects.filter(email__iexact=email).exists():
         raise ValidationError("Um usuario com este e-mail ja existe.")
 
-    usuario = CustomUser.objects.create_user(
+    # Conta criada como inativa — admin aprova manualmente e atribui cargo
+    CustomUser.objects.create_user(
         email=email,
         name=name,
         password=password,
-        role=role,
+        role='Atendente',
+        is_active=False,
     )
 
-    refresh = RefreshToken.for_user(usuario)
-
     return {
-        "access": str(refresh.access_token),
-        "refresh": str(refresh),
-        "email": usuario.email,
-        "name": usuario.name,
-        "isNewUser": True,
+        "mensagem": "Solicitação enviada com sucesso. Aguarde a aprovação do administrador.",
     }

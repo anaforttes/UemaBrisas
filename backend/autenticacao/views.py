@@ -3,14 +3,17 @@ import time
 import threading
 from django.utils import timezone
 from django.http import StreamingHttpResponse
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import CustomUser
+from .sse import sse_register, sse_unregister, sse_broadcast
 import logging
+import queue
 
 logger = logging.getLogger(__name__)
 
@@ -20,8 +23,9 @@ from .serializadores import (
     RedefinirSenhaSerializador,
     SolicitarRecuperacaoSenhaSerializador,
     CadastroSerializador,
+    CustomUserSerializer,
+    AtualizarUsuarioSerializer,
 )
-from .serializers import CustomUserSerializer, AtualizarUsuarioSerializer
 from .servicos import (
     autenticar_usuario,
     autenticar_com_google,
@@ -30,46 +34,13 @@ from .servicos import (
     criar_usuario,
 )
 
-# ── SSE — registro de clientes conectados ─────────────────────────────────────
-# Dicionário thread-safe: { user_id: set_of_queues }
-# Cada aba aberta do navegador tem sua própria fila de eventos.
-import queue
-
-_sse_lock    = threading.Lock()
-_sse_clients: dict[int, set] = {}   # user_id → {queue, ...}
-
-
-def _sse_register(user_id: int) -> queue.SimpleQueue:
-    q = queue.SimpleQueue()
-    with _sse_lock:
-        _sse_clients.setdefault(user_id, set()).add(q)
-    return q
-
-
-def _sse_unregister(user_id: int, q: queue.SimpleQueue):
-    with _sse_lock:
-        if user_id in _sse_clients:
-            _sse_clients[user_id].discard(q)
-            if not _sse_clients[user_id]:
-                del _sse_clients[user_id]
-
-
-def _sse_broadcast(event: str, data: dict):
-    """Envia um evento SSE para TODOS os clientes conectados."""
-    payload = f"event: {event}\ndata: {json.dumps(data)}\n\n"
-    with _sse_lock:
-        all_queues = [q for qs in _sse_clients.values() for q in qs]
-    for q in all_queues:
-        try:
-            q.put_nowait(payload)
-        except Exception:
-            pass
-
 
 # ── LOGIN ─────────────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def login(request):
+    request.throttle_scope = 'login'
     serializador = LoginSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
     resposta = autenticar_usuario(
@@ -92,7 +63,9 @@ def google_login(request):
 # ── CADASTRO ──────────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
+@throttle_classes([ScopedRateThrottle])
 def cadastro(request):
+    request.throttle_scope = 'cadastro'
     serializador = CadastroSerializador(data=request.data)
     if not serializador.is_valid():
         logger.error(f"Erro de validação: {serializador.errors}")
@@ -135,19 +108,13 @@ def redefinir_senha(request):
 
 # ── HEARTBEAT ─────────────────────────────────────────────────────────────────
 def _autenticar_token_body(request):
-    """
-    Extrai e valida o JWT do header Authorization OU do campo 'token' no body.
-    Necessário porque sendBeacon não suporta headers customizados.
-    Retorna o CustomUser ou None.
-    """
+    """Extrai e valida o JWT do header ou do body (para sendBeacon)."""
     from rest_framework_simplejwt.tokens import AccessToken
     from rest_framework_simplejwt.exceptions import TokenError
 
-    # 1. Tenta pelo header padrão
     header = request.META.get('HTTP_AUTHORIZATION', '')
     raw = header.removeprefix('Bearer ').strip() if header.startswith('Bearer ') else ''
 
-    # 2. Fallback: token no body JSON
     if not raw:
         try:
             import json as _json
@@ -166,59 +133,31 @@ def _autenticar_token_body(request):
         return None
 
 
-# ── HEARTBEAT ─────────────────────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def heartbeat(request):
-    """
-    Chamado pelo frontend a cada 25 s enquanto logado.
-    Aceita token no header Authorization OU no body { token: '...' }.
-    """
     user = _autenticar_token_body(request)
     if not user:
         return Response({'erro': 'Token inválido.'}, status=401)
 
     user.last_access = timezone.now()
     user.save(update_fields=['last_access'])
-
-    _sse_broadcast('status_update', {
-        'id':     user.id,
-        'status': 'Online',
-    })
-
+    sse_broadcast('status_update', {'id': user.id, 'status': 'Online'})
     return Response({'ok': True})
 
 
-# ── LOGOUT / OFFLINE EXPLÍCITO ────────────────────────────────────────────────
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def logout_status(request):
-    """
-    Chamado ao fazer logout ou fechar a aba (sendBeacon).
-    Preserva last_access no banco (histórico) — apenas emite Offline via SSE.
-    """
     user = _autenticar_token_body(request)
     if not user:
         return Response({'erro': 'Token inválido.'}, status=401)
-
-    # NÃO apaga last_access — ele registra o histórico do último login
-    # Apenas notifica os clientes SSE que o usuário ficou Offline
-    _sse_broadcast('status_update', {
-        'id':     user.id,
-        'status': 'Offline',
-    })
-
+    sse_broadcast('status_update', {'id': user.id, 'status': 'Offline'})
     return Response({'ok': True})
 
 
 # ── SSE STREAM ────────────────────────────────────────────────────────────────
 def status_stream(request):
-    """
-    GET /api/autenticacao/status-stream/
-    Abre um stream SSE. Qualquer cliente (inclusive não autenticado)
-    pode ouvir atualizações de status da equipe.
-    """
-    # Tenta identificar o user pelo token na query string ou header
     user_id = 0
     token = (
         request.GET.get('token') or
@@ -237,10 +176,9 @@ def status_stream(request):
         except Exception:
             pass
 
-    q = _sse_register(user_id)
+    q = sse_register(user_id)
 
     def event_generator():
-        # Envia estado atual de todos ao conectar
         users = CustomUser.objects.all().order_by('name')
         snapshot = [
             {'id': u.id, 'status': 'Online' if u.is_online else 'Offline'}
@@ -251,40 +189,31 @@ def status_stream(request):
         try:
             while True:
                 try:
-                    # Aguarda próximo evento (com keepalive a cada 20s)
                     msg = q.get(timeout=20)
                     yield msg
                 except queue.Empty:
-                    # keepalive para manter a conexão viva
                     yield ': keepalive\n\n'
         finally:
-            _sse_unregister(user_id, q)
+            sse_unregister(user_id, q)
 
-    response = StreamingHttpResponse(
-        event_generator(),
-        content_type='text/event-stream',
-    )
+    response = StreamingHttpResponse(event_generator(), content_type='text/event-stream')
     response['Cache-Control']               = 'no-cache'
     response['X-Accel-Buffering']           = 'no'
     response['Access-Control-Allow-Origin'] = '*'
     return response
 
 
-# ── LISTAR USUÁRIOS ───────────────────────────────────────────────────────────
+# ── LISTAR / GERENCIAR USUÁRIOS ───────────────────────────────────────────────
 class CustomUserList(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def get(self, request):
         users = CustomUser.objects.all().order_by('name')
-        serializer = CustomUserSerializer(users, many=True)
-        return Response(serializer.data)
+        return Response(CustomUserSerializer(users, many=True).data)
 
 
-# ── ATUALIZAR USUÁRIO ─────────────────────────────────────────────────────────
 class CustomUserDetail(APIView):
-    authentication_classes = []
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
         try:
@@ -297,10 +226,7 @@ class CustomUserDetail(APIView):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         updated_user = serializer.save()
-
-        # Notifica via SSE que as permissões/cargo mudaram
-        _sse_broadcast('user_updated', CustomUserSerializer(updated_user).data)
-
+        sse_broadcast('user_updated', CustomUserSerializer(updated_user).data)
         return Response(CustomUserSerializer(updated_user).data)
 
     def delete(self, request, pk):
@@ -311,7 +237,5 @@ class CustomUserDetail(APIView):
 
         user_data = CustomUserSerializer(user).data
         user.delete()
-
-        _sse_broadcast('user_removed', {'id': pk})
-
+        sse_broadcast('user_removed', {'id': pk})
         return Response(user_data, status=status.HTTP_200_OK)

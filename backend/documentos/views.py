@@ -1,4 +1,3 @@
-from datetime import timedelta
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -6,9 +5,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from autenticacao.models import CustomUser
+from autenticacao.sse import sse_broadcast
 from .models import (
     Documento, ColaboradorDocumento, ComentarioDocumento,
-    VersaoDocumento, AssinaturaDocumento, ConviteDocumento,
+    VersaoDocumento, ConviteDocumento,
 )
 from .serializadores import (
     DocumentoListSerializer, DocumentoDetalheSerializer,
@@ -16,16 +16,20 @@ from .serializadores import (
     VersaoSerializer, VersaoComConteudoSerializer,
     AssinaturaSerializer,
 )
+from .servicos import (
+    criar_documento, salvar_versao, adicionar_colaborador,
+    iniciar_assinaturas, registrar_assinatura,
+    gerar_convite, aceitar_convite,
+)
 
 
 def _sse_doc(doc_id, doc_ref, tipo, autor_nome):
     try:
-        from autenticacao.views import _sse_broadcast
-        _sse_broadcast('doc_update', {
-            'doc_id':    str(doc_id),
-            'doc_ref':   doc_ref,
-            'tipo':      tipo,
-            'autor':     autor_nome,
+        sse_broadcast('doc_update', {
+            'doc_id':  str(doc_id),
+            'doc_ref': doc_ref,
+            'tipo':    tipo,
+            'autor':   autor_nome,
         })
     except Exception:
         pass
@@ -62,22 +66,7 @@ class DocumentoListView(APIView):
         return Response(DocumentoListSerializer(docs, many=True).data)
 
     def post(self, request):
-        data = request.data
-        doc = Documento.objects.create(
-            doc_ref=data.get('doc_ref', ''),
-            titulo=data.get('titulo', 'Sem título'),
-            conteudo=data.get('conteudo', ''),
-            cabecalho=data.get('cabecalho', ''),
-            rodape=data.get('rodape', ''),
-            processo_id=data.get('processo_id', ''),
-            criado_por=request.user,
-            status=data.get('status', 'Draft'),
-        )
-        VersaoDocumento.objects.create(
-            documento=doc, numero=1,
-            conteudo=doc.conteudo, titulo=doc.titulo,
-            autor=request.user, descricao='Versão inicial',
-        )
+        doc = criar_documento(request.user, request.data)
         return Response(DocumentoDetalheSerializer(doc).data, status=status.HTTP_201_CREATED)
 
 
@@ -140,24 +129,13 @@ class SalvarVersaoView(APIView):
         if not _pode_editar(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
-        conteudo  = request.data.get('conteudo', doc.conteudo)
-        titulo    = request.data.get('titulo', doc.titulo)
-        descricao = request.data.get('descricao', '')
-        status_novo = request.data.get('status', None)
-
-        doc.conteudo = conteudo
-        doc.titulo   = titulo
-        if status_novo:
-            doc.status = status_novo
-        doc.versao_atual += 1
-        doc.save()
-
-        versao = VersaoDocumento.objects.create(
-            documento=doc, numero=doc.versao_atual,
-            conteudo=conteudo, titulo=titulo,
-            autor=request.user, descricao=descricao or f'Versão {doc.versao_atual}',
+        versao, doc = salvar_versao(
+            doc, request.user,
+            conteudo=request.data.get('conteudo', doc.conteudo),
+            titulo=request.data.get('titulo', doc.titulo),
+            descricao=request.data.get('descricao', ''),
+            status_novo=request.data.get('status'),
         )
-
         _sse_doc(doc.id, doc.doc_ref, 'conteudo', request.user.name)
 
         return Response({
@@ -231,14 +209,7 @@ class ColaboradorView(APIView):
         if usuario == doc.criado_por:
             return Response({'erro': 'O criador já tem acesso.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        colab, criado = ColaboradorDocumento.objects.get_or_create(
-            documento=doc, usuario=usuario,
-            defaults={'papel': papel},
-        )
-        if not criado:
-            colab.papel = papel
-            colab.save()
-
+        colab, _ = adicionar_colaborador(doc, usuario, papel)
         _sse_doc(doc.id, doc.doc_ref, 'colaborador_adicionado', request.user.name)
         return Response(ColaboradorSerializer(colab).data, status=status.HTTP_201_CREATED)
 
@@ -330,25 +301,7 @@ class AssinaturaListView(APIView):
         if not _pode_ver(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
-        ass, _ = AssinaturaDocumento.objects.get_or_create(
-            documento=doc, usuario=request.user,
-            defaults={'ordem': doc.assinaturas.count() + 1},
-        )
-        ass.status          = 'assinado'
-        ass.protocolo       = request.data.get('protocolo', '')
-        ass.hash_assinatura = request.data.get('hash_assinatura', '')
-        ass.nome_certificado = request.data.get('nome_certificado', '')
-        ass.cpf_certificado  = request.data.get('cpf_certificado', '')
-        ass.ac_emissora      = request.data.get('ac_emissora', '')
-        ass.assinado_em      = timezone.now()
-        ass.save()
-
-        total   = doc.assinaturas.count()
-        signed  = doc.assinaturas.filter(status='assinado').count()
-        if total > 0 and signed == total:
-            doc.status = 'Signed'
-            doc.save()
-
+        ass = registrar_assinatura(doc, request.user, request.data)
         _sse_doc(doc.id, doc.doc_ref, 'assinatura', request.user.name)
         return Response(AssinaturaSerializer(ass).data, status=status.HTTP_201_CREATED)
 
@@ -365,24 +318,8 @@ class IniciarAssinaturasView(APIView):
         if not _pode_editar(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
-        signatarios = request.data.get('signatarios', [])  # [{usuario_id, ordem}]
-        doc.assinaturas.all().delete()
-
-        criados = []
-        for item in signatarios:
-            try:
-                usuario = CustomUser.objects.get(pk=item['usuario_id'])
-            except CustomUser.DoesNotExist:
-                continue
-            ass = AssinaturaDocumento.objects.create(
-                documento=doc, usuario=usuario,
-                ordem=item.get('ordem', 1),
-                status='pendente',
-            )
-            criados.append(ass)
-
-        doc.status = 'Review'
-        doc.save()
+        signatarios = request.data.get('signatarios', [])
+        criados = iniciar_assinaturas(doc, request.user, signatarios)
         _sse_doc(doc.id, doc.doc_ref, 'assinaturas_iniciadas', request.user.name)
         return Response(AssinaturaSerializer(criados, many=True).data, status=status.HTTP_201_CREATED)
 
@@ -401,22 +338,9 @@ class GerarConviteView(APIView):
         if not _pode_editar(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
-        papel    = request.data.get('papel', 'editor')
-        dias     = int(request.data.get('dias', 7))
-        expira   = timezone.now() + timedelta(days=dias)
-
-        # Reutilizar convite ativo do mesmo papel se existir
-        convite = ConviteDocumento.objects.filter(
-            documento=doc, papel=papel, ativo=True, expira_em__gt=timezone.now()
-        ).first()
-
-        if not convite:
-            convite = ConviteDocumento.objects.create(
-                documento=doc,
-                criado_por=request.user,
-                papel=papel,
-                expira_em=expira,
-            )
+        papel   = request.data.get('papel', 'editor')
+        dias    = int(request.data.get('dias', 7))
+        convite = gerar_convite(doc, request.user, papel, dias)
 
         return Response({
             'codigo':    str(convite.codigo),
@@ -465,39 +389,17 @@ class AceitarConviteView(APIView):
 
     def post(self, request, codigo):
         """Aceita o convite — adiciona o usuário como colaborador."""
-        try:
-            convite = ConviteDocumento.objects.select_related('documento').get(
-                codigo=codigo, ativo=True
-            )
-        except ConviteDocumento.DoesNotExist:
-            return Response({'erro': 'Convite inválido ou expirado.'}, status=status.HTTP_404_NOT_FOUND)
+        convite, erro = aceitar_convite(codigo, request.user)
 
-        if convite.expira_em < timezone.now():
-            convite.ativo = False
-            convite.save()
-            return Response({'erro': 'Este convite expirou.'}, status=status.HTTP_410_GONE)
-
-        if convite.usos >= convite.max_usos:
-            return Response({'erro': 'Limite de usos atingido.'}, status=status.HTTP_410_GONE)
+        if erro == 'Convite inválido ou expirado.':
+            return Response({'erro': erro}, status=status.HTTP_404_NOT_FOUND)
+        if erro in ('Este convite expirou.', 'Limite de usos atingido.'):
+            return Response({'erro': erro}, status=status.HTTP_410_GONE)
+        if erro == 'ja_criador':
+            return Response({'mensagem': 'Você já é o criador deste documento.', 'documento_id': str(convite.documento_id)})
 
         doc = convite.documento
-
-        if doc.criado_por == request.user:
-            return Response({'mensagem': 'Você já é o criador deste documento.', 'documento_id': str(doc.id)})
-
-        colab, criado = ColaboradorDocumento.objects.get_or_create(
-            documento=doc, usuario=request.user,
-            defaults={'papel': convite.papel},
-        )
-        if not criado and colab.papel != convite.papel:
-            colab.papel = convite.papel
-            colab.save()
-
-        convite.usos += 1
-        convite.save()
-
         _sse_doc(doc.id, doc.doc_ref, 'colaborador_adicionado', request.user.name)
-
         return Response({
             'mensagem':     f'Você entrou como {convite.papel} no documento.',
             'documento_id': str(doc.id),

@@ -5,10 +5,11 @@ import {
   FolderOpen, ChevronRight, MapPin, Loader2, AlertTriangle, CheckCircle2,
   Eye, Trash2, MoreHorizontal,
 } from 'lucide-react';
-import { MOCK_MODELS, MOCK_PROCESSES } from '../../constants';
+import { MOCK_MODELS } from '../../constants/index';
 import { dbService } from '../../services/databaseService';
+import { listarProcessos } from '../../services/painelService';
 import { REURBProcess, DadosAdicionaisDocumento } from '../../types/index';
-import { useGeolocalizacao, gerarBlocoGeoHTML } from '../editor/components/useGeolocalizacao';
+import { useGeolocalizacao, gerarBlocoGeoHTML } from '../../hooks/useGeolocalizacao';
 import { templateProfilesService, TemplateProfile } from '../../services/templateProfilesService';
 
 // ─── Cores por tipo de documento ──────────────────────────────────────────────
@@ -913,12 +914,14 @@ export const Templates: React.FC = () => {
   const [textoFinalDocumento, setTextoFinalDocumento] = useState('');
   const [etapaModal, setEtapaModal] = useState<'dados' | 'geo' | 'processo' | null>(null);
   const [processoEscolhido, setProcessoEscolhido] = useState<REURBProcess | null>(null);
+  const [processos, setProcessos] = useState<REURBProcess[]>([]);
 
   const { carregando, resultado, capturarEValidar, limpar } = useGeolocalizacao();
 
-  const processos = useMemo(() => {
-    const doDb = dbService.processes.selectAll();
-    return doDb.length > 0 ? doDb : MOCK_PROCESSES;
+  useEffect(() => {
+    listarProcessos({ page: 1 })
+      .then(data => setProcessos(data.results as any))
+      .catch(() => setProcessos([]));
   }, []);
 
   const todosModelos = useMemo<TemplateModelUnified[]>(() => {

@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { 
   LayoutDashboard, FileText, FolderKanban, Users, Settings, LogOut, BarChart3
 } from 'lucide-react';
-import { User } from '../../types';
+import { User } from '../../types/index';
 import { Logo } from '../common/Logo';
 
 interface SidebarProps {

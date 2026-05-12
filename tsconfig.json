@@ -19,9 +19,9 @@
     "allowJs": true,
     "jsx": "react-jsx",
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"],
+      "@shared/*": ["./shared/*"],
+      "@features/*": ["./features/*"]
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
@@ -32,7 +32,7 @@
   ],
   "exclude": [
     "node_modules",
-    "uema-2026/node_modules",
+    "uema-2026",
     "backend"
   ]
 }

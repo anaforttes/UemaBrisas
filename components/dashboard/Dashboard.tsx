@@ -1,30 +1,43 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Plus, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
+import { Bell, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
 import { buscarDashboard } from '../../services/painelService';
-import { MOCK_MODELS } from '../../constants';
+import { MOCK_MODELS } from '../../constants/index';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
-import { NewProcessModal } from './NewProcessModal';
+
+// Cache de módulo — evita spinner em toda navegação para o painel (TTL: 30s)
+let _dashboardCache: any = null;
+let _cacheAt = 0;
+const CACHE_TTL = 30_000;
+
+function isCacheValid() {
+  return _dashboardCache !== null && Date.now() - _cacheAt < CACHE_TTL;
+}
 
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
-  const [showNewProcessModal, setShowNewProcessModal] = useState(false);
-  const [dadosPainel, setDadosPainel]               = useState<any>(null);
-  const [loading, setLoading]                        = useState(true);
-  const [erro, setErro]                              = useState('');
-  const [showNotificacoes, setShowNotificacoes]      = useState(false);
-  const notificacoesRef                              = useRef<HTMLDivElement>(null);
-  const navigate                                     = useNavigate();
+  const [dadosPainel, setDadosPainel]          = useState<any>(isCacheValid() ? _dashboardCache : null);
+  const [loading, setLoading]                  = useState(!isCacheValid());
+  const [erro, setErro]                        = useState('');
+  const [showNotificacoes, setShowNotificacoes] = useState(false);
+  const notificacoesRef                        = useRef<HTMLDivElement>(null);
+  const navigate                               = useNavigate();
 
-  const carregarDashboard = async () => {
-    try {
-      setLoading(true);
+  const carregarDashboard = async (silencioso = false) => {
+    if (!silencioso) {
       setErro('');
+      if (!isCacheValid()) setLoading(true);
+    }
+    try {
       const dados = await buscarDashboard();
+      _dashboardCache = dados;
+      _cacheAt = Date.now();
       setDadosPainel(dados);
-    } catch (e) {
-      console.error(e);
-      setErro('Erro ao carregar painel');
+      setErro('');
+    } catch (e: any) {
+      if (!_dashboardCache) {
+        setErro(e?.message || 'Erro ao carregar painel. Verifique se o backend está rodando.');
+      }
     } finally {
       setLoading(false);
     }
@@ -33,13 +46,27 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   useEffect(() => {
     carregarDashboard();
 
+    const handleFocus = () => carregarDashboard(true);
+    window.addEventListener('focus', handleFocus);
+
+    const handleAlteracao = () => {
+      _dashboardCache = null;
+      carregarDashboard();
+    };
+    window.addEventListener('reurb:processos-alterados', handleAlteracao);
+
     const handler = (e: MouseEvent) => {
       if (notificacoesRef.current && !notificacoesRef.current.contains(e.target as Node)) {
         setShowNotificacoes(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('reurb:processos-alterados', handleAlteracao);
+      document.removeEventListener('mousedown', handler);
+    };
   }, []);
 
   const stats = [
@@ -64,7 +91,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       <div className="p-10 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <p className="text-red-500 font-semibold">{erro}</p>
-          <button onClick={carregarDashboard} className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+          <button onClick={() => carregarDashboard()} className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
             Tentar novamente
           </button>
         </div>
@@ -102,14 +129,6 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
               </div>
             )}
           </div>
-
-          <button
-            type="button"
-            onClick={() => setShowNewProcessModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-2xl font-bold hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all"
-          >
-            <Plus size={20} /> Novo Processo
-          </button>
         </div>
       </header>
 
@@ -165,20 +184,13 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                   onClick={() => navigate('/templates')}
                   className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200"
                 >
-                  <Plus size={18} />
+                  <ArrowUpRight size={18} />
                 </button>
               </div>
             ))}
           </div>
         </div>
       </div>
-
-      <NewProcessModal
-        isOpen={showNewProcessModal}
-        onClose={() => setShowNewProcessModal(false)}
-        onSuccess={carregarDashboard}
-        currentUser={user}
-      />
     </div>
   );
 };

@@ -3,19 +3,33 @@ import {
   Search, Filter, Plus, LayoutGrid, List,
   FileText, MapPin, Calendar,
   ChevronRight, MoreHorizontal, Activity,
-  AlertCircle, CheckCircle2, Clock, Download, Trash2, AlertTriangle
+  AlertCircle, CheckCircle2, Clock, Download, Trash2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { dbService } from '../../services/databaseService';
-import { listarProcessos, atualizarProcesso, deletarProcesso } from '../../services/painelService';
+import { ProcessoMeu } from '../../services/painelService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
 import { ProcessDrawer } from './ProcessDrawer';
+import { DeleteProcessModal } from './DeleteProcessModal';
 import { usePermissoes } from '../../hooks/usePermissoes';
+import { useProcesses } from '../../hooks/useProcesses';
+
+function formatarData(iso: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? '—' : d.toLocaleDateString('pt-BR');
+}
+
+const PAPEL_STYLE: Record<string, string> = {
+  'Criador':     'bg-amber-50 text-amber-600 border-amber-100',
+  'Técnico':     'bg-blue-50 text-blue-600 border-blue-100',
+  'Jurídico':    'bg-violet-50 text-violet-600 border-violet-100',
+  'Colaborador': 'bg-emerald-50 text-emerald-600 border-emerald-100',
+};
 
 export const ProcessManagement: React.FC = () => {
-  const [processes, setProcesses]                     = useState<REURBProcess[]>([]);
+  const { processes, meusProcs, fetchData, handleProtocolar, handleDownloadZip, deleteProcess } = useProcesses();
   const [viewMode, setViewMode]                       = useState<'table' | 'grid'>('grid');
   const [searchTerm, setSearchTerm]                   = useState('');
   const [isModalOpen, setIsModalOpen]                 = useState(false);
@@ -28,9 +42,7 @@ export const ProcessManagement: React.FC = () => {
   const navigate                                      = useNavigate();
   const { pode }                                      = usePermissoes();
 
-  const currentUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
-
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -42,96 +54,12 @@ export const ProcessManagement: React.FC = () => {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const fetchData = async () => {
-    try {
-      const data = await listarProcessos();
-      setProcesses(data as any);
-    } catch {
-      setProcesses([]);
-    }
-  };
-
-  const handleProtocolar = async (proc: REURBProcess) => {
-    try {
-      await atualizarProcesso(proc.id, { protocolado: true, status: 'Em Andamento' });
-    } catch (e) {
-      console.error('Erro ao protocolar processo:', e);
-    }
-    fetchData();
-  };
-
-  const handleDownloadZip = async (proc: REURBProcess) => {
-    if (!(window as any).JSZip) {
-      await new Promise<void>((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-        script.onload = () => resolve();
-        document.head.appendChild(script);
-      });
-    }
-
-    const JSZip = (window as any).JSZip;
-    const zip   = new JSZip();
-    const pasta = zip.folder(`processo_${proc.protocol || proc.id}`);
-
-    const meta = [
-      `PROCESSO: ${proc.protocol || proc.id}`,
-      `REQUERENTE: ${proc.applicant}`,
-      `NÚCLEO: ${proc.title}`,
-      `MODALIDADE: ${proc.modality}`,
-      `STATUS: ${proc.status}`,
-      `LOCALIZAÇÃO: ${proc.location || '—'}`,
-      `RESPONSÁVEL: ${proc.responsibleName || '—'}`,
-      `ÁREA: ${proc.area || '—'}`,
-      `PROGRESSO: ${proc.progress}%`,
-      `CRIADO EM: ${proc.createdAt}`,
-      `ATUALIZADO EM: ${proc.updatedAt}`,
-    ].join('\n');
-    pasta!.file('metadados.txt', meta);
-
-    const documentos = dbService.documents.findByProcessId(proc.id);
-    if (documentos.length > 0) {
-      const pastaDocumentos = pasta!.folder('documentos');
-      documentos.forEach((doc, i) => {
-        const nomeArquivo = `${String(i + 1).padStart(2, '0')}_${doc.title.replace(/[^a-zA-Z0-9À-ú\s]/g, '').trim()}.html`;
-        pastaDocumentos!.file(nomeArquivo, doc.content || '');
-      });
-    }
-
-    const anexosSalvos = localStorage.getItem(`anexos_${proc.id}`);
-    if (anexosSalvos) {
-      const anexos = JSON.parse(anexosSalvos);
-      if (anexos.length > 0) {
-        const pastaAnexos = pasta!.folder('anexos');
-        anexos.forEach((anexo: any) => {
-          const base64Data = anexo.base64.split(',')[1] || anexo.base64;
-          pastaAnexos!.file(anexo.nome, base64Data, { base64: true });
-        });
-      }
-    }
-
-    const blob = await zip.generateAsync({ type: 'blob' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `processo_${proc.protocol || proc.id}.zip`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   const handleDelete = async () => {
     if (!deleteTarget) return;
     setDeletando(true);
-    const idNumerico = /^\d+$/.test(deleteTarget.id);
     try {
-      if (idNumerico) {
-        await deletarProcesso(deleteTarget.id);
-      }
-      // ID mock (proc-001...) ou real — remove da lista local
-      setProcesses(prev => prev.filter(p => p.id !== deleteTarget.id));
+      await deleteProcess(deleteTarget);
     } catch {
-      // API falhou — ainda remove da UI e recarrega para sincronizar
-      setProcesses(prev => prev.filter(p => p.id !== deleteTarget.id));
       await fetchData();
     } finally {
       setDeletando(false);
@@ -158,44 +86,12 @@ export const ProcessManagement: React.FC = () => {
 
       {/* Modal confirmação de exclusão */}
       {deleteTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <div className="flex flex-col items-center gap-4 text-center">
-              <div className="w-14 h-14 bg-red-100 rounded-full flex items-center justify-center">
-                <AlertTriangle size={28} className="text-red-500" />
-              </div>
-              <div>
-                <h3 className="text-lg font-black text-slate-800">Excluir processo</h3>
-                <p className="mt-1 text-sm text-slate-500">
-                  Tem certeza que deseja excluir o processo de{' '}
-                  <span className="font-semibold text-slate-700">{deleteTarget.applicant}</span>?
-                  Esta ação não pode ser desfeita.
-                </p>
-              </div>
-              <div className="flex w-full gap-3">
-                <button
-                  onClick={() => setDeleteTarget(null)}
-                  disabled={deletando}
-                  className="flex-1 rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-600 hover:bg-slate-50 transition-colors disabled:opacity-50"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deletando}
-                  className="flex-1 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {deletando ? (
-                    <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Trash2 size={14} />
-                  )}
-                  {deletando ? 'Excluindo...' : 'Excluir'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DeleteProcessModal
+          target={deleteTarget}
+          deletando={deletando}
+          onConfirm={handleDelete}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
 
       <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-6">
@@ -280,20 +176,29 @@ export const ProcessManagement: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {filteredProcesses.map(proc => (
+          {filteredProcesses.map(proc => {
+            const meuPapel = meusProcs.find(mp => mp.id === proc.id);
+            return (
             <div key={proc.id} className="bg-white border border-slate-200 rounded-[32px] p-6 hover:shadow-2xl hover:-translate-y-1.5 transition-all duration-300 group">
               <div className="flex justify-between items-start mb-6">
                 <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-blue-600 group-hover:text-white transition-all shadow-inner">
                   <FileText size={22} />
                 </div>
                 <div className="flex flex-col items-end gap-2">
-                  <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
-                    proc.modality === 'REURB-S'
-                      ? 'bg-blue-50 text-blue-600 border-blue-100'
-                      : 'bg-purple-50 text-purple-600 border-purple-100'
-                  }`}>
-                    {proc.modality}
-                  </span>
+                  <div className="flex flex-wrap gap-1 justify-end">
+                    {meuPapel && meuPapel.meus_papeis.map(papel => (
+                      <span key={papel} className={`text-[9px] font-black uppercase tracking-widest px-2 py-1 rounded-full border ${PAPEL_STYLE[papel] ?? 'bg-slate-50 text-slate-500 border-slate-100'}`}>
+                        {papel}
+                      </span>
+                    ))}
+                    <span className={`text-[9px] font-black uppercase tracking-widest px-3 py-1.5 rounded-full border ${
+                      proc.modality === 'REURB-S'
+                        ? 'bg-blue-50 text-blue-600 border-blue-100'
+                        : 'bg-purple-50 text-purple-600 border-purple-100'
+                    }`}>
+                      {proc.modality}
+                    </span>
+                  </div>
                   <span className="text-[10px] font-bold text-slate-300">#{proc.protocol || 'S/P'}</span>
                 </div>
               </div>
@@ -326,7 +231,7 @@ export const ProcessManagement: React.FC = () => {
                   <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1 flex items-center gap-1">
                     <Calendar size={10} /> Início
                   </span>
-                  <span className="text-xs font-bold text-slate-600">{proc.createdAt}</span>
+                  <span className="text-xs font-bold text-slate-600">{formatarData(proc.createdAt)}</span>
                 </div>
                 <div className="flex flex-col text-right">
                   <span className="text-[9px] font-black text-slate-300 uppercase tracking-widest mb-1 flex items-center justify-end gap-1">
@@ -395,7 +300,8 @@ export const ProcessManagement: React.FC = () => {
                 )}
               </div>
             </div>
-          ))}
+            );
+          })}
 
           {filteredProcesses.length === 0 && (
             <div className="col-span-full py-32 text-center bg-white rounded-[40px] border-2 border-dashed border-slate-100">
