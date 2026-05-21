@@ -1,7 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Briefcase, Clock, FileText, ArrowUpRight } from 'lucide-react';
+import { Bell, Briefcase, Clock, FileText, ArrowUpRight, CheckCheck } from 'lucide-react';
 import { buscarDashboard } from '../../services/painelService';
+import {
+  listarNotificacoes,
+  marcarLida,
+  marcarTodasLidas,
+  type Notificacao,
+} from '../../services/notificacoesService';
 import { MOCK_MODELS } from '../../constants/index';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
@@ -16,12 +22,36 @@ function isCacheValid() {
 }
 
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
-  const [dadosPainel, setDadosPainel]          = useState<any>(isCacheValid() ? _dashboardCache : null);
-  const [loading, setLoading]                  = useState(!isCacheValid());
-  const [erro, setErro]                        = useState('');
+  const [dadosPainel, setDadosPainel] = useState<any>(isCacheValid() ? _dashboardCache : null);
+  const [loading, setLoading] = useState(!isCacheValid());
+  const [erro, setErro] = useState('');
   const [showNotificacoes, setShowNotificacoes] = useState(false);
-  const notificacoesRef                        = useRef<HTMLDivElement>(null);
-  const navigate                               = useNavigate();
+  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [naoLidas, setNaoLidas] = useState(0);
+  const notificacoesRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const carregarNotificacoes = useCallback(async () => {
+    try {
+      const dados = await listarNotificacoes();
+      setNotificacoes(dados.resultados);
+      setNaoLidas(dados.nao_lidas);
+    } catch {
+      // falha silenciosa — não bloqueia o painel
+    }
+  }, []);
+
+  const handleMarcarLida = async (id: number) => {
+    await marcarLida(id);
+    setNotificacoes((prev) => prev.map((n) => (n.id === id ? { ...n, lida: true } : n)));
+    setNaoLidas((c) => Math.max(0, c - 1));
+  };
+
+  const handleMarcarTodas = async () => {
+    await marcarTodasLidas();
+    setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
+    setNaoLidas(0);
+  };
 
   const carregarDashboard = async (silencioso = false) => {
     if (!silencioso) {
@@ -45,8 +75,14 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   useEffect(() => {
     carregarDashboard();
+    carregarNotificacoes();
 
-    const handleFocus = () => carregarDashboard(true);
+    const interval = setInterval(carregarNotificacoes, 60_000);
+
+    const handleFocus = () => {
+      carregarDashboard(true);
+      carregarNotificacoes();
+    };
     window.addEventListener('focus', handleFocus);
 
     const handleAlteracao = () => {
@@ -63,16 +99,38 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     document.addEventListener('mousedown', handler);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('reurb:processos-alterados', handleAlteracao);
       document.removeEventListener('mousedown', handler);
     };
-  }, []);
+  }, [carregarNotificacoes]);
 
   const stats = [
-    { label: 'Processos Ativos', value: String(dadosPainel?.cards?.ativos    ?? 0), change: '+2', icon: Briefcase, color: 'text-blue-600',  bg: 'bg-blue-50'  },
-    { label: 'Em Revisão',       value: String(dadosPainel?.cards?.em_revisao ?? 0), change: '0',  icon: Clock,     color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'Concluídos',       value: String(dadosPainel?.cards?.concluidos  ?? 0), change: '+1', icon: FileText,  color: 'text-green-600', bg: 'bg-green-50' },
+    {
+      label: 'Processos Ativos',
+      value: String(dadosPainel?.cards?.ativos ?? 0),
+      change: '+2',
+      icon: Briefcase,
+      color: 'text-blue-600',
+      bg: 'bg-blue-50',
+    },
+    {
+      label: 'Em Revisão',
+      value: String(dadosPainel?.cards?.em_revisao ?? 0),
+      change: '0',
+      icon: Clock,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
+    },
+    {
+      label: 'Concluídos',
+      value: String(dadosPainel?.cards?.concluidos ?? 0),
+      change: '+1',
+      icon: FileText,
+      color: 'text-green-600',
+      bg: 'bg-green-50',
+    },
   ];
 
   if (loading) {
@@ -91,7 +149,10 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       <div className="p-10 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <p className="text-red-500 font-semibold">{erro}</p>
-          <button onClick={() => carregarDashboard()} className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700">
+          <button
+            onClick={() => carregarDashboard()}
+            className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700"
+          >
             Tentar novamente
           </button>
         </div>
@@ -115,17 +176,79 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           <div className="relative" ref={notificacoesRef}>
             <button
               type="button"
-              onClick={() => setShowNotificacoes(!showNotificacoes)}
+              onClick={() => {
+                setShowNotificacoes(!showNotificacoes);
+                if (!showNotificacoes) carregarNotificacoes();
+              }}
               className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 relative hover:shadow-md transition-all"
             >
               <Bell size={22} />
-              <span className="absolute top-3 right-3 w-3 h-3 bg-red-500 rounded-full border-[3px] border-white" />
+              {naoLidas > 0 && (
+                <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full text-[10px] font-black text-white border-2 border-white flex items-center justify-center">
+                  {naoLidas > 9 ? '9+' : naoLidas}
+                </span>
+              )}
             </button>
 
             {showNotificacoes && (
-              <div className="absolute right-0 top-14 w-80 bg-white rounded-2xl border border-slate-100 shadow-xl p-5 z-50">
-                <h3 className="font-black text-slate-800 mb-2">Notificações</h3>
-                <p className="text-sm text-slate-400">Nenhuma notificação no momento.</p>
+              <div className="absolute right-0 top-14 w-96 bg-white rounded-2xl border border-slate-100 shadow-xl z-50 overflow-hidden">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
+                  <h3 className="font-black text-slate-800">Notificações</h3>
+                  {naoLidas > 0 && (
+                    <button
+                      onClick={handleMarcarTodas}
+                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                    >
+                      <CheckCheck size={14} /> Marcar todas como lidas
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
+                  {notificacoes.length === 0 ? (
+                    <div className="px-5 py-8 text-center">
+                      <Bell size={28} className="text-slate-200 mx-auto mb-2" />
+                      <p className="text-sm text-slate-400 font-medium">Nenhuma notificação.</p>
+                    </div>
+                  ) : (
+                    notificacoes.map((n) => (
+                      <div
+                        key={n.id}
+                        className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-slate-50 ${!n.lida ? 'bg-blue-50/40' : ''}`}
+                        onClick={() => {
+                          if (!n.lida) handleMarcarLida(n.id);
+                          if (n.link) {
+                            navigate(n.link);
+                            setShowNotificacoes(false);
+                          }
+                        }}
+                      >
+                        <div
+                          className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${!n.lida ? 'bg-blue-500' : 'bg-transparent'}`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p
+                            className={`text-xs font-bold truncate ${!n.lida ? 'text-slate-800' : 'text-slate-500'}`}
+                          >
+                            {n.titulo}
+                          </p>
+                          {n.descricao && (
+                            <p className="text-[11px] text-slate-400 mt-0.5 line-clamp-2">
+                              {n.descricao}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-slate-300 mt-1">
+                            {new Date(n.criado_em).toLocaleString('pt-BR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -134,16 +257,25 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
         {stats.map((stat, i) => (
-          <div key={i} className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group">
+          <div
+            key={i}
+            className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group"
+          >
             <div className="flex justify-between items-start mb-6">
-              <div className={`${stat.bg} ${stat.color} p-4 rounded-[20px] transition-transform group-hover:rotate-3`}>
+              <div
+                className={`${stat.bg} ${stat.color} p-4 rounded-[20px] transition-transform group-hover:rotate-3`}
+              >
                 <stat.icon size={28} />
               </div>
-              <span className={`text-[10px] font-black tracking-widest px-3 py-1.5 rounded-full uppercase ${stat.change.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}>
+              <span
+                className={`text-[10px] font-black tracking-widest px-3 py-1.5 rounded-full uppercase ${stat.change.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
+              >
                 {stat.change} Hoje
               </span>
             </div>
-            <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest">{stat.label}</h3>
+            <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest">
+              {stat.label}
+            </h3>
             <p className="text-4xl font-black text-slate-800 mt-2">{stat.value}</p>
           </div>
         ))}
@@ -153,7 +285,10 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
             <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
-            <Link to="/processes" className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2">
+            <Link
+              to="/processes"
+              className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2"
+            >
               Ver Todos <ArrowUpRight size={16} />
             </Link>
           </div>
@@ -175,8 +310,12 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                     <FileText size={20} />
                   </div>
                   <div>
-                    <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-all">{model.name}</h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Versão {model.version}</p>
+                    <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-all">
+                      {model.name}
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                      Versão {model.version}
+                    </p>
                   </div>
                 </div>
                 <button

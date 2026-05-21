@@ -6,6 +6,7 @@ from .views import (
     ComentarioListView, ComentarioUpdateView,
     AssinaturaListView, IniciarAssinaturasView,
     GerarConviteView, AceitarConviteView,
+    AuditoriaListView, PresencaListView,
 )
 
 urlpatterns = [
@@ -22,4 +23,6 @@ urlpatterns = [
     path('<uuid:doc_id>/assinaturas/', AssinaturaListView.as_view()),
     path('<uuid:doc_id>/assinaturas/iniciar/', IniciarAssinaturasView.as_view()),
     path('<uuid:doc_id>/convite/', GerarConviteView.as_view()),
+    path('<uuid:doc_id>/auditoria/', AuditoriaListView.as_view()),
+    path('<uuid:doc_id>/presenca/', PresencaListView.as_view()),
 ]

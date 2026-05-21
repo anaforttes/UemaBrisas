@@ -33,7 +33,8 @@ class ComentarioSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ComentarioDocumento
-        fields = ['id', 'autor', 'autor_nome', 'autor_cargo', 'texto', 'tipo', 'status', 'criado_em']
+        fields = ['id', 'autor', 'autor_nome', 'autor_cargo', 'texto', 'tipo', 'status',
+                  'texto_selecionado', 'pos_inicio', 'pos_fim', 'criado_em']
 
 
 class VersaoSerializer(serializers.ModelSerializer):

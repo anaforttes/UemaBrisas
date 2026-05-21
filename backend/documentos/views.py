@@ -8,7 +8,8 @@ from autenticacao.models import CustomUser
 from autenticacao.sse import sse_broadcast
 from .models import (
     Documento, ColaboradorDocumento, ComentarioDocumento,
-    VersaoDocumento, ConviteDocumento,
+    VersaoDocumento, ConviteDocumento, AuditoriaDocumento,
+    PresencaDocumento,
 )
 from .serializadores import (
     DocumentoListSerializer, DocumentoDetalheSerializer,
@@ -19,8 +20,9 @@ from .serializadores import (
 from .servicos import (
     criar_documento, salvar_versao, adicionar_colaborador,
     iniciar_assinaturas, registrar_assinatura,
-    gerar_convite, aceitar_convite,
+    gerar_convite, aceitar_convite, registrar_auditoria, atualizar_presenca,
 )
+from notificacoes.servicos import criar_notificacao
 
 
 def _sse_doc(doc_id, doc_ref, tipo, autor_nome):
@@ -129,6 +131,24 @@ class SalvarVersaoView(APIView):
         if not _pode_editar(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
+        # Locking otimista: detecta conflito se versão esperada não bate
+        versao_esperada = request.data.get('versao_esperada')
+        if versao_esperada is not None:
+            try:
+                versao_esperada = int(versao_esperada)
+            except (TypeError, ValueError):
+                versao_esperada = None
+        if versao_esperada is not None and doc.versao_atual > versao_esperada:
+            ultima = doc.versoes.select_related('autor').first()
+            autor_conflito = ultima.autor.name if ultima and ultima.autor else 'outro usuário'
+            return Response({
+                'conflito': True,
+                'versao_atual': doc.versao_atual,
+                'conteudo_atual': doc.conteudo,
+                'titulo_atual': doc.titulo,
+                'autor_ultima_versao': autor_conflito,
+            }, status=status.HTTP_409_CONFLICT)
+
         versao, doc = salvar_versao(
             doc, request.user,
             conteudo=request.data.get('conteudo', doc.conteudo),
@@ -211,6 +231,14 @@ class ColaboradorView(APIView):
 
         colab, _ = adicionar_colaborador(doc, usuario, papel)
         _sse_doc(doc.id, doc.doc_ref, 'colaborador_adicionado', request.user.name)
+
+        criar_notificacao(
+            usuario, 'colaborador',
+            f'Você foi adicionado ao documento "{doc.titulo}"',
+            f'{request.user.name} concedeu acesso como {papel}.',
+            link=f'/editor/{doc.id}',
+        )
+
         return Response(ColaboradorSerializer(colab).data, status=status.HTTP_201_CREATED)
 
 
@@ -250,12 +278,34 @@ class ComentarioListView(APIView):
         if not _pode_ver(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
+        pos_inicio = request.data.get('pos_inicio')
+        pos_fim    = request.data.get('pos_fim')
         comentario = ComentarioDocumento.objects.create(
-            documento=doc, autor=request.user,
+            documento=doc,
+            autor=request.user,
             texto=request.data.get('texto', ''),
             tipo=request.data.get('tipo', 'comentario'),
+            texto_selecionado=request.data.get('texto_selecionado', ''),
+            pos_inicio=int(pos_inicio) if pos_inicio is not None else None,
+            pos_fim=int(pos_fim) if pos_fim is not None else None,
         )
         _sse_doc(doc.id, doc.doc_ref, 'comentario', request.user.name)
+
+        # Notifica o dono e colaboradores (exceto o próprio autor do comentário)
+        destinatarios = set()
+        if doc.criado_por and doc.criado_por != request.user:
+            destinatarios.add(doc.criado_por)
+        for colab in doc.colaboradores.select_related('usuario').all():
+            if colab.usuario != request.user:
+                destinatarios.add(colab.usuario)
+        for dest in destinatarios:
+            criar_notificacao(
+                dest, 'comentario',
+                f'Novo comentário em "{doc.titulo}"',
+                f'{request.user.name}: {comentario.texto[:120]}',
+                link=f'/editor/{doc.id}',
+            )
+
         return Response(ComentarioSerializer(comentario).data, status=status.HTTP_201_CREATED)
 
 
@@ -406,3 +456,70 @@ class AceitarConviteView(APIView):
             'doc_ref':      doc.doc_ref,
             'papel':        convite.papel,
         }, status=status.HTTP_200_OK)
+
+
+# ─── Auditoria ────────────────────────────────────────────────────────────────
+
+class AuditoriaListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, doc_id):
+        try:
+            doc = Documento.objects.get(pk=doc_id)
+        except Documento.DoesNotExist:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if not _pode_ver(request, doc):
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        registros = AuditoriaDocumento.objects.filter(documento=doc).select_related('usuario')[:100]
+        return Response([{
+            'id': str(r.id),
+            'tipo': r.tipo,
+            'usuario': r.usuario.name if r.usuario else 'Sistema',
+            'descricao': r.descricao,
+            'versao': r.versao,
+            'criado_em': r.criado_em.isoformat(),
+        } for r in registros])
+
+
+# ─── Presença em tempo real ───────────────────────────────────────────────────
+
+class PresencaListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, doc_id):
+        try:
+            doc = Documento.objects.get(pk=doc_id)
+        except Documento.DoesNotExist:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if not _pode_ver(request, doc):
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Remove presença com mais de 5 minutos (offline)
+        PresencaDocumento.objects.filter(
+            documento=doc,
+            ultimo_acesso__lt=timezone.now() - timezone.timedelta(minutes=5)
+        ).delete()
+
+        presencas = PresencaDocumento.objects.filter(documento=doc).select_related('usuario')
+        return Response([{
+            'usuario_id': p.usuario.id,
+            'usuario_name': p.usuario.name,
+            'ultimo_acesso': p.ultimo_acesso.isoformat(),
+            'cursor_pos': p.cursor_pos,
+        } for p in presencas])
+
+    def post(self, request, doc_id):
+        """Atualiza presença do usuário (heartbeat)."""
+        try:
+            doc = Documento.objects.get(pk=doc_id)
+        except Documento.DoesNotExist:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if not _pode_ver(request, doc):
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+
+        cursor_pos = request.data.get('cursor_pos')
+        atualizar_presenca(doc, request.user,
+                           cursor_pos=int(cursor_pos) if cursor_pos is not None else None)
+        _sse_doc(doc.id, doc.doc_ref, 'presenca', request.user.name)
+        return Response({'status': 'ok'})

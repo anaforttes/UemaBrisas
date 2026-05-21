@@ -1,0 +1,36 @@
+---
+description: Regras específicas para arquivos backend Python/Django
+globs: ["backend/**/*.py"]
+alwaysApply: false
+---
+
+# Backend — Django + DRF
+
+## Estrutura obrigatória por app
+
+```
+app/
+  models.py       → modelos e migrations
+  views.py        → só lógica HTTP (status codes, serialização da resposta)
+  servicos.py     → toda regra de negócio
+  serializadores.py → validação e serialização de entrada/saída
+  permissoes.py   → controle de acesso customizado
+  urls.py         → roteamento
+```
+
+## Views
+- Herdam de `APIView`
+- Não acessam banco diretamente — chamam `servicos.py`
+- Respondem com `Response()` e status explícito
+- Permissão mínima: `IsAuthenticated`
+
+## Modelos
+- UUIDs como PK onde aplicável
+- `auto_now_add` para `criado_em`, `auto_now` para `atualizado_em`
+- `related_name` sempre definido
+- Migrations nunca criadas manualmente
+
+## Segurança
+- Nunca expor senha ou token em resposta
+- Validar permissão antes de qualquer operação de escrita
+- CORS já configurado para localhost:5173-5180

@@ -25,23 +25,23 @@ export interface ProcessoAPI {
 
 function apiParaFrontend(p: ProcessoAPI): REURBProcess {
   return {
-    id:              String(p.id),
-    protocol:        p.protocol,
-    protocolado:     p.protocolado,
-    title:           p.title,
-    applicant:       p.applicant,
-    modality:        p.modality,
-    status:          p.status as ProcessStatus,
-    progress:        p.progress,
-    location:        p.location,
-    municipio:       p.municipio,
-    estado:          p.estado,
-    area:            p.area,
+    id: String(p.id),
+    protocol: p.protocol,
+    protocolado: p.protocolado,
+    title: p.title,
+    applicant: p.applicant,
+    modality: p.modality,
+    status: p.status as ProcessStatus,
+    progress: p.progress,
+    location: p.location,
+    municipio: p.municipio,
+    estado: p.estado,
+    area: p.area,
     responsibleName: p.responsible_name,
-    technicianId:    String(p.technician_id ?? ''),
-    legalId:         String(p.legal_id ?? ''),
-    createdAt:       p.created_at,
-    updatedAt:       p.updated_at,
+    technicianId: String(p.technician_id ?? ''),
+    legalId: String(p.legal_id ?? ''),
+    createdAt: p.created_at,
+    updatedAt: p.updated_at,
   };
 }
 
@@ -54,7 +54,11 @@ interface PaginatedResponse<T> {
 
 // ─── API pública ──────────────────────────────────────────────────────────────
 
-export async function listarProcessos(params?: { search?: string; status?: string; page?: number }) {
+export async function listarProcessos(params?: {
+  search?: string;
+  status?: string;
+  page?: number;
+}) {
   const qs = new URLSearchParams();
   if (params?.search) qs.set('search', params.search);
   if (params?.status) qs.set('status', params.status);
@@ -112,7 +116,24 @@ export interface ProcessoMeu extends ReturnType<typeof apiParaFrontend> {
 
 export async function meusProcessos(): Promise<ProcessoMeu[]> {
   const dados = await request<(ProcessoAPI & { meus_papeis: string[] })[]>('/api/processos/meus/');
-  return dados.map(p => ({ ...apiParaFrontend(p), meus_papeis: p.meus_papeis }));
+  return dados.map((p) => ({ ...apiParaFrontend(p), meus_papeis: p.meus_papeis }));
+}
+
+export interface AgregacoesAPI {
+  total: number;
+  progresso_medio: number;
+  por_mes: { mes: string; total: number }[];
+  por_modalidade: { modality: string; total: number }[];
+  por_status: { status: string; total: number }[];
+  por_responsavel: { responsible_name: string; total: number }[];
+}
+
+export async function buscarAgregacoes(
+  periodo: '7d' | '30d' | '90d' | 'all' = 'all',
+  modalidade: 'todos' | 'REURB-S' | 'REURB-E' = 'todos'
+): Promise<AgregacoesAPI> {
+  const qs = new URLSearchParams({ periodo, modalidade });
+  return request<AgregacoesAPI>(`/api/painel/agregacoes/?${qs}`);
 }
 
 export async function buscarDashboard() {
@@ -129,7 +150,7 @@ export async function buscarDashboard() {
 
   return {
     cards: {
-      ativos:     stats.ativos,
+      ativos: stats.ativos,
       em_revisao: stats.em_revisao,
       concluidos: stats.concluidos,
     },

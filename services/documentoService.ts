@@ -1,4 +1,4 @@
-import { request } from '../shared/services/apiClient';
+import { request, getToken, API_BASE, refreshAccessToken } from '../shared/services/apiClient';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -17,7 +17,18 @@ export interface DocComentario {
   texto: string;
   tipo: 'comentario' | 'sugestao';
   status: 'pendente' | 'aceito' | 'rejeitado';
+  texto_selecionado: string;
+  pos_inicio: number | null;
+  pos_fim: number | null;
   criado_em: string;
+}
+
+export interface ConflictError {
+  conflito: true;
+  versao_atual: number;
+  conteudo_atual: string;
+  titulo_atual: string;
+  autor_ultima_versao: string;
 }
 
 export interface DocVersao {
@@ -64,7 +75,9 @@ export interface DocDetalhe {
 
 export const documentoService = {
   buscarPorRef: async (docRef: string): Promise<DocDetalhe | null> => {
-    const lista = await request<DocDetalhe[]>(`/api/documentos/?doc_ref=${encodeURIComponent(docRef)}`);
+    const lista = await request<DocDetalhe[]>(
+      `/api/documentos/?doc_ref=${encodeURIComponent(docRef)}`
+    );
     if (!lista || lista.length === 0) return null;
     return documentoService.buscar(lista[0].id);
   },
@@ -98,12 +111,33 @@ export const documentoService = {
 
   salvarVersao: async (
     docId: string,
-    dados: { conteudo: string; titulo: string; descricao?: string; status?: string }
-  ): Promise<{ versao: DocVersao; documento: DocDetalhe }> => {
-    return request(`/api/documentos/${docId}/salvar/`, {
-      method: 'POST',
-      body: JSON.stringify(dados),
-    });
+    dados: {
+      conteudo: string;
+      titulo: string;
+      descricao?: string;
+      status?: string;
+      versao_esperada?: number;
+    }
+  ): Promise<{ versao: DocVersao; documento: DocDetalhe } | ConflictError> => {
+    let token = getToken();
+    const makeReq = (t: string | null) =>
+      fetch(`${API_BASE}/api/documentos/${docId}/salvar/`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(t ? { Authorization: `Bearer ${t}` } : {}),
+        },
+        body: JSON.stringify(dados),
+      });
+    let res = await makeReq(token);
+    if (res.status === 401) {
+      token = await refreshAccessToken();
+      res = await makeReq(token);
+    }
+    const data = await res.json();
+    if (res.status === 409) return data as ConflictError;
+    if (!res.ok) throw new Error(data.detail ?? data.message ?? `Erro ${res.status}`);
+    return data as { versao: DocVersao; documento: DocDetalhe };
   },
 
   listarVersoes: async (docId: string): Promise<DocVersao[]> => {
@@ -142,11 +176,12 @@ export const documentoService = {
   criarComentario: async (
     docId: string,
     texto: string,
-    tipo: 'comentario' | 'sugestao'
+    tipo: 'comentario' | 'sugestao',
+    ancora?: { texto_selecionado: string; pos_inicio: number; pos_fim: number }
   ): Promise<DocComentario> => {
     return request<DocComentario>(`/api/documentos/${docId}/comentarios/`, {
       method: 'POST',
-      body: JSON.stringify({ texto, tipo }),
+      body: JSON.stringify({ texto, tipo, ...ancora }),
     });
   },
 
@@ -190,7 +225,9 @@ export const documentoService = {
     await request<void>(`/api/documentos/${docId}/convite/`, { method: 'DELETE' });
   },
 
-  infoConvite: async (codigo: string): Promise<{
+  infoConvite: async (
+    codigo: string
+  ): Promise<{
     documento_titulo: string;
     documento_id: string;
     criado_por: string;

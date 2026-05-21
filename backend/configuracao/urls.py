@@ -9,4 +9,5 @@ urlpatterns = [
     path('api/processos/', include('processos.urls')),
     path('api/permissoes/', include('permissoes.urls')),
     path('api/documentos/', include('documentos.urls')),
+    path('api/notificacoes/', include('notificacoes.urls')),
 ]

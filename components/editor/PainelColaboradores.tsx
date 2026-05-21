@@ -1,9 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Users, Link2, Copy, CheckCheck, Crown, Trash2,
-  Loader2, RefreshCw, X, Clock, UserCheck,
+  Users,
+  Link2,
+  Copy,
+  CheckCheck,
+  Crown,
+  Trash2,
+  Loader2,
+  RefreshCw,
+  X,
+  Clock,
+  UserCheck,
+  Circle,
 } from 'lucide-react';
 import { documentoService, DocColaborador } from '../../services/documentoService';
+import { auditoriaService, UsuarioPresenca } from '../../services/auditoriaService';
 
 interface Props {
   docId: string;
@@ -15,28 +26,58 @@ interface Props {
 const FRONTEND_URL = (import.meta as any).env?.VITE_FRONTEND_URL ?? 'http://localhost:5173';
 
 const avatarCor = (nome: string) => {
-  const cores = ['bg-blue-500', 'bg-violet-500', 'bg-emerald-500', 'bg-rose-500', 'bg-amber-500', 'bg-cyan-500'];
+  const cores = [
+    'bg-blue-500',
+    'bg-violet-500',
+    'bg-emerald-500',
+    'bg-rose-500',
+    'bg-amber-500',
+    'bg-cyan-500',
+  ];
   return cores[nome.charCodeAt(0) % cores.length];
 };
 
 const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriador, ehEditor }) => {
   const [colaboradores, setColaboradores] = useState<DocColaborador[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [removendo, setRemovendo]         = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [removendo, setRemovendo] = useState<number | null>(null);
+  const [usuariosOnline, setUsuariosOnline] = useState<Set<number>>(new Set());
+  const [carregandoPresenca, setCarregandoPresenca] = useState(false);
 
   const [conviteCodigo, setConviteCodigo] = useState<string | null>(null);
   const [conviteExpira, setConviteExpira] = useState<string | null>(null);
-  const [gerando, setGerando]             = useState(false);
-  const [copiado, setCopiado]             = useState(false);
+  const [gerando, setGerando] = useState(false);
+  const [copiado, setCopiado] = useState(false);
 
   const linkConvite = conviteCodigo ? `${FRONTEND_URL}/#/convite/${conviteCodigo}` : '';
 
   useEffect(() => {
-    documentoService.listarColaboradores(docId)
-      .then(setColaboradores)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    Promise.all([
+      documentoService.listarColaboradores(docId).then(setColaboradores),
+      carregarPresenca(),
+    ]).finally(() => setLoading(false));
   }, [docId]);
+
+  // Atualizar presença a cada 10 segundos
+  useEffect(() => {
+    const intervalo = setInterval(carregarPresenca, 10000);
+    return () => clearInterval(intervalo);
+  }, []);
+
+  const carregarPresenca = async () => {
+    try {
+      setCarregandoPresenca(true);
+      const presencas = await auditoriaService.obterPresenca(docId);
+      const ids = new Set(presencas.map((p) => p.usuario_id));
+      setUsuariosOnline(ids);
+      // Sempre atualizar a própria presença
+      await auditoriaService.atualizarPresenca(docId);
+    } catch (err) {
+      console.error('Erro ao carregar presença:', err);
+    } finally {
+      setCarregandoPresenca(false);
+    }
+  };
 
   const handleGerarConvite = async () => {
     setGerando(true);
@@ -64,7 +105,9 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
       await documentoService.revogarConvites(docId);
       setConviteCodigo(null);
       setConviteExpira(null);
-    } catch { /* ignora */ }
+    } catch {
+      /* ignora */
+    }
   };
 
   const handleRemover = async (colab: DocColaborador) => {
@@ -72,7 +115,7 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
     setRemovendo(colab.usuario.id);
     try {
       await documentoService.removerColaborador(docId, colab.usuario.id);
-      setColaboradores(prev => prev.filter(c => c.id !== colab.id));
+      setColaboradores((prev) => prev.filter((c) => c.id !== colab.id));
     } catch (e: any) {
       alert(e?.message ?? 'Erro ao remover.');
     } finally {
@@ -88,7 +131,6 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
-
       {/* ── Cabeçalho ─────────────────────────────────────────────── */}
       <div className="px-5 pt-5 pb-4 border-b border-slate-100">
         <div className="flex items-center gap-2 mb-1">
@@ -99,7 +141,7 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
           </span>
         </div>
         <p className="text-[11px] text-slate-400">
-          Todos os participantes podem ler e editar este documento.
+          Editando agora: {usuariosOnline.size > 0 ? usuariosOnline.size : 'ninguém'}
         </p>
       </div>
 
@@ -114,11 +156,23 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
         {/* Criador */}
         {donoCriador && (
           <div className="flex items-center gap-3 px-3 py-2.5 bg-slate-50 rounded-2xl">
-            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-black shrink-0 ${avatarCor(donoCriador.name)}`}>
-              {donoCriador.name.charAt(0).toUpperCase()}
+            <div className="relative">
+              <div
+                className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-black shrink-0 ${avatarCor(donoCriador.name)}`}
+              >
+                {donoCriador.name.charAt(0).toUpperCase()}
+              </div>
+              {usuariosOnline.has(donoCriador.id) && (
+                <Circle
+                  size={8}
+                  className="absolute bottom-0 right-0 fill-green-500 text-green-500"
+                />
+              )}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-slate-800 truncate">{donoCriador.name}</p>
+              <p className="text-[13px] font-semibold text-slate-800 truncate">
+                {donoCriador.name}
+              </p>
               <p className="text-[11px] text-slate-400 truncate">{donoCriador.role}</p>
             </div>
             <div className="flex items-center gap-1 shrink-0">
@@ -129,38 +183,63 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
         )}
 
         {/* Colaboradores */}
-        {!loading && colaboradores.map(colab => {
-          const ehVoce = String(colab.usuario.id) === String(currentUserId);
-          return (
-            <div key={colab.id} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-slate-50 transition-colors group">
-              <div className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-black shrink-0 ${avatarCor(colab.usuario.name)}`}>
-                {colab.usuario.name.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <p className="text-[13px] font-semibold text-slate-800 truncate">{colab.usuario.name}</p>
-                  {ehVoce && (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full shrink-0">Você</span>
+        {!loading &&
+          colaboradores.map((colab) => {
+            const ehVoce = String(colab.usuario.id) === String(currentUserId);
+            const estaOnline = usuariosOnline.has(colab.usuario.id);
+            return (
+              <div
+                key={colab.id}
+                className="flex items-center gap-3 px-3 py-2.5 rounded-2xl hover:bg-slate-50 transition-colors group"
+              >
+                <div className="relative">
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-black shrink-0 ${avatarCor(colab.usuario.name)}`}
+                  >
+                    {colab.usuario.name.charAt(0).toUpperCase()}
+                  </div>
+                  {estaOnline && (
+                    <Circle
+                      size={8}
+                      className="absolute bottom-0 right-0 fill-green-500 text-green-500"
+                    />
                   )}
                 </div>
-                <p className="text-[11px] text-slate-400 truncate">{colab.usuario.role}</p>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[13px] font-semibold text-slate-800 truncate">
+                      {colab.usuario.name}
+                    </p>
+                    {ehVoce && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-blue-100 text-blue-600 rounded-full shrink-0">
+                        Você
+                      </span>
+                    )}
+                    {estaOnline && !ehVoce && (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-green-100 text-green-600 rounded-full shrink-0 flex items-center gap-1">
+                        <Circle size={4} className="fill-green-600" /> Online
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-slate-400 truncate">{colab.usuario.role}</p>
+                </div>
+                {ehEditor && !ehVoce && (
+                  <button
+                    onClick={() => handleRemover(colab)}
+                    disabled={removendo === colab.usuario.id}
+                    title="Remover participante"
+                    className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
+                  >
+                    {removendo === colab.usuario.id ? (
+                      <Loader2 size={13} className="animate-spin" />
+                    ) : (
+                      <Trash2 size={13} />
+                    )}
+                  </button>
+                )}
               </div>
-              {ehEditor && !ehVoce && (
-                <button
-                  onClick={() => handleRemover(colab)}
-                  disabled={removendo === colab.usuario.id}
-                  title="Remover participante"
-                  className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-300 hover:text-red-400 hover:bg-red-50 rounded-lg transition-all"
-                >
-                  {removendo === colab.usuario.id
-                    ? <Loader2 size={13} className="animate-spin" />
-                    : <Trash2 size={13} />
-                  }
-                </button>
-              )}
-            </div>
-          );
-        })}
+            );
+          })}
 
         {!loading && colaboradores.length === 0 && (
           <div className="text-center py-4 px-2">
@@ -172,7 +251,6 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
       {/* ── Seção de convite ───────────────────────────────────────── */}
       {ehEditor && (
         <div className="border-t border-slate-100 shrink-0">
-
           {!conviteCodigo ? (
             /* Estado: sem link ativo */
             <div className="px-5 py-4 space-y-2">
@@ -185,13 +263,17 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
                 disabled={gerando}
                 className="w-full flex items-center justify-center gap-2 py-3 mt-1 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-2xl text-[13px] font-bold transition-colors disabled:opacity-60"
               >
-                {gerando
-                  ? <><Loader2 size={14} className="animate-spin" /> Gerando link...</>
-                  : <><Link2 size={14} /> Gerar link de convite</>
-                }
+                {gerando ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" /> Gerando link...
+                  </>
+                ) : (
+                  <>
+                    <Link2 size={14} /> Gerar link de convite
+                  </>
+                )}
               </button>
             </div>
-
           ) : (
             /* Estado: link ativo */
             <div className="px-5 py-4 space-y-3">
@@ -219,10 +301,15 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
                       : 'bg-slate-800 hover:bg-slate-900 text-white'
                   }`}
                 >
-                  {copiado
-                    ? <><CheckCheck size={14} /> Link copiado!</>
-                    : <><Copy size={14} /> Copiar link</>
-                  }
+                  {copiado ? (
+                    <>
+                      <CheckCheck size={14} /> Link copiado!
+                    </>
+                  ) : (
+                    <>
+                      <Copy size={14} /> Copiar link
+                    </>
+                  )}
                 </button>
               </div>
 
@@ -245,7 +332,13 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
 
               <p className="text-[10px] text-slate-400 text-center leading-relaxed">
                 Qualquer pessoa com o link consegue entrar.{' '}
-                <button onClick={handleRevogar} className="text-red-400 hover:underline font-medium">Desative</button> se quiser bloquear o acesso.
+                <button
+                  onClick={handleRevogar}
+                  className="text-red-400 hover:underline font-medium"
+                >
+                  Desative
+                </button>{' '}
+                se quiser bloquear o acesso.
               </p>
             </div>
           )}

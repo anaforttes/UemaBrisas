@@ -1,0 +1,30 @@
+---
+description: Regras específicas para arquivos frontend TypeScript/React
+globs: ["**/*.ts", "**/*.tsx"]
+alwaysApply: false
+---
+
+# Frontend — React + TypeScript
+
+## Componentes
+- Componentes funcionais com TypeScript estrito
+- Props sempre tipadas com interface (não type alias para props de componente)
+- Sem `any` — use `unknown` e narrowing quando necessário
+
+## Hooks
+- Hooks customizados ficam em `hooks/`
+- Nunca colocar lógica de fetch diretamente em componentes — criar hook ou usar service
+
+## Serviços / API
+- Toda chamada HTTP via `request()` de `shared/services/apiClient`
+- Nunca hardcodar URLs — usar `API_BASE` do apiClient
+
+## Estado
+- Estado local simples com `useState`
+- Refs para valores que não devem re-renderizar (`useRef`)
+- Sem Redux / Zustand ainda — manter simples
+
+## Tailwind
+- Classes utilitárias direto no JSX
+- Sem CSS modules ou styled-components
+- Responsividade mobile-first quando aplicável

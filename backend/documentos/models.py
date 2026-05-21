@@ -54,13 +54,16 @@ class ComentarioDocumento(models.Model):
     TIPO_CHOICES   = [('comentario', 'Comentário'), ('sugestao', 'Sugestão')]
     STATUS_CHOICES = [('pendente', 'Pendente'), ('aceito', 'Aceito'), ('rejeitado', 'Rejeitado')]
 
-    id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    documento = models.ForeignKey(Documento, on_delete=models.CASCADE, related_name='comentarios')
-    autor     = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
-    texto     = models.TextField()
-    tipo      = models.CharField(max_length=20, choices=TIPO_CHOICES, default='comentario')
-    status    = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
-    criado_em = models.DateTimeField(auto_now_add=True)
+    id                = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    documento         = models.ForeignKey(Documento, on_delete=models.CASCADE, related_name='comentarios')
+    autor             = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    texto             = models.TextField()
+    tipo              = models.CharField(max_length=20, choices=TIPO_CHOICES, default='comentario')
+    status            = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pendente')
+    texto_selecionado = models.TextField(blank=True, default='')
+    pos_inicio        = models.IntegerField(null=True, blank=True)
+    pos_fim           = models.IntegerField(null=True, blank=True)
+    criado_em         = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-criado_em']
@@ -114,3 +117,44 @@ class ConviteDocumento(models.Model):
 
     def __str__(self):
         return f'Convite {self.codigo} → {self.documento.titulo}'
+
+
+class AuditoriaDocumento(models.Model):
+    TIPO_CHOICES = [
+        ('criacao', 'Criação'),
+        ('edicao', 'Edição'),
+        ('comentario', 'Comentário'),
+        ('assinatura', 'Assinatura'),
+        ('finalizado', 'Finalizado'),
+        ('colaborador_adicionado', 'Colaborador Adicionado'),
+        ('colaborador_removido', 'Colaborador Removido'),
+        ('status_alterado', 'Status Alterado'),
+    ]
+
+    id        = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    documento = models.ForeignKey(Documento, on_delete=models.CASCADE, related_name='auditoria')
+    tipo      = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    usuario   = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True)
+    descricao = models.TextField(blank=True)
+    versao    = models.PositiveIntegerField(null=True, blank=True)
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        indexes = [models.Index(fields=['documento', '-criado_em'])]
+
+    def __str__(self):
+        return f'{self.tipo} em {self.documento.titulo} por {self.usuario}'
+
+
+class PresencaDocumento(models.Model):
+    documento     = models.ForeignKey(Documento, on_delete=models.CASCADE, related_name='presencas')
+    usuario       = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    ultimo_acesso = models.DateTimeField(auto_now=True, db_index=True)
+    cursor_pos    = models.IntegerField(null=True, blank=True)
+
+    class Meta:
+        unique_together = ('documento', 'usuario')
+
+    def __str__(self):
+        return f'{self.usuario.name} em {self.documento.titulo}'

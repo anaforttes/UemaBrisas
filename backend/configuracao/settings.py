@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'processos',
     'permissoes',
     'documentos',
+    'notificacoes',
 ]
 
 AUTH_USER_MODEL = 'autenticacao.CustomUser'
@@ -121,6 +122,14 @@ DATABASES = {
         conn_health_checks=True,
     )
 }
+
+# Testes sempre usam SQLite em memória (evita conflito com banco remoto Neon)
+import sys
+if 'test' in sys.argv:
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': ':memory:',
+    }
 
 # ── Validação de senha ────────────────────────────────────────────────────────
 AUTH_PASSWORD_VALIDATORS = [

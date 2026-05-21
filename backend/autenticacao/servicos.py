@@ -123,8 +123,8 @@ def autenticar_usuario(email: str, senha: str) -> dict:
     usuario_existente.last_access = timezone.now()
     usuario_existente.save(update_fields=['last_access'])
 
-    from autenticacao.views import _sse_broadcast
-    _sse_broadcast('status_update', {
+    from autenticacao.sse import sse_broadcast
+    sse_broadcast('status_update', {
         'id':     usuario_existente.id,
         'status': 'Online',
     })
@@ -184,8 +184,8 @@ def autenticar_com_google(credential: str) -> dict:
     usuario.last_access = timezone.now()
     usuario.save(update_fields=['last_access'])
 
-    from autenticacao.views import _sse_broadcast
-    _sse_broadcast('status_update', {
+    from autenticacao.sse import sse_broadcast
+    sse_broadcast('status_update', {
         'id':     usuario.id,
         'status': 'Online',
     })

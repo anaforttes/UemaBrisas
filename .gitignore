@@ -1,7 +1,5 @@
-node_modules
-<<<<<<< HEAD
-=======
-dist
+node_modules/
+dist/
 .env
 .env.local
 .DS_Store
@@ -13,4 +11,5 @@ __pycache__/
 
 venv/
 db.sqlite3
->>>>>>> feature/carol-login
+
+.claude/settings.local.json

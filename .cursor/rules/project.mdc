@@ -1,0 +1,33 @@
+---
+description: Regras gerais do projeto UemaBrisas / ReUrb Doc Flow
+globs: ["**/*.ts", "**/*.tsx", "**/*.py"]
+alwaysApply: true
+---
+
+# Projeto: UemaBrisas — ReUrb Doc Flow
+
+Sistema de gestão documental para regularização fundiária urbana (REURB).
+
+## Stack
+- Frontend: React 18 + Vite + TypeScript + TipTap 3
+- Backend: Django + DRF + JWT
+- Banco: Neon PostgreSQL
+
+## Regras de arquitetura
+
+### Backend (Python/Django)
+- `views.py` → só lógica HTTP (sem regra de negócio)
+- `servicos.py` → toda lógica de negócio
+- `serializadores.py` → validação de entrada
+- Migrations sempre via `python manage.py makemigrations`, nunca manual
+
+### Frontend (TypeScript/React)
+- Chamadas HTTP sempre via `services/` — nunca diretamente em componentes
+- Token e storage sempre via `shared/services/apiClient`
+- Estrutura: `components/` | `hooks/` | `services/` | `shared/`
+
+## Estilo de código
+- Sem comentários que explicam o QUÊ — só o POR QUÊ quando não óbvio
+- Sem abstrações prematuras
+- Sem tratamento de erros para casos impossíveis
+- Sem feature flags ou shims de retrocompatibilidade desnecessários

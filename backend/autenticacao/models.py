@@ -37,7 +37,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         default=dict,
         db_column='permissions_data',
     )
-    last_access  = models.DateTimeField(null=True, blank=True)
+    avatar          = models.TextField(blank=True, default='')
+    name_changed_at = models.DateTimeField(null=True, blank=True)
+    last_access     = models.DateTimeField(null=True, blank=True)
     is_active    = models.BooleanField(default=True)
     is_staff     = models.BooleanField(default=False)
     created_at   = models.DateTimeField(auto_now_add=True)

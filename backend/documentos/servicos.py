@@ -4,8 +4,32 @@ from django.utils import timezone
 from autenticacao.models import CustomUser
 from .models import (
     Documento, ColaboradorDocumento, VersaoDocumento,
-    AssinaturaDocumento, ConviteDocumento,
+    AssinaturaDocumento, ConviteDocumento, AuditoriaDocumento,
+    PresencaDocumento,
 )
+
+
+def registrar_auditoria(doc: Documento, usuario: CustomUser, tipo: str, descricao: str = '', versao: int = None):
+    """Registra ação de auditoria no documento."""
+    AuditoriaDocumento.objects.create(
+        documento=doc,
+        tipo=tipo,
+        usuario=usuario,
+        descricao=descricao,
+        versao=versao,
+    )
+
+
+def atualizar_presenca(doc: Documento, usuario: CustomUser, cursor_pos: int = None):
+    """Atualiza timestamp de presença e posição do cursor do usuário no documento."""
+    defaults = {}
+    if cursor_pos is not None:
+        defaults['cursor_pos'] = cursor_pos
+    PresencaDocumento.objects.update_or_create(
+        documento=doc,
+        usuario=usuario,
+        defaults=defaults,
+    )
 
 
 def criar_documento(user, data: dict) -> Documento:
@@ -24,6 +48,8 @@ def criar_documento(user, data: dict) -> Documento:
         conteudo=doc.conteudo, titulo=doc.titulo,
         autor=user, descricao='Versão inicial',
     )
+    registrar_auditoria(doc, user, 'criacao', f'Documento criado: {doc.titulo}', 1)
+    atualizar_presenca(doc, user)
     return doc
 
 
@@ -42,6 +68,12 @@ def salvar_versao(doc: Documento, user, conteudo: str, titulo: str,
         autor=user,
         descricao=descricao or f'Versão {doc.versao_atual}',
     )
+
+    tipo_auditoria = 'status_alterado' if status_novo else 'edicao'
+    desc = descricao or f'Documento editado - Versão {doc.versao_atual}'
+    registrar_auditoria(doc, user, tipo_auditoria, desc, doc.versao_atual)
+    atualizar_presenca(doc, user)
+
     return versao, doc
 
 
@@ -54,6 +86,9 @@ def adicionar_colaborador(doc: Documento, usuario: CustomUser,
     if not criado:
         colab.papel = papel
         colab.save()
+    else:
+        registrar_auditoria(doc, None, 'colaborador_adicionado',
+                          f'{usuario.name} adicionado como {papel}')
     return colab, criado
 
 
@@ -75,6 +110,7 @@ def iniciar_assinaturas(doc: Documento, user, signatarios: list) -> list:
 
     doc.status = 'Review'
     doc.save()
+    registrar_auditoria(doc, user, 'status_alterado', 'Documento enviado para revisão')
     return criados
 
 
@@ -92,11 +128,15 @@ def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumen
     ass.assinado_em      = timezone.now()
     ass.save()
 
+    registrar_auditoria(doc, user, 'assinatura',
+                       f'Assinado por {user.name} - Protocolo: {ass.protocolo}')
+
     total  = doc.assinaturas.count()
     signed = doc.assinaturas.filter(status='assinado').count()
     if total > 0 and signed == total:
         doc.status = 'Signed'
         doc.save()
+        registrar_auditoria(doc, user, 'status_alterado', 'Documento completamente assinado')
 
     return ass
 
@@ -141,7 +181,12 @@ def aceitar_convite(codigo: str, user) -> tuple:
     if not criado and colab.papel != convite.papel:
         colab.papel = convite.papel
         colab.save()
+    else:
+        if criado:
+            registrar_auditoria(doc, None, 'colaborador_adicionado',
+                              f'{user.name} entrou via convite como {convite.papel}')
 
     convite.usos += 1
     convite.save()
+    atualizar_presenca(doc, user)
     return convite, None

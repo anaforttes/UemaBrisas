@@ -1,5 +1,7 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
+from datetime import timedelta
 from rest_framework import serializers
 from .models import CustomUser
 
@@ -49,7 +51,7 @@ class CustomUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CustomUser
-        fields = ['id', 'name', 'email', 'role', 'access_flags', 'permissions', 'is_active', 'last_access', 'status']
+        fields = ['id', 'name', 'email', 'role', 'access_flags', 'permissions', 'is_active', 'last_access', 'status', 'avatar', 'name_changed_at']
 
     def get_status(self, obj) -> str:
         return 'Online' if obj.is_online else 'Offline'
@@ -63,21 +65,42 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return CustomUser.objects.create_user(**validated_data)
 
 
+NAME_CHANGE_COOLDOWN_DAYS = 30
+
 class AtualizarUsuarioSerializer(serializers.ModelSerializer):
     permissions = serializers.DictField(child=serializers.BooleanField(), required=False, write_only=True)
 
     class Meta:
         model = CustomUser
-        fields = ['role', 'access_flags', 'permissions', 'name', 'is_active']
+        fields = ['role', 'access_flags', 'permissions', 'name', 'is_active', 'avatar']
         extra_kwargs = {
             'role': {'required': False}, 'access_flags': {'required': False},
             'name': {'required': False}, 'is_active': {'required': False},
+            'avatar': {'required': False},
         }
+
+    def validate_name(self, value):
+        instance = self.instance
+        if instance and value != instance.name:
+            if instance.name_changed_at:
+                proxima = instance.name_changed_at + timedelta(days=NAME_CHANGE_COOLDOWN_DAYS)
+                if timezone.now() < proxima:
+                    dias_restantes = (proxima - timezone.now()).days + 1
+                    raise serializers.ValidationError(
+                        f'Você só pode alterar o nome a cada {NAME_CHANGE_COOLDOWN_DAYS} dias. '
+                        f'Tente novamente em {dias_restantes} dia(s).'
+                    )
+        return value
 
     def update(self, instance, validated_data):
         permissions = validated_data.pop('permissions', None)
         if permissions is not None:
             instance.permissions_data = permissions
+
+        novo_nome = validated_data.get('name')
+        if novo_nome and novo_nome != instance.name:
+            instance.name_changed_at = timezone.now()
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()

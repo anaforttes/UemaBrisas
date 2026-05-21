@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentoService } from '../../services/documentoService';
+import { dbService } from '../../services/databaseService';
 import { Users, CheckCircle2, AlertCircle, Loader2, FileText, LogIn } from 'lucide-react';
 import { User } from '../../types/index';
 
@@ -10,23 +11,38 @@ interface Props {
 
 const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
   const { code } = useParams<{ code: string }>();
-  const navigate  = useNavigate();
+  const navigate = useNavigate();
 
   type Estado = 'carregando' | 'info' | 'aceitando' | 'sucesso' | 'erro';
-  const [estado, setEstado]   = useState<Estado>('carregando');
-  const [info, setInfo]       = useState<{
-    documento_titulo: string; criado_por: string; papel: string; expira_em: string; ja_membro: boolean;
+  const [estado, setEstado] = useState<Estado>('carregando');
+  const [info, setInfo] = useState<{
+    documento_titulo: string;
+    criado_por: string;
+    papel: string;
+    expira_em: string;
+    ja_membro: boolean;
   } | null>(null);
-  const [erro, setErro]       = useState('');
-  const [docId, setDocId]     = useState('');
+  const [erro, setErro] = useState('');
+  const [docId, setDocId] = useState('');
 
   useEffect(() => {
-    if (!code) { setErro('Código inválido.'); setEstado('erro'); return; }
+    if (!code) {
+      setErro('Código inválido.');
+      setEstado('erro');
+      return;
+    }
     if (!currentUser) return; // aguarda login
 
-    documentoService.infoConvite(code)
-      .then((data) => { setInfo(data); setEstado('info'); })
-      .catch((e) => { setErro(e?.message ?? 'Convite inválido ou expirado.'); setEstado('erro'); });
+    documentoService
+      .infoConvite(code)
+      .then((data) => {
+        setInfo(data);
+        setEstado('info');
+      })
+      .catch((e) => {
+        setErro(e?.message ?? 'Convite inválido ou expirado.');
+        setEstado('erro');
+      });
   }, [code, currentUser]);
 
   const handleAceitar = async () => {
@@ -34,7 +50,23 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
     setEstado('aceitando');
     try {
       const res = await documentoService.aceitarConvite(code);
-      setDocId(res.documento_id);
+      const backendId = res.documento_id;
+      setDocId(backendId);
+
+      // Busca o documento completo e salva no localStorage para o editor encontrar
+      try {
+        const doc = await documentoService.buscar(backendId);
+        dbService.documents.upsert({
+          id: backendId,
+          title: doc.titulo,
+          content: doc.conteudo,
+          processId: doc.processo_id ?? '',
+          status: doc.status as any,
+        });
+      } catch {
+        /* se falhar, o editor vai buscar direto no backend */
+      }
+
       setEstado('sucesso');
     } catch (e: any) {
       setErro(e?.message ?? 'Erro ao entrar no documento.');
@@ -43,7 +75,7 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
   };
 
   const PAPEL_LABEL: Record<string, string> = { editor: 'Editor', visualizador: 'Visualizador' };
-  const PAPEL_COR:   Record<string, string> = {
+  const PAPEL_COR: Record<string, string> = {
     editor: 'bg-blue-100 text-blue-700',
     visualizador: 'bg-slate-100 text-slate-600',
   };
@@ -51,7 +83,6 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
       <div className="w-full max-w-md bg-white border border-slate-200 rounded-[32px] shadow-2xl p-8">
-
         {/* Sem login */}
         {!currentUser && (
           <div className="text-center space-y-4">
@@ -59,7 +90,9 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
               <LogIn size={28} className="text-blue-600" />
             </div>
             <h2 className="text-xl font-black text-slate-800">Faça login para continuar</h2>
-            <p className="text-sm text-slate-500">Você precisa estar logado para aceitar este convite.</p>
+            <p className="text-sm text-slate-500">
+              Você precisa estar logado para aceitar este convite.
+            </p>
             <Link
               to="/login"
               className="inline-block px-6 py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
@@ -100,7 +133,9 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
               <div className="h-px bg-slate-200" />
               <div className="flex items-center justify-between">
                 <p className="text-xs text-slate-500">Seu papel</p>
-                <span className={`text-[11px] font-bold px-3 py-1 rounded-full ${PAPEL_COR[info.papel]}`}>
+                <span
+                  className={`text-[11px] font-bold px-3 py-1 rounded-full ${PAPEL_COR[info.papel]}`}
+                >
                   {PAPEL_LABEL[info.papel] ?? info.papel}
                 </span>
               </div>
@@ -150,13 +185,24 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
               <CheckCircle2 size={28} className="text-green-600" />
             </div>
             <h2 className="text-xl font-black text-slate-800">Pronto!</h2>
-            <p className="text-sm text-slate-500">Você agora tem acesso ao documento como <strong>{PAPEL_LABEL[info?.papel ?? ''] ?? info?.papel}</strong>.</p>
-            <button
-              onClick={() => navigate('/')}
-              className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
-            >
-              Ir para o Painel
-            </button>
+            <p className="text-sm text-slate-500">
+              Você agora tem acesso ao documento como{' '}
+              <strong>{PAPEL_LABEL[info?.papel ?? ''] ?? info?.papel}</strong>.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => navigate(`/edit/${docId}`)}
+                className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold text-sm hover:bg-blue-700 transition-colors"
+              >
+                Abrir Documento
+              </button>
+              <button
+                onClick={() => navigate('/')}
+                className="w-full py-2.5 border border-slate-200 text-slate-600 rounded-xl font-bold text-sm hover:bg-slate-50 transition-colors"
+              >
+                Ir para o Painel
+              </button>
+            </div>
           </div>
         )}
 
