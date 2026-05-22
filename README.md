@@ -269,4 +269,4 @@ Frontend disponível em `http://localhost:5173`
 ---
 
 _Desenvolvido para gestão pública de regularização fundiária municipal — UEMA 2026._
-_Equipe: Andre, Carol, Keven, Leandro._
+_Equipe: Andre, Carol, Keven, Isabel, Leandro._
