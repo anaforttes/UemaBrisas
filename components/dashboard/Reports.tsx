@@ -14,9 +14,25 @@ import { dbService } from '../../services/databaseService';
 import { buscarAgregacoes, type AgregacoesAPI } from '../../services/painelService';
 import { User } from '../../types/index';
 
+// ─── Cache de módulo (TTL 60s) ────────────────────────────────────────────────
+
+type CacheKey = string;
+const _reportsCache = new Map<CacheKey, { data: AgregacoesAPI; at: number }>();
+const REPORTS_TTL = 60_000;
+
+function getCached(key: CacheKey): AgregacoesAPI | null {
+  const entry = _reportsCache.get(key);
+  if (!entry || Date.now() - entry.at > REPORTS_TTL) return null;
+  return entry.data;
+}
+function setCached(key: CacheKey, data: AgregacoesAPI) {
+  _reportsCache.set(key, { data, at: Date.now() });
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+const SKELETON_BARS = [40, 65, 25, 80, 55, 30, 70, 45, 90, 35, 60, 50];
 
 // ─── Tipos do Chat ────────────────────────────────────────────────────────────
 
@@ -407,13 +423,25 @@ const STATUS_COR: Record<string, string> = {
 export const Reports: React.FC = () => {
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'REURB-S' | 'REURB-E'>('todos');
-  const [dados, setDados] = useState<AgregacoesAPI | null>(null);
-  const [carregando, setCarregando] = useState(true);
+
+  const cacheKey = `${periodo}:${tipoFiltro}`;
+  const [dados, setDados] = useState<AgregacoesAPI | null>(() => getCached(cacheKey));
+  const [carregando, setCarregando] = useState(!getCached(cacheKey));
 
   useEffect(() => {
+    const key = `${periodo}:${tipoFiltro}`;
+    const cached = getCached(key);
+    if (cached) {
+      setDados(cached);
+      setCarregando(false);
+      return;
+    }
     setCarregando(true);
     buscarAgregacoes(periodo, tipoFiltro)
-      .then(setDados)
+      .then((d) => {
+        setCached(key, d);
+        setDados(d);
+      })
       .catch(() => setDados(null))
       .finally(() => setCarregando(false));
   }, [periodo, tipoFiltro]);
@@ -468,10 +496,74 @@ export const Reports: React.FC = () => {
 
   if (carregando) {
     return (
-      <div className="p-10 flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-          <span className="text-sm font-medium">Carregando relatórios...</span>
+      <div className="p-10 max-w-7xl mx-auto">
+        <div className="mb-10 flex items-end justify-between">
+          <div className="space-y-3">
+            <div className="h-10 w-64 bg-slate-200 rounded-xl animate-pulse" />
+            <div className="h-4 w-72 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+          <div className="flex gap-3">
+            <div className="w-72 h-11 bg-slate-100 rounded-2xl animate-pulse" />
+            <div className="w-36 h-11 bg-slate-100 rounded-2xl animate-pulse" />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-[24px] border border-slate-100 p-6">
+              <div className="w-10 h-10 bg-slate-100 rounded-xl animate-pulse mb-4" />
+              <div className="h-8 w-14 bg-slate-200 rounded-lg animate-pulse mb-2" />
+              <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+          <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 p-8">
+            <div className="h-6 w-40 bg-slate-200 rounded-lg animate-pulse mb-6" />
+            <div className="flex items-end gap-2 h-40">
+              {SKELETON_BARS.map((h, i) => (
+                <div
+                  key={i}
+                  className="flex-1 bg-slate-100 rounded-t-lg animate-pulse"
+                  style={{ height: `${h}%` }}
+                />
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+            <div className="h-6 w-32 bg-slate-200 rounded-lg animate-pulse mb-6" />
+            <div className="space-y-5">
+              {[80, 55, 40, 70].map((w, i) => (
+                <div key={i}>
+                  <div
+                    className="h-3 bg-slate-100 rounded-full animate-pulse mb-2"
+                    style={{ width: `${w}%` }}
+                  />
+                  <div
+                    className="h-3 bg-slate-100 rounded-full animate-pulse"
+                    style={{ width: `${w - 15}%` }}
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <div className="h-6 w-56 bg-slate-200 rounded-lg animate-pulse mb-6" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-4 py-4 border-b border-slate-50 last:border-0"
+            >
+              <div className="w-8 h-8 bg-slate-100 rounded-xl animate-pulse shrink-0" />
+              <div className="flex-1">
+                <div className="h-4 w-36 bg-slate-100 rounded animate-pulse mb-2" />
+                <div
+                  className="h-2 bg-slate-100 rounded-full animate-pulse"
+                  style={{ width: `${65 - i * 15}%` }}
+                />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );

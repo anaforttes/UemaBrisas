@@ -86,8 +86,12 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     }
   };
 
+  const prevFiltroRef = useRef<string | undefined>(undefined);
   useEffect(() => {
-    _dashboardCache = null;
+    if (prevFiltroRef.current !== undefined && prevFiltroRef.current !== statusFiltro) {
+      _dashboardCache = null;
+    }
+    prevFiltroRef.current = statusFiltro;
     carregarDashboard();
   }, [statusFiltro]);
 
@@ -252,10 +256,35 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   if (loading) {
     return (
-      <div className="p-10 flex items-center justify-center min-h-[400px]">
-        <div className="flex flex-col items-center gap-3 text-slate-400">
-          <div className="w-8 h-8 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin" />
-          <span className="text-sm font-medium">Carregando painel...</span>
+      <div className="p-10 max-w-7xl mx-auto">
+        <div className="mb-12 flex justify-between items-end">
+          <div className="space-y-3">
+            <div className="h-10 w-56 bg-slate-200 rounded-xl animate-pulse" />
+            <div className="h-4 w-80 bg-slate-100 rounded-lg animate-pulse" />
+          </div>
+          <div className="w-12 h-12 bg-slate-100 rounded-2xl animate-pulse" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div key={i} className="bg-white p-8 rounded-[32px] border border-slate-100">
+              <div className="flex justify-between items-start mb-6">
+                <div className="w-16 h-16 bg-slate-100 rounded-[20px] animate-pulse" />
+                <div className="w-20 h-7 bg-slate-100 rounded-full animate-pulse" />
+              </div>
+              <div className="h-3 w-24 bg-slate-100 rounded animate-pulse mb-3" />
+              <div className="h-10 w-16 bg-slate-200 rounded-lg animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <div className="h-6 w-48 bg-slate-200 rounded-lg animate-pulse mb-6" />
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex gap-6 py-4 border-b border-slate-50 last:border-0">
+              <div className="h-4 w-32 bg-slate-100 rounded animate-pulse" />
+              <div className="h-4 w-48 bg-slate-100 rounded animate-pulse" />
+              <div className="h-4 w-20 bg-slate-100 rounded animate-pulse ml-auto" />
+            </div>
+          ))}
         </div>
       </div>
     );
