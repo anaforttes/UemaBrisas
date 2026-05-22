@@ -10,4 +10,5 @@ urlpatterns = [
     path('api/permissoes/', include('permissoes.urls')),
     path('api/documentos/', include('documentos.urls')),
     path('api/notificacoes/', include('notificacoes.urls')),
+    path('api/controleadmin/', include('controleadmin.urls')),
 ]

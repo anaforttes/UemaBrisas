@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'permissoes',
     'documentos',
     'notificacoes',
+    'controleadmin',
 ]
 
 AUTH_USER_MODEL = 'autenticacao.CustomUser'

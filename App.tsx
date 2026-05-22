@@ -10,6 +10,7 @@ import { Templates } from './components/dashboard/Templates';
 import { Reports } from './components/dashboard/Reports';
 import { Team } from './components/dashboard/Team';
 import { Configuracoes } from './components/dashboard/Configuracoes';
+import { ControleAdmin } from './components/dashboard/ControleAdmin';
 import { ProcessManagement } from './components/dashboard/ProcessManagement';
 import Editor from './components/editor/Editor';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
@@ -79,28 +80,40 @@ const AppInner: React.FC = () => {
 
   return (
     <Routes>
-      <Route path="/login"          element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={login} />} />
-      <Route path="/signup"         element={user ? <Navigate to="/" /> : <SignupScreen />} />
-      <Route path="/forgot-password" element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />} />
-      <Route path="/convite/:code"  element={<ConviteAcceptPage currentUser={user} />} />
-      <Route path="/*" element={
-        !user ? <Navigate to="/login" /> : (
-          <div className="flex min-h-screen bg-slate-50 font-sans">
-            <Sidebar user={user} onLogout={logout} />
-            <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
-              <Routes>
-                <Route path="/"          element={<Dashboard user={user} />} />
-                <Route path="/processes" element={<ProcessManagement />} />
-                <Route path="/templates" element={<Templates />} />
-                <Route path="/reports"   element={<Reports />} />
-                <Route path="/team"      element={<Team />} />
-                <Route path="/settings"  element={<Configuracoes />} />
-                <Route path="/edit/:docId" element={<EditorPage />} />
-              </Routes>
-            </main>
-          </div>
-        )
-      } />
+      <Route
+        path="/login"
+        element={user ? <Navigate to="/" /> : <LoginScreen onLoginSuccess={login} />}
+      />
+      <Route path="/signup" element={user ? <Navigate to="/" /> : <SignupScreen />} />
+      <Route
+        path="/forgot-password"
+        element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />}
+      />
+      <Route path="/convite/:code" element={<ConviteAcceptPage currentUser={user} />} />
+      <Route
+        path="/*"
+        element={
+          !user ? (
+            <Navigate to="/login" />
+          ) : (
+            <div className="flex min-h-screen bg-slate-50 font-sans">
+              <Sidebar user={user} onLogout={logout} />
+              <main className="flex-1 h-screen overflow-y-auto relative scroll-smooth">
+                <Routes>
+                  <Route path="/" element={<Dashboard user={user} />} />
+                  <Route path="/processes" element={<ProcessManagement />} />
+                  <Route path="/templates" element={<Templates />} />
+                  <Route path="/reports" element={<Reports />} />
+                  <Route path="/team" element={<Team />} />
+                  <Route path="/settings" element={<Configuracoes />} />
+                  <Route path="/admin-control" element={<ControleAdmin />} />
+                  <Route path="/edit/:docId" element={<EditorPage />} />
+                </Routes>
+              </main>
+            </div>
+          )
+        }
+      />
     </Routes>
   );
 };

@@ -1,7 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Briefcase, Clock, FileText, ArrowUpRight, CheckCheck } from 'lucide-react';
+import {
+  Bell,
+  Briefcase,
+  Clock,
+  FileText,
+  ArrowUpRight,
+  CheckCheck,
+  Plus,
+  AlertTriangle,
+} from 'lucide-react';
 import { buscarDashboard } from '../../services/painelService';
+import { dbService } from '../../services/databaseService';
 import {
   listarNotificacoes,
   marcarLida,
@@ -11,6 +21,7 @@ import {
 import { MOCK_MODELS } from '../../constants/index';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
+import { NewProcessModal } from './NewProcessModal';
 
 // Cache de módulo — evita spinner em toda navegação para o painel (TTL: 30s)
 let _dashboardCache: any = null;
@@ -25,6 +36,8 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   const [dadosPainel, setDadosPainel] = useState<any>(isCacheValid() ? _dashboardCache : null);
   const [loading, setLoading] = useState(!isCacheValid());
   const [erro, setErro] = useState('');
+  const [statusFiltro, setStatusFiltro] = useState('');
+  const [showNewProcessModal, setShowNewProcessModal] = useState(false);
   const [showNotificacoes, setShowNotificacoes] = useState(false);
   const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
@@ -59,7 +72,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       if (!isCacheValid()) setLoading(true);
     }
     try {
-      const dados = await buscarDashboard();
+      const dados = await buscarDashboard(statusFiltro || undefined);
       _dashboardCache = dados;
       _cacheAt = Date.now();
       setDadosPainel(dados);
@@ -74,7 +87,11 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   };
 
   useEffect(() => {
+    _dashboardCache = null;
     carregarDashboard();
+  }, [statusFiltro]);
+
+  useEffect(() => {
     carregarNotificacoes();
 
     const interval = setInterval(carregarNotificacoes, 60_000);
@@ -106,6 +123,67 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
     };
   }, [carregarNotificacoes]);
 
+  const processosBase = dbService.processes.selectAll();
+  const documentosBase = processosBase.flatMap((p) => dbService.documents.findByProcessId(p.id));
+  const protocolos = processosBase.map((p) => p.protocol).filter(Boolean);
+  const protocolosDuplicados = protocolos.filter((p, i) => protocolos.indexOf(p) !== i);
+  const documentosComCpfPendente = documentosBase.filter(
+    (d) => /cpf|cnpj/i.test(d.content || d.title || '') && /_{3,}|__\./.test(d.content || '')
+  );
+  const datasInconsistentes = processosBase.filter((p) => {
+    if (!p.createdAt || !p.updatedAt) return true;
+    return new Date(p.createdAt).getTime() > new Date(p.updatedAt).getTime();
+  });
+  const processosSemReferencia = processosBase.filter(
+    (p) => !p.protocol || !p.title || !p.applicant || !p.modality || !p.status
+  );
+  const modelosComCpfCnpj = MOCK_MODELS.filter((m) =>
+    /portaria|notifica|relat|demarca|título|titulo/i.test(m.name)
+  ).length;
+
+  const alertasInconsistencia = [
+    {
+      label: 'CPF/CNPJ',
+      value: documentosComCpfPendente.length,
+      detail:
+        documentosComCpfPendente.length > 0
+          ? 'documentos com identificação pendente'
+          : `${modelosComCpfCnpj} modelos monitorados`,
+      color: 'text-amber-600',
+      bg: 'bg-amber-50',
+    },
+    {
+      label: 'Datas',
+      value: datasInconsistentes.length,
+      detail:
+        datasInconsistentes.length > 0
+          ? 'processos com datas inconsistentes'
+          : 'cronologia dos processos conferida',
+      color: 'text-blue-600',
+      bg: 'bg-blue-50',
+    },
+    {
+      label: 'Numeração',
+      value: protocolosDuplicados.length,
+      detail:
+        protocolosDuplicados.length > 0
+          ? 'protocolos duplicados encontrados'
+          : `${protocolos.length} protocolos únicos`,
+      color: 'text-purple-600',
+      bg: 'bg-purple-50',
+    },
+    {
+      label: 'Referências',
+      value: processosSemReferencia.length,
+      detail:
+        processosSemReferencia.length > 0
+          ? 'processos com campos essenciais ausentes'
+          : 'processos com referências básicas preenchidas',
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+    },
+  ];
+
   const stats = [
     {
       label: 'Processos Ativos',
@@ -114,6 +192,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       icon: Briefcase,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
+      filter: 'ativo',
     },
     {
       label: 'Em Revisão',
@@ -122,6 +201,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       icon: Clock,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
+      filter: 'em_revisao',
     },
     {
       label: 'Concluídos',
@@ -130,6 +210,43 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       icon: FileText,
       color: 'text-green-600',
       bg: 'bg-green-50',
+      filter: 'concluido',
+    },
+    {
+      label: 'Em Edição',
+      value: String(dadosPainel?.status?.em_edicao ?? 0),
+      change: '0',
+      icon: FileText,
+      color: 'text-slate-600',
+      bg: 'bg-slate-50',
+      filter: 'em_edicao',
+    },
+    {
+      label: 'Pendentes',
+      value: String(dadosPainel?.status?.pendente ?? 0),
+      change: '0',
+      icon: Clock,
+      color: 'text-red-600',
+      bg: 'bg-red-50',
+      filter: 'pendente',
+    },
+    {
+      label: 'Assinados',
+      value: String(dadosPainel?.status?.assinado ?? 0),
+      change: '0',
+      icon: Briefcase,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-50',
+      filter: 'assinado',
+    },
+    {
+      label: 'Arquivados',
+      value: String(dadosPainel?.status?.arquivado ?? 0),
+      change: '0',
+      icon: FileText,
+      color: 'text-gray-600',
+      bg: 'bg-gray-100',
+      filter: 'arquivado',
     },
   ];
 
@@ -259,7 +376,8 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         {stats.map((stat, i) => (
           <div
             key={i}
-            className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group"
+            onClick={() => setStatusFiltro(stat.filter)}
+            className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer"
           >
             <div className="flex justify-between items-start mb-6">
               <div
@@ -281,10 +399,58 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         ))}
       </div>
 
+      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 mb-12">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="font-black text-slate-800 text-lg">Alertas de Inconsistência</h3>
+            <p className="text-xs text-slate-400 font-medium mt-1">
+              CPF/CNPJ, datas, numeração e referências dos processos.
+            </p>
+          </div>
+          <div className="w-11 h-11 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center">
+            <AlertTriangle size={22} />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {alertasInconsistencia.map((alerta) => (
+            <div
+              key={alerta.label}
+              className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50"
+            >
+              <div className="flex items-start justify-between gap-3 mb-4">
+                <div
+                  className={`${alerta.bg} ${alerta.color} w-10 h-10 rounded-xl flex items-center justify-center`}
+                >
+                  <AlertTriangle size={18} />
+                </div>
+                <span className="text-3xl font-black text-slate-800">{alerta.value}</span>
+              </div>
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {alerta.label}
+              </h4>
+              <p className="text-xs font-bold text-slate-600 mt-1 leading-relaxed">
+                {alerta.detail}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
         <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
           <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
-            <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
+            <div>
+              <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
+              {statusFiltro && (
+                <button
+                  type="button"
+                  onClick={() => setStatusFiltro('')}
+                  className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline mt-1"
+                >
+                  Limpar Filtro
+                </button>
+              )}
+            </div>
             <Link
               to="/processes"
               className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2"
@@ -330,6 +496,16 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      <NewProcessModal
+        isOpen={showNewProcessModal}
+        onClose={() => setShowNewProcessModal(false)}
+        onSuccess={() => {
+          _dashboardCache = null;
+          carregarDashboard();
+        }}
+        currentUser={user}
+      />
     </div>
   );
 };

@@ -77,6 +77,13 @@ def cadastro(request):
             serializador.validated_data['name'],
             serializador.validated_data['role'],
         )
+        try:
+            from controleadmin.servicos import garantir_perfil_usuario
+            from autenticacao.models import CustomUser
+            user = CustomUser.objects.get(email=serializador.validated_data['email'])
+            garantir_perfil_usuario(user)
+        except Exception:
+            pass
         return Response(resposta)
     except Exception as e:
         logger.error(f"Erro ao criar usuário: {str(e)}")

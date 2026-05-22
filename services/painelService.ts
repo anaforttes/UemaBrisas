@@ -136,24 +136,17 @@ export async function buscarAgregacoes(
   return request<AgregacoesAPI>(`/api/painel/agregacoes/?${qs}`);
 }
 
-export async function buscarDashboard() {
-  const [paginado, stats] = await Promise.all([
-    listarProcessos(),
-    request<{ total: number; ativos: number; concluidos: number; em_revisao: number }>(
-      '/api/processos/stats/'
-    ),
-  ]);
-
-  const recentes = [...paginado.results]
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-    .slice(0, 10);
-
-  return {
-    cards: {
-      ativos: stats.ativos,
-      em_revisao: stats.em_revisao,
-      concluidos: stats.concluidos,
-    },
-    recentes,
-  };
+export async function buscarDashboard(statusFiltro?: string) {
+  const qs = statusFiltro ? `?status=${encodeURIComponent(statusFiltro)}` : '';
+  return request<{
+    cards: { ativos: number; em_revisao: number; concluidos: number };
+    status: {
+      em_edicao: number;
+      em_revisao: number;
+      pendente: number;
+      assinado: number;
+      arquivado: number;
+    };
+    recentes: any[];
+  }>(`/api/painel/dashboard/${qs}`);
 }
