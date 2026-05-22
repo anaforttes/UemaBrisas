@@ -29,7 +29,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Aprovação de etapa pelo drawer atualiza o banco e avança para a próxima automaticamente
 - Endpoint idempotente: se o processo já foi protocolado, retorna etapas existentes sem duplicar
 
-### Painel (Dashboard) — Carol / Andre
+### Painel (Dashboard) — Carol 
 
 - Integração completa com `/api/processos/stats/` e `/api/processos/`
 - Skeleton screens substituem o spinner — carregamento visualmente suave
@@ -44,7 +44,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Busca incremental: após a carga inicial, só busca mensagens novas (por timestamp)
 - Sidebar de membros carregada do banco (usuários reais)
 
-### Documentos — Carol / Andre
+### Documentos — Carol
 
 - Documentos vinculados a processos, armazenados no banco
 - ProcessDrawer lista documentos do backend (qualquer membro vê os mesmos docs)
@@ -64,7 +64,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Cache com TTL de 60s e skeleton screen durante carregamento
 - Gráfico de barras e distribuição por categoria
 
-### Equipe — Leandro / Andre
+### Equipe — Leandro 
 
 - Listagem de membros via banco (`CustomUser`) — sem dados mock
 - Status Online/Offline em tempo real via SSE + heartbeat a cada 25s
