@@ -1,5 +1,7 @@
 from django.contrib import admin
 from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -14,4 +16,6 @@ urlpatterns = [
     path('api/chat/', include('chat.urls')),
     path('api/processos/<int:processo_pk>/etapas/', include('etapas.urls_processo')),
     path('api/etapas/', include('etapas.urls')),
-]
+    path('api/processos/<int:processo_pk>/anexos/', include('anexos.urls_processo')),
+    path('api/anexos/', include('anexos.urls')),
+] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

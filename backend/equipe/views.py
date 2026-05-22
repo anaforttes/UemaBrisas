@@ -1,12 +1,11 @@
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from autenticacao.models import CustomUser
 
 
 @api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def listar_usuarios(request):
-    usuarios = [
-        {'id': 1, 'name': 'Administrador', 'role': 'technician'},
-        {'id': 2, 'name': 'João Técnico', 'role': 'technician'},
-        {'id': 3, 'name': 'Maria Jurídico', 'role': 'legal'},
-    ]
-    return Response(usuarios)
+    qs = CustomUser.objects.filter(is_active=True).values('id', 'name', 'email', 'role')
+    return Response(list(qs))

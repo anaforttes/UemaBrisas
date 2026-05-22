@@ -17,6 +17,8 @@ import {
 import { REURBProcess } from '../../types/index';
 import { documentoService, DocLista } from '../../services/documentoService';
 import { etapasService, EtapaAPI } from '../../services/etapasService';
+import { equipeService, MembroEquipe } from '../../services/equipeService';
+import { anexosService, AnexoAPI } from '../../services/anexosService';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface ProcessDrawerProps {
@@ -27,16 +29,13 @@ interface ProcessDrawerProps {
 
 type Aba = 'etapas' | 'documentos' | 'timeline' | 'equipe' | 'anexos';
 
-// ─── Tipo Anexo ───────────────────────────────────────────────────────────────
+// ─── Tipo EventoTimeline ─────────────────────────────────────────────────────
 
-interface Anexo {
-  id: string;
-  nome: string;
-  tipo: string;
-  tamanho: number;
-  base64: string;
-  adicionadoEm: string;
-  adicionadoPor: string;
+interface EventoTimeline {
+  descricao: string;
+  usuarioNome: string;
+  criadoEm: string;
+  cor?: string;
 }
 
 const ETAPA_COR: Record<string, string> = {
@@ -160,12 +159,15 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
   const [documents, setDocuments] = useState<DocLista[]>([]);
   const [criandoDoc, setCriandoDoc] = useState(false);
   const [etapas, setEtapas] = useState<EtapaAPI[]>([]);
+  const [membros, setMembros] = useState<MembroEquipe[]>([]);
   const [abaAtiva, setAbaAtiva] = useState<Aba>('etapas');
-  const [auditoria, setAuditoria] = useState<any[]>([]);
+  const [timeline, setTimeline] = useState<EventoTimeline[]>([]);
   const [mostrarModalAprovacao, setMostrarModalAprovacao] = useState(false);
   const [aprovacaoSucesso, setAprovacaoSucesso] = useState(false);
-  const [anexos, setAnexos] = useState<Anexo[]>([]);
+  const [anexos, setAnexos] = useState<AnexoAPI[]>([]);
+  const [uploadando, setUploadando] = useState(false);
   const [dragAtivo, setDragAtivo] = useState(false);
+  const [erroCarregamento, setErroCarregamento] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -179,25 +181,67 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
   const carregarDados = async () => {
     if (!process) return;
     setAprovacaoSucesso(false);
+    setErroCarregamento(false);
 
     try {
-      const docs = await documentoService.listarPorProcesso(process.id);
-      setDocuments(docs);
-    } catch {
-      setDocuments([]);
-    }
+      const [docs, etapasData, anexosData, membrosData] = await Promise.allSettled([
+        documentoService.listarPorProcesso(process.id),
+        etapasService.listar(process.id),
+        anexosService.listar(process.id),
+        equipeService.listar(),
+      ]);
 
-    try {
-      const etapasData = await etapasService.listar(process.id);
-      setEtapas(etapasData);
-    } catch {
-      setEtapas([]);
-    }
-    setAuditoria([]);
+      const docsOk = docs.status === 'fulfilled' ? docs.value : [];
+      const etapasOk = etapasData.status === 'fulfilled' ? etapasData.value : [];
+      const anexosOk = anexosData.status === 'fulfilled' ? anexosData.value : [];
+      const membrosOk = membrosData.status === 'fulfilled' ? membrosData.value : [];
 
-    const key = `anexos_${process.id}`;
-    const saved = localStorage.getItem(key);
-    setAnexos(saved ? JSON.parse(saved) : []);
+      setDocuments(docsOk);
+      setEtapas(etapasOk);
+      setAnexos(anexosOk);
+      setMembros(membrosOk);
+
+      // Gerar timeline a partir de etapas e documentos
+      const eventos: EventoTimeline[] = [];
+      etapasOk.forEach((e) => {
+        if (e.data_inicio) {
+          eventos.push({
+            descricao: `Etapa iniciada: ${e.nome}`,
+            usuarioNome: e.responsavel_nome || 'Sistema',
+            criadoEm: e.data_inicio,
+            cor: 'bg-blue-100',
+          });
+        }
+        if (e.data_conclusao) {
+          eventos.push({
+            descricao: `Etapa concluída: ${e.nome}`,
+            usuarioNome: e.responsavel_nome || 'Sistema',
+            criadoEm: e.data_conclusao,
+            cor: 'bg-green-100',
+          });
+        }
+      });
+      docsOk.forEach((d) => {
+        eventos.push({
+          descricao: `Documento criado: ${d.titulo}`,
+          usuarioNome: d.criado_por?.name || 'Sistema',
+          criadoEm: d.criado_em,
+          cor: 'bg-purple-100',
+        });
+      });
+      eventos.sort((a, b) => new Date(b.criadoEm).getTime() - new Date(a.criadoEm).getTime());
+      setTimeline(eventos);
+
+      if (
+        docs.status === 'rejected' &&
+        etapasData.status === 'rejected' &&
+        anexosData.status === 'rejected'
+      ) {
+        setErroCarregamento(true);
+      }
+    } catch {
+      setErroCarregamento(true);
+    }
   };
 
   const handleNovoDocumento = async () => {
@@ -216,47 +260,29 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
     }
   };
 
-  const salvarAnexos = (novosAnexos: Anexo[]) => {
-    if (!process) return;
-    localStorage.setItem(`anexos_${process.id}`, JSON.stringify(novosAnexos));
-    setAnexos(novosAnexos);
+  const handleArquivos = async (files: FileList | null) => {
+    if (!files || !process || uploadando) return;
+    setUploadando(true);
+    try {
+      for (const file of Array.from(files)) {
+        const novo = await anexosService.upload(process.id, file);
+        setAnexos((prev) => [novo, ...prev]);
+      }
+    } finally {
+      setUploadando(false);
+    }
   };
 
-  const handleArquivos = (files: FileList | null) => {
-    if (!files || !process) return;
-    const lista = Array.from(files);
-
-    lista.forEach((file) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const novoAnexo: Anexo = {
-          id: `anx-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          nome: file.name,
-          tipo: file.type,
-          tamanho: file.size,
-          base64: e.target?.result as string,
-          adicionadoEm: new Date().toISOString(),
-          adicionadoPor: currentUser.name || 'Usuário',
-        };
-        setAnexos((prev) => {
-          const atualizados = [...prev, novoAnexo];
-          localStorage.setItem(`anexos_${process.id}`, JSON.stringify(atualizados));
-          return atualizados;
-        });
-      };
-      reader.readAsDataURL(file);
-    });
+  const handleRemoverAnexo = async (id: number) => {
+    await anexosService.deletar(id);
+    setAnexos((prev) => prev.filter((a) => a.id !== id));
   };
 
-  const handleRemoverAnexo = (id: string) => {
-    const atualizados = anexos.filter((a) => a.id !== id);
-    salvarAnexos(atualizados);
-  };
-
-  const handleDownload = (anexo: Anexo) => {
+  const handleDownload = (anexo: AnexoAPI) => {
     const link = document.createElement('a');
-    link.href = anexo.base64;
+    link.href = anexo.url;
     link.download = anexo.nome;
+    link.target = '_blank';
     link.click();
   };
 
@@ -337,6 +363,20 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
             <X size={24} />
           </button>
         </div>
+
+        {/* Banner de erro */}
+        {erroCarregamento && (
+          <div className="mx-8 mt-4 flex items-center gap-3 p-3 bg-red-50 border border-red-100 rounded-2xl">
+            <AlertCircle size={14} className="text-red-500 shrink-0" />
+            <p className="text-xs text-red-700 flex-1">Falha ao carregar dados do processo.</p>
+            <button
+              onClick={carregarDados}
+              className="text-[10px] font-black text-red-600 hover:underline shrink-0"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
 
         {/* Barra de progresso */}
         <div className="px-8 py-4 border-b border-slate-50">
@@ -536,9 +576,10 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                 </h4>
                 <button
                   onClick={() => inputRef.current?.click()}
-                  className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1"
+                  disabled={uploadando}
+                  className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1 disabled:opacity-50"
                 >
-                  <Upload size={12} /> Adicionar
+                  <Upload size={12} /> {uploadando ? 'Enviando...' : 'Adicionar'}
                 </button>
               </div>
 
@@ -548,7 +589,10 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                 multiple
                 accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp,.zip"
                 className="hidden"
-                onChange={(e) => handleArquivos(e.target.files)}
+                onChange={(e) => {
+                  handleArquivos(e.target.files);
+                  e.target.value = '';
+                }}
               />
 
               {/* Área de drag and drop */}
@@ -604,8 +648,8 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-bold text-slate-700 truncate">{anexo.nome}</p>
                         <p className="text-[10px] text-slate-400">
-                          {formatarTamanho(anexo.tamanho)} · {formatarData(anexo.adicionadoEm)} ·{' '}
-                          {anexo.adicionadoPor}
+                          {formatarTamanho(anexo.tamanho)} · {formatarData(anexo.adicionado_em)} ·{' '}
+                          {anexo.adicionado_por || 'Usuário'}
                         </p>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
@@ -662,19 +706,24 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                 </div>
               </div>
 
-              {auditoria.length === 0 ? (
+              {timeline.length === 0 ? (
                 <div className="p-6 border-2 border-dashed border-slate-100 rounded-3xl text-center">
                   <Clock size={24} className="mx-auto text-slate-200 mb-2" />
                   <p className="text-xs text-slate-400 font-medium">
                     Nenhum evento registrado ainda.
                   </p>
+                  <p className="text-[10px] text-slate-300 mt-1">
+                    Protocole o processo para iniciar as etapas.
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-3 relative before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-100">
-                  {auditoria.map((log, i) => (
+                  {timeline.map((log, i) => (
                     <div key={i} className="flex gap-4 relative">
-                      <div className="w-6 h-6 rounded-full bg-blue-100 border-4 border-white shadow-sm flex items-center justify-center z-10 shrink-0">
-                        <div className="w-2 h-2 rounded-full bg-blue-600" />
+                      <div
+                        className={`w-6 h-6 rounded-full ${log.cor || 'bg-blue-100'} border-4 border-white shadow-sm flex items-center justify-center z-10 shrink-0`}
+                      >
+                        <div className="w-2 h-2 rounded-full bg-current opacity-60" />
                       </div>
                       <div className="flex-1 pb-2">
                         <p className="text-xs font-bold text-slate-800">{log.descricao}</p>
@@ -700,7 +749,7 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
 
           {/* ── Aba Equipe ── */}
           {abaAtiva === 'equipe' && (
-            <section className="space-y-4">
+            <section className="space-y-3">
               <div className="flex items-center gap-3 p-4 bg-blue-50/30 border border-blue-50 rounded-2xl">
                 <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-600 shadow-sm">
                   <UserIcon size={20} />
@@ -714,6 +763,27 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                   </p>
                 </div>
               </div>
+              {membros.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    Equipe ({membros.length})
+                  </h4>
+                  {membros.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-100 rounded-2xl"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-black shrink-0">
+                        {m.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
+                        <p className="text-[10px] text-slate-400 truncate">{m.role}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
               {!process.responsibleName && (
                 <div className="flex items-center gap-2 p-3 bg-amber-50 border border-amber-100 rounded-xl">
                   <AlertCircle size={14} className="text-amber-500 shrink-0" />

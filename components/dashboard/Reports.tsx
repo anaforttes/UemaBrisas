@@ -10,10 +10,9 @@ import {
   X,
   Minus,
 } from 'lucide-react';
-import { dbService } from '../../services/databaseService';
 import { buscarAgregacoes, type AgregacoesAPI } from '../../services/painelService';
 import { chatService, MensagemChat } from '../../services/chatService';
-import { User } from '../../types/index';
+import { equipeService, MembroEquipe } from '../../services/equipeService';
 
 // ─── Cache de módulo (TTL 60s) ────────────────────────────────────────────────
 
@@ -64,7 +63,7 @@ const formatarData = (iso: string) =>
 const ChatFlutuante: React.FC = () => {
   const currentUser = JSON.parse(localStorage.getItem('reurb_current_user') || '{}');
 
-  const [membros, setMembros] = useState<User[]>([]);
+  const [membros, setMembros] = useState<MembroEquipe[]>([]);
   const [aberto, setAberto] = useState(false);
   const [minimizado, setMinimizado] = useState(false);
   const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
@@ -76,8 +75,8 @@ const ChatFlutuante: React.FC = () => {
   const ultimoIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
-    dbService.users
-      .selectAll()
+    equipeService
+      .listar()
       .then(setMembros)
       .catch(() => setMembros([]));
   }, []);
@@ -151,8 +150,8 @@ const ChatFlutuante: React.FC = () => {
     }
   };
 
-  const online = membros.filter((m) => m.status === 'Online');
-  const offline = membros.filter((m) => m.status !== 'Online');
+  const online = membros;
+  const offline: MembroEquipe[] = [];
 
   const mensagensComSeparador = useMemo(() => {
     const resultado: { tipo: 'data' | 'mensagem'; valor: string | MensagemChat }[] = [];
@@ -200,7 +199,7 @@ const ChatFlutuante: React.FC = () => {
                           <div className="relative shrink-0">
                             <div
                               className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-black"
-                              style={{ background: getCorAvatar(m.id) }}
+                              style={{ background: getCorAvatar(String(m.id)) }}
                             >
                               {m.name.charAt(0)}
                             </div>
