@@ -41,6 +41,8 @@ INSTALLED_APPS = [
     'documentos',
     'notificacoes',
     'controleadmin',
+    'chat',
+    'etapas',
 ]
 
 AUTH_USER_MODEL = 'autenticacao.CustomUser'

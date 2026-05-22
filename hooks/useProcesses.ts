@@ -1,6 +1,12 @@
 import { useState, useCallback } from 'react';
 import { dbService } from '../services/databaseService';
-import { listarProcessos, meusProcessos, atualizarProcesso, deletarProcesso, ProcessoMeu } from '../services/painelService';
+import {
+  listarProcessos,
+  meusProcessos,
+  deletarProcesso,
+  ProcessoMeu,
+} from '../services/painelService';
+import { etapasService } from '../services/etapasService';
 import { REURBProcess } from '../types/index';
 
 export function useProcesses() {
@@ -9,10 +15,7 @@ export function useProcesses() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [data, meus] = await Promise.all([
-        listarProcessos(),
-        meusProcessos().catch(() => []),
-      ]);
+      const [data, meus] = await Promise.all([listarProcessos(), meusProcessos().catch(() => [])]);
       setProcesses(data.results);
       setMeusProcs(meus);
     } catch {
@@ -20,13 +23,18 @@ export function useProcesses() {
     }
   }, []);
 
-  const handleProtocolar = useCallback(async (proc: REURBProcess) => {
-    try {
-      await atualizarProcesso(proc.id, { protocolado: true, status: 'Em Andamento' });
-      window.dispatchEvent(new CustomEvent('reurb:processos-alterados'));
-    } catch { /* ignora */ }
-    fetchData();
-  }, [fetchData]);
+  const handleProtocolar = useCallback(
+    async (proc: REURBProcess) => {
+      try {
+        await etapasService.protocolar(proc.id);
+        window.dispatchEvent(new CustomEvent('reurb:processos-alterados'));
+      } catch {
+        /* ignora */
+      }
+      fetchData();
+    },
+    [fetchData]
+  );
 
   const handleDownloadZip = useCallback(async (proc: REURBProcess) => {
     if (!(window as any).JSZip) {
@@ -39,7 +47,7 @@ export function useProcesses() {
     }
 
     const JSZip = (window as any).JSZip;
-    const zip   = new JSZip();
+    const zip = new JSZip();
     const pasta = zip.folder(`processo_${proc.protocol || proc.id}`);
 
     const meta = [
@@ -79,9 +87,9 @@ export function useProcesses() {
     }
 
     const blob = await zip.generateAsync({ type: 'blob' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     a.download = `processo_${proc.protocol || proc.id}.zip`;
     a.click();
     URL.revokeObjectURL(url);
@@ -92,7 +100,7 @@ export function useProcesses() {
     if (idNumerico) {
       await deletarProcesso(proc.id);
     }
-    setProcesses(prev => prev.filter(p => p.id !== proc.id));
+    setProcesses((prev) => prev.filter((p) => p.id !== proc.id));
     window.dispatchEvent(new CustomEvent('reurb:processos-alterados'));
   }, []);
 

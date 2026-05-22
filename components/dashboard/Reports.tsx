@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 import { buscarAgregacoes, type AgregacoesAPI } from '../../services/painelService';
+import { chatService, MensagemChat } from '../../services/chatService';
 import { User } from '../../types/index';
 
 // ─── Cache de módulo (TTL 60s) ────────────────────────────────────────────────
@@ -34,29 +35,7 @@ function setCached(key: CacheKey, data: AgregacoesAPI) {
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 const SKELETON_BARS = [40, 65, 25, 80, 55, 30, 70, 45, 90, 35, 60, 50];
 
-// ─── Tipos do Chat ────────────────────────────────────────────────────────────
-
-interface Mensagem {
-  id: string;
-  autorId: string;
-  autorNome: string;
-  autorCor: string;
-  texto: string;
-  hora: string;
-  data: string;
-}
-
-const CHAT_KEY = 'reurb_chat_mensagens';
-
-const salvarMensagens = (msgs: Mensagem[]) => localStorage.setItem(CHAT_KEY, JSON.stringify(msgs));
-const carregarMensagens = (): Mensagem[] => {
-  try {
-    const r = localStorage.getItem(CHAT_KEY);
-    return r ? JSON.parse(r) : [];
-  } catch {
-    return [];
-  }
-};
+// ─── Helpers do Chat ─────────────────────────────────────────────────────────
 
 const CORES_AVATAR = [
   '#2563eb',
@@ -88,17 +67,47 @@ const ChatFlutuante: React.FC = () => {
   const [membros, setMembros] = useState<User[]>([]);
   const [aberto, setAberto] = useState(false);
   const [minimizado, setMinimizado] = useState(false);
-  const [mensagens, setMensagens] = useState<Mensagem[]>(carregarMensagens);
+  const [mensagens, setMensagens] = useState<MensagemChat[]>([]);
   const [texto, setTexto] = useState('');
   const [naoLidas, setNaoLidas] = useState(0);
+  const [enviando, setEnviando] = useState(false);
   const fimRef = useRef<HTMLDivElement>(null);
-  const prevLen = useRef(mensagens.length);
+  const prevLen = useRef(0);
+  const ultimoIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     dbService.users
       .selectAll()
       .then(setMembros)
       .catch(() => setMembros([]));
+  }, []);
+
+  // Carga inicial + polling a cada 5s
+  useEffect(() => {
+    let cancelado = false;
+
+    const buscar = async () => {
+      try {
+        const novas = await chatService.listar(ultimoIdRef.current);
+        if (cancelado || novas.length === 0) return;
+        setMensagens((prev) => {
+          const idsExistentes = new Set(prev.map((m) => m.id));
+          const append = novas.filter((m) => !idsExistentes.has(m.id));
+          if (append.length === 0) return prev;
+          ultimoIdRef.current = append[append.length - 1].criado_em;
+          return [...prev, ...append];
+        });
+      } catch {
+        // silently ignore network errors during polling
+      }
+    };
+
+    buscar();
+    const timer = setInterval(buscar, 5000);
+    return () => {
+      cancelado = true;
+      clearInterval(timer);
+    };
   }, []);
 
   useEffect(() => {
@@ -116,22 +125,23 @@ const ChatFlutuante: React.FC = () => {
     prevLen.current = mensagens.length;
   }, [mensagens]);
 
-  const enviar = () => {
-    if (!texto.trim()) return;
-    const agora = new Date().toISOString();
-    const nova: Mensagem = {
-      id: `msg-${Date.now()}`,
-      autorId: currentUser.id || 'u-anonimo',
-      autorNome: currentUser.name || 'Usuário',
-      autorCor: getCorAvatar(currentUser.id || 'u-anonimo'),
-      texto: texto.trim(),
-      hora: agora,
-      data: formatarData(agora),
-    };
-    const atualizadas = [...mensagens, nova];
-    setMensagens(atualizadas);
-    salvarMensagens(atualizadas);
+  const enviar = async () => {
+    if (!texto.trim() || enviando) return;
+    const textoEnvio = texto.trim();
     setTexto('');
+    setEnviando(true);
+    try {
+      const nova = await chatService.enviar(textoEnvio);
+      setMensagens((prev) => {
+        if (prev.some((m) => m.id === nova.id)) return prev;
+        ultimoIdRef.current = nova.criado_em;
+        return [...prev, nova];
+      });
+    } catch {
+      setTexto(textoEnvio); // restore on error
+    } finally {
+      setEnviando(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -145,10 +155,10 @@ const ChatFlutuante: React.FC = () => {
   const offline = membros.filter((m) => m.status !== 'Online');
 
   const mensagensComSeparador = useMemo(() => {
-    const resultado: { tipo: 'data' | 'mensagem'; valor: string | Mensagem }[] = [];
+    const resultado: { tipo: 'data' | 'mensagem'; valor: string | MensagemChat }[] = [];
     let dataAtual = '';
     mensagens.forEach((m) => {
-      const data = formatarData(m.hora);
+      const data = formatarData(m.criado_em);
       if (data !== dataAtual) {
         dataAtual = data;
         resultado.push({ tipo: 'data', valor: data });
@@ -287,8 +297,8 @@ const ChatFlutuante: React.FC = () => {
                         </div>
                       );
                     }
-                    const msg = item.valor as Mensagem;
-                    const ehMeu = msg.autorId === currentUser.id;
+                    const msg = item.valor as MensagemChat;
+                    const ehMeu = String(msg.usuario_id) === String(currentUser.id);
                     return (
                       <div
                         key={msg.id}
@@ -296,9 +306,9 @@ const ChatFlutuante: React.FC = () => {
                       >
                         <div
                           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0"
-                          style={{ background: msg.autorCor }}
+                          style={{ background: getCorAvatar(String(msg.usuario_id)) }}
                         >
-                          {msg.autorNome.charAt(0)}
+                          {msg.usuario_nome.charAt(0)}
                         </div>
                         <div
                           className={`flex flex-col ${ehMeu ? 'items-end' : 'items-start'} max-w-[65%]`}
@@ -307,9 +317,11 @@ const ChatFlutuante: React.FC = () => {
                             className={`flex items-baseline gap-1.5 mb-0.5 ${ehMeu ? 'flex-row-reverse' : ''}`}
                           >
                             <p className="text-[11px] font-black text-slate-700">
-                              {msg.autorNome.split(' ')[0]}
+                              {msg.usuario_nome.split(' ')[0]}
                             </p>
-                            <p className="text-[9px] text-slate-400">{formatarHora(msg.hora)}</p>
+                            <p className="text-[9px] text-slate-400">
+                              {formatarHora(msg.criado_em)}
+                            </p>
                           </div>
                           <div
                             className={`px-3 py-2 rounded-2xl text-xs leading-relaxed ${
@@ -339,7 +351,7 @@ const ChatFlutuante: React.FC = () => {
                   />
                   <button
                     onClick={enviar}
-                    disabled={!texto.trim()}
+                    disabled={!texto.trim() || enviando}
                     className="w-8 h-8 bg-blue-600 text-white rounded-xl flex items-center justify-center hover:bg-blue-700 transition-all shadow-lg shadow-blue-100 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
                   >
                     <Send size={13} />

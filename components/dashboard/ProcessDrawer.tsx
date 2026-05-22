@@ -14,14 +14,15 @@ import {
   Paperclip,
   Plus,
 } from 'lucide-react';
-import { REURBProcess, REURBEtapa, EtapaStatus } from '../../types/index';
-import { dbService } from '../../services/databaseService';
+import { REURBProcess } from '../../types/index';
 import { documentoService, DocLista } from '../../services/documentoService';
+import { etapasService, EtapaAPI } from '../../services/etapasService';
 import { Link, useNavigate } from 'react-router-dom';
 
 interface ProcessDrawerProps {
   process: REURBProcess | null;
   onClose: () => void;
+  onProtocolar?: (processoId: string) => void;
 }
 
 type Aba = 'etapas' | 'documentos' | 'timeline' | 'equipe' | 'anexos';
@@ -84,8 +85,8 @@ const ICONE_TIPO: Record<string, string> = {
 // ─── Modal de Aprovação ───────────────────────────────────────────────────────
 
 interface ModalAprovacaoProps {
-  etapaAtual: REURBEtapa;
-  proximaEtapa: REURBEtapa | null;
+  etapaAtual: EtapaAPI;
+  proximaEtapa: EtapaAPI | null;
   onConfirmar: (parecer: string) => void;
   onFechar: () => void;
 }
@@ -158,7 +159,7 @@ const ModalAprovacao: React.FC<ModalAprovacaoProps> = ({
 export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }) => {
   const [documents, setDocuments] = useState<DocLista[]>([]);
   const [criandoDoc, setCriandoDoc] = useState(false);
-  const [etapas, setEtapas] = useState<REURBEtapa[]>([]);
+  const [etapas, setEtapas] = useState<EtapaAPI[]>([]);
   const [abaAtiva, setAbaAtiva] = useState<Aba>('etapas');
   const [auditoria, setAuditoria] = useState<any[]>([]);
   const [mostrarModalAprovacao, setMostrarModalAprovacao] = useState(false);
@@ -186,8 +187,13 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
       setDocuments([]);
     }
 
-    setEtapas(dbService.etapas.findByProcessId(process.id));
-    setAuditoria(dbService.auditoria.findByEntidade(process.id));
+    try {
+      const etapasData = await etapasService.listar(process.id);
+      setEtapas(etapasData);
+    } catch {
+      setEtapas([]);
+    }
+    setAuditoria([]);
 
     const key = `anexos_${process.id}`;
     const saved = localStorage.getItem(key);
@@ -276,22 +282,15 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
     { id: 'equipe', label: 'Equipe' },
   ];
 
-  const handleConfirmarAprovacao = (parecer: string) => {
+  const handleConfirmarAprovacao = async (parecer: string) => {
     if (!etapaAtual) return;
-    dbService.etapas.updateStatus(
-      etapaAtual.id,
-      'concluida' as EtapaStatus,
-      currentUser.id || 'u-admin',
-      currentUser.name || 'Administrador'
-    );
-    if (parecer.trim()) dbService.etapas.atualizarObservacoes(etapaAtual.id, parecer);
-    if (proximaEtapa)
-      dbService.etapas.updateStatus(
-        proximaEtapa.id,
-        'em_andamento' as EtapaStatus,
-        currentUser.id || 'u-admin',
-        currentUser.name || 'Administrador'
-      );
+    await etapasService.atualizar(etapaAtual.id, {
+      status: 'concluida',
+      ...(parecer.trim() ? { observacoes: parecer } : {}),
+    });
+    if (proximaEtapa) {
+      await etapasService.atualizar(proximaEtapa.id, { status: 'em_andamento' });
+    }
     setMostrarModalAprovacao(false);
     setAprovacaoSucesso(true);
     carregarDados();
@@ -405,16 +404,17 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose }
                           >
                             {ETAPA_LABEL[etapa.status]}
                           </span>
-                          {etapa.responsavelNome && (
+                          {etapa.responsavel_nome && (
                             <span className="text-[10px] text-slate-400">
-                              {etapa.responsavelNome}
+                              {etapa.responsavel_nome}
                             </span>
                           )}
                         </div>
-                        {etapa.dataInicio && (
+                        {etapa.data_inicio && (
                           <p className="text-[10px] text-slate-400 mt-0.5">
-                            Início: {formatarData(etapa.dataInicio)}
-                            {etapa.dataConclusao && ` · Fim: ${formatarData(etapa.dataConclusao)}`}
+                            Início: {formatarData(etapa.data_inicio)}
+                            {etapa.data_conclusao &&
+                              ` · Fim: ${formatarData(etapa.data_conclusao)}`}
                           </p>
                         )}
                         {etapa.observacoes && (

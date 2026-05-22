@@ -11,4 +11,7 @@ urlpatterns = [
     path('api/documentos/', include('documentos.urls')),
     path('api/notificacoes/', include('notificacoes.urls')),
     path('api/controleadmin/', include('controleadmin.urls')),
+    path('api/chat/', include('chat.urls')),
+    path('api/processos/<int:processo_pk>/etapas/', include('etapas.urls_processo')),
+    path('api/etapas/', include('etapas.urls')),
 ]
