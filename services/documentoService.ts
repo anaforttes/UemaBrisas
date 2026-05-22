@@ -54,6 +54,18 @@ export interface DocAssinatura {
   assinado_em: string | null;
 }
 
+export interface DocLista {
+  id: string;
+  doc_ref: string;
+  titulo: string;
+  processo_id: string;
+  criado_por: { id: number; name: string; email: string; role: string } | null;
+  status: string;
+  versao_atual: number;
+  criado_em: string;
+  atualizado_em: string;
+}
+
 export interface DocDetalhe {
   id: string;
   doc_ref: string;
@@ -74,6 +86,10 @@ export interface DocDetalhe {
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export const documentoService = {
+  listarPorProcesso: async (processoId: string): Promise<DocLista[]> => {
+    return request<DocLista[]>(`/api/documentos/?processo_id=${encodeURIComponent(processoId)}`);
+  },
+
   buscarPorRef: async (docRef: string): Promise<DocDetalhe | null> => {
     const lista = await request<DocDetalhe[]>(
       `/api/documentos/?doc_ref=${encodeURIComponent(docRef)}`

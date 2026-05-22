@@ -56,9 +56,13 @@ class DocumentoListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        doc_ref = request.query_params.get('doc_ref', '')
+        doc_ref    = request.query_params.get('doc_ref', '')
+        processo_id = request.query_params.get('processo_id', '')
         if doc_ref:
             docs = Documento.objects.filter(doc_ref=doc_ref)
+            docs = [d for d in docs if _pode_ver(request, d)]
+        elif processo_id:
+            docs = Documento.objects.filter(processo_id=processo_id)
             docs = [d for d in docs if _pode_ver(request, d)]
         else:
             from django.db.models import Q
