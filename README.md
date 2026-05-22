@@ -6,14 +6,14 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 
 ## Integrações realizadas
 
-### Autenticação — Keven
+### Autenticação 
 
 - Cadastro e login integrados com o banco via `POST /api/autenticacao/cadastro/` e `/login/`
 - Autenticação com JWT (access token + refresh token automático ao expirar)
 - Recuperação de senha com e-mail HTML responsivo
 - Login exige conta real no banco — sem fallback local
 
-### Processos — Andre
+### Processos 
 
 - Listagem, criação, edição e exclusão via `/api/processos/`
 - Modal de confirmação antes de excluir, com atualização imediata do painel
@@ -21,7 +21,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Tags de papel ("Criador", "Técnico", "Jurídico", "Colaborador") nos cards
 - Datas formatadas como DD/MM/AAAA no grid
 
-### Etapas dos Processos — Andre
+### Etapas dos Processos 
 
 - 14 etapas REURB criadas automaticamente ao protocolar um processo
 - Fluxo: Abertura → Diagnóstico → Levantamento → Classificação → Buscas Dominiais → Notificação → Estudos Técnicos → Vetorização → Saneamento → Elaboração do PRF → Aprovação → Emissão da CRF → Registro em Cartório → Monitoramento
@@ -29,7 +29,7 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Aprovação de etapa pelo drawer atualiza o banco e avança para a próxima automaticamente
 - Endpoint idempotente: se o processo já foi protocolado, retorna etapas existentes sem duplicar
 
-### Painel (Dashboard) — Carol 
+### Painel (Dashboard) 
 
 - Integração completa com `/api/processos/stats/` e `/api/processos/`
 - Skeleton screens substituem o spinner — carregamento visualmente suave
@@ -37,45 +37,45 @@ Sistema completo para gestão de processos REURB (Regularização Fundiária Urb
 - Invalidação automática ao deletar ou protocolar um processo
 - Feedback de erro com botão "Tentar novamente" quando o backend não responde
 
-### Chat da Equipe — Andre
+### Chat da Equipe 
 
 - Mensagens salvas no banco de dados, compartilhadas entre todos os membros
 - Polling automático a cada 5s — novas mensagens aparecem sem recarregar a página
 - Busca incremental: após a carga inicial, só busca mensagens novas (por timestamp)
 - Sidebar de membros carregada do banco (usuários reais)
 
-### Documentos — Carol
+### Documentos 
 
 - Documentos vinculados a processos, armazenados no banco
 - ProcessDrawer lista documentos do backend (qualquer membro vê os mesmos docs)
 - Criar novo documento abre diretamente no editor TipTap e salva no servidor
 - Geração de link de convite para co-edição com papel definido
 
-### Anexos dos Processos — Andre
+### Anexos dos Processos 
 
 - Upload de arquivos (PDF, DOC, DOCX, JPG, PNG, ZIP) diretamente para o servidor
 - Arquivos servidos via `/media/` — link permanente independente do navegador
 - Exclusão remove o arquivo do disco e o registro do banco
 - Drag-and-drop e seleção múltipla suportados
 
-### Relatórios — Andre
+### Relatórios 
 
 - Dados reais do banco: processos por modalidade, status e município
 - Cache com TTL de 60s e skeleton screen durante carregamento
 - Gráfico de barras e distribuição por categoria
 
-### Equipe — Leandro 
+### Equipe
 
 - Listagem de membros via banco (`CustomUser`) — sem dados mock
 - Status Online/Offline em tempo real via SSE + heartbeat a cada 25s
 - Editar nome, salvar permissões e remover colaborador via PATCH/DELETE
 
-### Colaboração em Documentos — Carol
+### Colaboração em Documentos 
 
 - SSE centralizado em `autenticacao/sse.py` para broadcast em tempo real
 - Aceite de convite via `/convite/:code` — adiciona colaborador com papel definido
 
-### Timeline dos Processos — Andre
+### Timeline dos Processos 
 
 - Gerada automaticamente a partir dos dados reais: início/conclusão de etapas e criação de documentos
 - Ordenada do evento mais recente ao mais antigo, com código de cor por tipo
