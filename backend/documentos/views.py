@@ -9,13 +9,13 @@ from autenticacao.sse import sse_broadcast
 from .models import (
     Documento, ColaboradorDocumento, ComentarioDocumento,
     VersaoDocumento, ConviteDocumento, AuditoriaDocumento,
-    PresencaDocumento,
+    PresencaDocumento, ModeloDocumento,
 )
 from .serializadores import (
     DocumentoListSerializer, DocumentoDetalheSerializer,
     ColaboradorSerializer, ComentarioSerializer,
     VersaoSerializer, VersaoComConteudoSerializer,
-    AssinaturaSerializer,
+    AssinaturaSerializer, ModeloDocumentoSerializer,
 )
 from .servicos import (
     criar_documento, salvar_versao, adicionar_colaborador,
@@ -527,3 +527,51 @@ class PresencaListView(APIView):
                            cursor_pos=int(cursor_pos) if cursor_pos is not None else None)
         _sse_doc(doc.id, doc.doc_ref, 'presenca', request.user.name)
         return Response({'status': 'ok'})
+
+
+class ModeloListView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        modelos = ModeloDocumento.objects.filter(criado_por=request.user)
+        return Response(ModeloDocumentoSerializer(modelos, many=True).data)
+
+    def post(self, request):
+        serializer = ModeloDocumentoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save(criado_por=request.user)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ModeloDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def _get_modelo(self, pk, user):
+        try:
+            return ModeloDocumento.objects.get(pk=pk, criado_por=user)
+        except ModeloDocumento.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        modelo = self._get_modelo(pk, request.user)
+        if not modelo:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        return Response(ModeloDocumentoSerializer(modelo).data)
+
+    def put(self, request, pk):
+        modelo = self._get_modelo(pk, request.user)
+        if not modelo:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        serializer = ModeloDocumentoSerializer(modelo, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, pk):
+        modelo = self._get_modelo(pk, request.user)
+        if not modelo:
+            return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        modelo.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

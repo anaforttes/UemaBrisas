@@ -1,7 +1,0 @@
-{
-  "name": "UEMA 2026",
-  "description": "Uma plataforma avançada para gestão e edição colaborativa de documentos de regularização fundiária (REURB), com fluxo de aprovação e inteligência artificial.",
-  "requestFramePermissions": [
-    "camera"
-  ]
-}

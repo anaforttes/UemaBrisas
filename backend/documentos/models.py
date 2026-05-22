@@ -147,6 +147,33 @@ class AuditoriaDocumento(models.Model):
         return f'{self.tipo} em {self.documento.titulo} por {self.usuario}'
 
 
+class ModeloDocumento(models.Model):
+    TIPO_CHOICES = [
+        ('Administrativo', 'Administrativo'),
+        ('Notificação', 'Notificação'),
+        ('Técnico', 'Técnico'),
+        ('Titularidade', 'Titularidade'),
+        ('Outro', 'Outro'),
+    ]
+
+    id          = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    nome        = models.CharField(max_length=300)
+    tipo        = models.CharField(max_length=50, choices=TIPO_CHOICES, default='Outro')
+    versao      = models.CharField(max_length=20, default='V1.0')
+    descricao   = models.TextField(blank=True, default='')
+    conteudo    = models.TextField()
+    campos      = models.JSONField(default=list)
+    criado_por  = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='modelos_criados')
+    criado_em   = models.DateTimeField(auto_now_add=True)
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-atualizado_em']
+
+    def __str__(self):
+        return f'{self.nome} ({self.versao})'
+
+
 class PresencaDocumento(models.Model):
     documento     = models.ForeignKey(Documento, on_delete=models.CASCADE, related_name='presencas')
     usuario       = models.ForeignKey(CustomUser, on_delete=models.CASCADE)

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from autenticacao.models import CustomUser
-from .models import Documento, ColaboradorDocumento, ComentarioDocumento, VersaoDocumento, AssinaturaDocumento
+from .models import Documento, ColaboradorDocumento, ComentarioDocumento, VersaoDocumento, AssinaturaDocumento, ModeloDocumento
 
 
 class UsuarioSimples(serializers.ModelSerializer):
@@ -89,3 +89,12 @@ class DocumentoDetalheSerializer(serializers.ModelSerializer):
             'processo_id', 'criado_por', 'status', 'versao_atual',
             'criado_em', 'atualizado_em', 'colaboradores', 'assinaturas',
         ]
+
+
+class ModeloDocumentoSerializer(serializers.ModelSerializer):
+    criado_por = UsuarioSimples(read_only=True)
+
+    class Meta:
+        model  = ModeloDocumento
+        fields = ['id', 'nome', 'tipo', 'versao', 'descricao', 'conteudo', 'campos', 'criado_por', 'criado_em', 'atualizado_em']
+        read_only_fields = ['id', 'criado_por', 'criado_em', 'atualizado_em']
