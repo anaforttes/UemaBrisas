@@ -1,12 +1,64 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { BarChart3, TrendingUp, FileText, Users, Calendar, Send, MessageSquare, X, Minus } from 'lucide-react';
+import {
+  BarChart3,
+  TrendingUp,
+  FileText,
+  Users,
+  Calendar,
+  Send,
+  MessageSquare,
+  X,
+  Minus,
+  ShieldCheck,
+  History,
+  AlertTriangle,
+  Layers3,
+} from 'lucide-react';
 import { dbService } from '../../services/databaseService';
-import { MOCK_PROCESSES } from '../../constants';
+import { MOCK_MODELS, MOCK_PROCESSES } from '../../constants';
 import { ProcessStatus } from '../../types/index';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const MESES = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+const getSetor = (nome?: string) => {
+  const valor = (nome || '').toLowerCase();
+
+  if (valor.includes('adv')) return 'Jurídico';
+  if (valor.includes('ass. social') || valor.includes('social')) return 'Social';
+  if (valor.includes('cart')) return 'Cartorial';
+  if (
+    valor.includes('eng') ||
+    valor.includes('arq') ||
+    valor.includes('top') ||
+    valor.includes('geog') ||
+    valor.includes('téc')
+  ) return 'Técnico';
+
+  return nome ? 'Administrativo' : 'Não atribuído';
+};
+
+const getTipoDocumento = (titulo: string) => {
+  const valor = titulo.toLowerCase();
+
+  if (valor.includes('portaria')) return 'Administrativo';
+  if (valor.includes('notifica')) return 'Notificação';
+  if (valor.includes('relatório') || valor.includes('relatorio')) return 'Técnico';
+  if (valor.includes('demarca')) return 'Técnico';
+  if (valor.includes('título') || valor.includes('titulo')) return 'Titularidade';
+
+  return 'Outros';
+};
+
+const contarPorChave = <T,>(itens: T[], getChave: (item: T) => string) => {
+  const mapa: Record<string, number> = {};
+  itens.forEach((item) => {
+    const chave = getChave(item);
+    mapa[chave] = (mapa[chave] || 0) + 1;
+  });
+  return Object.entries(mapa).sort((a, b) => b[1] - a[1]);
+};
 
 // ─── Tipos do Chat ────────────────────────────────────────────────────────────
 
@@ -328,6 +380,13 @@ export const Reports: React.FC = () => {
     });
   }, [processos, periodo, tipoFiltro]);
 
+  const documentos = useMemo(
+    () => processos.flatMap(p => dbService.documents.findByProcessId(p.id)),
+    [processos]
+  );
+
+  const auditoria = useMemo(() => dbService.auditoria.selectAll(), []);
+
   const stats = useMemo(() => ({
     total:          processosFiltrados.length,
     emAndamento:    processosFiltrados.filter(p => p.status === ProcessStatus.EM_ANDAMENTO).length,
@@ -337,6 +396,38 @@ export const Reports: React.FC = () => {
       ? Math.round(processosFiltrados.reduce((acc, p) => acc + p.progress, 0) / processosFiltrados.length)
       : 0,
   }), [processosFiltrados]);
+
+  const painelStatus = useMemo(() => [
+    {
+      label: 'Em Edição',
+      value: processos.filter(p => [ProcessStatus.INICIAL, 'Em Edição'].includes(p.status as string)).length,
+      color: 'bg-slate-500',
+    },
+    {
+      label: 'Em Revisão',
+      value: processos.filter(p =>
+        p.status === ProcessStatus.EM_ANALISE ||
+        p.status === ProcessStatus.ANALISE_JURIDICA ||
+        p.status === ProcessStatus.DILIGENCIA
+      ).length,
+      color: 'bg-amber-500',
+    },
+    {
+      label: 'Pendente',
+      value: processos.filter(p => p.status === ProcessStatus.PENDENTE).length,
+      color: 'bg-red-500',
+    },
+    {
+      label: 'Assinado',
+      value: documentos.filter(d => d.status === 'Signed').length,
+      color: 'bg-emerald-500',
+    },
+    {
+      label: 'Arquivado',
+      value: processos.filter(p => p.status === ProcessStatus.ARQUIVADO).length,
+      color: 'bg-gray-500',
+    },
+  ], [processos, documentos]);
 
   const porStatus = useMemo(() => {
     const mapa: Record<string, number> = {};
@@ -359,6 +450,59 @@ export const Reports: React.FC = () => {
     });
     return Object.entries(mapa).sort((a, b) => b[1] - a[1]).slice(0, 5);
   }, [processosFiltrados]);
+
+  const porSetor = useMemo(() => {
+    return contarPorChave(processosFiltrados, p => getSetor(p.responsibleName)).slice(0, 5);
+  }, [processosFiltrados]);
+
+  const porTipoDocumento = useMemo(() => {
+    const baseDocumentos = documentos.length > 0
+      ? documentos.map(doc => ({ tipo: getTipoDocumento(doc.title) }))
+      : MOCK_MODELS.map(model => ({ tipo: model.type }));
+
+    return contarPorChave(baseDocumentos, item => item.tipo);
+  }, [documentos]);
+
+  const alteracoesPorUsuario = useMemo(() => {
+    if (auditoria.length > 0) {
+      return contarPorChave(auditoria, log => log.usuarioNome).slice(0, 5);
+    }
+
+    return porResponsavel.slice(0, 5);
+  }, [auditoria, porResponsavel]);
+
+  const documentosCriticos = useMemo(() => {
+    const docsReais = documentos.filter(doc => doc.status === 'Review' || doc.status === 'Draft');
+
+    if (docsReais.length > 0) {
+      return docsReais.slice(0, 4).map(doc => ({
+        nome: doc.title || 'Documento sem título',
+        detalhe: doc.status === 'Review' ? 'Em revisão' : 'Rascunho pendente',
+      }));
+    }
+
+    return MOCK_MODELS.slice(0, 4).map(model => ({
+      nome: model.name,
+      detalhe: `${model.type} · versão ${model.version}`,
+    }));
+  }, [documentos]);
+
+  const historicoVersoes = useMemo(() => {
+    if (documentos.length > 0) {
+      return [...documentos]
+        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+        .slice(0, 4)
+        .map(doc => ({
+          nome: doc.title || 'Documento sem título',
+          detalhe: `v${doc.version} · ${formatarData(doc.updatedAt)}`,
+        }));
+    }
+
+    return MOCK_MODELS.slice(0, 4).map(model => ({
+      nome: model.name,
+      detalhe: `v${model.version} · ${formatarData(model.lastUpdated)}`,
+    }));
+  }, [documentos]);
 
   const porMes = useMemo(() => {
     const mapa: Record<number, number> = {};
@@ -422,6 +566,104 @@ export const Reports: React.FC = () => {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      <div className="bg-white rounded-[32px] border border-slate-100 p-8 mb-8">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="font-black text-slate-800 text-lg">Painel por Status</h3>
+            <p className="text-xs text-slate-400 font-medium mt-1">
+              Em edição, em revisão, pendente, assinado e arquivado.
+            </p>
+          </div>
+          <div className="w-10 h-10 bg-slate-900 text-white rounded-2xl flex items-center justify-center">
+            <Layers3 size={18} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {painelStatus.map((status) => (
+            <div key={status.label} className="border border-slate-100 rounded-2xl p-5 bg-slate-50/50">
+              <div className="flex items-center justify-between mb-4">
+                <span className={`w-3 h-3 rounded-full ${status.color}`} />
+                <span className="text-3xl font-black text-slate-800">{status.value}</span>
+              </div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {status.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <Calendar size={20} className="text-blue-600" /> Por Período
+          </h3>
+          <div className="space-y-4">
+            {[
+              { label: 'Selecionado', value: stats.total },
+              { label: 'Concluídos', value: stats.concluidos },
+              { label: 'Pendentes', value: stats.pendentes },
+              { label: 'Progresso Médio', value: `${stats.progressoMedio}%` },
+            ].map(item => (
+              <div key={item.label} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                <span className="text-xs font-bold text-slate-500">{item.label}</span>
+                <span className="text-sm font-black text-slate-800">{item.value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <FileText size={20} className="text-purple-600" /> Tipo de Documento
+          </h3>
+          <div className="space-y-4">
+            {porTipoDocumento.map(([tipo, count]) => (
+              <div key={tipo}>
+                <div className="flex justify-between mb-1">
+                  <span className="text-xs font-bold text-slate-600">{tipo}</span>
+                  <span className="text-xs font-black text-slate-800">{count}</span>
+                </div>
+                <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-purple-600 rounded-full"
+                    style={{ width: `${Math.max((count / Math.max(...porTipoDocumento.map(([, total]) => total), 1)) * 100, 8)}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <Users size={20} className="text-emerald-600" /> Produtividade por Setor
+          </h3>
+          <div className="space-y-4">
+            {porSetor.map(([setor, count]) => (
+              <div key={setor} className="flex items-center gap-4">
+                <div className="w-8 h-8 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-700 text-xs font-black shrink-0">
+                  {setor.charAt(0)}
+                </div>
+                <div className="flex-1">
+                  <div className="flex justify-between mb-1">
+                    <span className="text-sm font-bold text-slate-700">{setor}</span>
+                    <span className="text-sm font-black text-slate-800">{count}</span>
+                  </div>
+                  <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-600 rounded-full"
+                      style={{ width: `${Math.max((count / Math.max(...porSetor.map(([, total]) => total), 1)) * 100, 8)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
@@ -512,6 +754,65 @@ export const Reports: React.FC = () => {
             })}
           </div>
         )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mt-8">
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <ShieldCheck size={20} className="text-blue-600" /> Alterações por Usuário
+          </h3>
+          <div className="space-y-4">
+            {alteracoesPorUsuario.map(([nome, count]) => (
+              <div key={nome} className="flex items-center justify-between border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                <div>
+                  <p className="text-sm font-bold text-slate-700">{nome}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
+                    {auditoria.length > 0 ? 'Registro de auditoria' : 'Responsável por processo'}
+                  </p>
+                </div>
+                <span className="text-lg font-black text-slate-800">{count}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <AlertTriangle size={20} className="text-amber-600" /> Documentos Críticos
+          </h3>
+          <div className="space-y-4">
+            {documentosCriticos.map((doc) => (
+              <div key={`${doc.nome}-${doc.detalhe}`} className="flex items-start gap-3 border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <FileText size={15} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-700 truncate">{doc.nome}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{doc.detalhe}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <History size={20} className="text-indigo-600" /> Histórico de Versões
+          </h3>
+          <div className="space-y-4">
+            {historicoVersoes.map((versao) => (
+              <div key={`${versao.nome}-${versao.detalhe}`} className="flex items-start gap-3 border-b border-slate-50 pb-3 last:border-0 last:pb-0">
+                <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+                  <History size={15} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-700 truncate">{versao.nome}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{versao.detalhe}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Chat flutuante */}

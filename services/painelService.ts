@@ -145,6 +145,61 @@ export async function deletarProcesso(id: string | number) {
   await request<void>(`/api/processos/${id}/`, { method: 'DELETE' });
 }
 
-export async function buscarDashboard() {
-  return request('/api/painel/dashboard/');
-}q
+function filtrarProcessosDashboard(processos: ReturnType<typeof dbService.processes.selectAll>, status?: string) {
+  if (!status) return processos;
+
+  const mapaStatus: Record<string, string[]> = {
+    em_edicao: ['Em Edição', 'Inicial'],
+    em_revisao: ['Em Revisão', 'Em Análise', 'Análise Jurídica', 'Diligência'],
+    pendente: ['Pendente'],
+    assinado: ['Assinado'],
+    arquivado: ['Arquivado'],
+    concluido: ['Concluído', 'Finalizado'],
+    ativo: ['Em Andamento'],
+  };
+
+  const statusValidos = mapaStatus[status];
+  if (!statusValidos) return processos;
+
+  return processos.filter((processo) => statusValidos.includes(String(processo.status)));
+}
+
+function montarDashboardLocal(status?: string) {
+  const processos = dbService.processes.selectAll();
+  const processosFiltrados = filtrarProcessosDashboard(processos, status);
+
+  return {
+    cards: {
+      ativos: processos.filter((processo) => processo.status === 'Em Andamento').length,
+      em_revisao: processos.filter((processo) =>
+        ['Em Revisão', 'Em Análise', 'Análise Jurídica', 'Diligência'].includes(String(processo.status))
+      ).length,
+      concluidos: processos.filter((processo) =>
+        ['Concluído', 'Finalizado'].includes(String(processo.status))
+      ).length,
+    },
+    status: {
+      em_edicao: processos.filter((processo) =>
+        ['Em Edição', 'Inicial'].includes(String(processo.status))
+      ).length,
+      em_revisao: processos.filter((processo) =>
+        ['Em Revisão', 'Em Análise', 'Análise Jurídica', 'Diligência'].includes(String(processo.status))
+      ).length,
+      pendente: processos.filter((processo) => processo.status === 'Pendente').length,
+      assinado: processos.filter((processo) => processo.status === 'Assinado').length,
+      arquivado: processos.filter((processo) => processo.status === 'Arquivado').length,
+    },
+    recentes: processosFiltrados.slice(0, 5),
+  };
+}
+
+export async function buscarDashboard(status?: string) {
+  const query = status ? `?status=${status}` : '';
+
+  try {
+    return await request(`/api/painel/dashboard/${query}`);
+  } catch {
+    console.warn('Backend do painel indisponível. Usando dados locais.');
+    return montarDashboardLocal(status);
+  }
+}
