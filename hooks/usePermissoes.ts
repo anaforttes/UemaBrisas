@@ -1,24 +1,21 @@
-// ─── Hook de Permissões ───────────────────────────────────────────────────────
-// Arquivo central de controle de acesso.
-// Importe em qualquer componente com: import { usePermissoes } from '../../hooks/usePermissoes';
-// Use com: const { pode, isExterno, isAdmin } = usePermissoes();
-
+import { useEffect, useState } from 'react';
 import { User, FlagsAcesso } from '../types/index';
+import { request, getToken } from '../shared/services/apiClient';
 
 interface Permissoes {
   // Navegação
-  verPainel:      boolean;
-  verProcessos:   boolean;
-  verModelos:     boolean;
-  verRelatorios:  boolean;
-  verEquipe:      boolean;
-  verSettings:    boolean;
+  verPainel: boolean;
+  verProcessos: boolean;
+  verModelos: boolean;
+  verRelatorios: boolean;
+  verEquipe: boolean;
+  verSettings: boolean;
 
   // Ações em processos
-  criarProcesso:  boolean;
+  criarProcesso: boolean;
   protocolarProcesso: boolean;
-  verMenuAcoes:   boolean;
-  baixarZip:      boolean;
+  verMenuAcoes: boolean;
+  baixarZip: boolean;
 
   // Ações em documentos
   editarDocumento: boolean;
@@ -28,72 +25,95 @@ interface Permissoes {
 
   // Ações em equipe
   gerenciarPermissoes: boolean;
-  convidarMembro:      boolean;
-  removerMembro:       boolean;
+  convidarMembro: boolean;
+  removerMembro: boolean;
 }
 
 interface RetornoPermissoes {
-  pode:           Permissoes;
-  isExterno:      boolean;
-  isAdmin:        boolean;
-  isSuperAdmin:   boolean;
+  pode: Permissoes;
+  isExterno: boolean;
+  isAdmin: boolean;
+  isSuperAdmin: boolean;
   isProfissional: boolean;
-  user:           User | null;
-  flags:          FlagsAcesso;
+  user: User | null;
+  flags: FlagsAcesso;
 }
 
 const FLAGS_PADRAO: FlagsAcesso = {
-  superusuario:        false,
-  adminMunicipio:      false,
+  superusuario: false,
+  adminMunicipio: false,
   profissionalInterno: false,
-  usuarioExterno:      false,
+  usuarioExterno: false,
 };
 
+function lerUsuarioLocalStorage(): User | null {
+  try {
+    const raw = localStorage.getItem('reurb_current_user');
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function computarPermissoes(flags: FlagsAcesso): Permissoes {
+  const isExterno = flags.usuarioExterno ?? false;
+  const isAdmin = flags.adminMunicipio ?? false;
+  const isSuperAdmin = flags.superusuario ?? false;
+  const isProfissional = flags.profissionalInterno ?? false;
+
+  return {
+    verPainel: true,
+    verProcessos: true,
+    verModelos: true,
+    verRelatorios: !isExterno,
+    verEquipe: !isExterno,
+    verSettings: !isExterno,
+
+    criarProcesso: !isExterno,
+    protocolarProcesso: !isExterno,
+    verMenuAcoes: !isExterno,
+    baixarZip: !isExterno,
+
+    editarDocumento: !isExterno,
+    assinarDocumento: !isExterno && (isProfissional || isAdmin || isSuperAdmin),
+    exportarDocumento: !isExterno,
+    finalizarDocumento: !isExterno,
+
+    gerenciarPermissoes: isAdmin || isSuperAdmin,
+    convidarMembro: isAdmin || isSuperAdmin,
+    removerMembro: isAdmin || isSuperAdmin,
+  };
+}
+
 export const usePermissoes = (): RetornoPermissoes => {
-  // Lê o usuário atual do localStorage
-  const user: User | null = (() => {
-    try {
-      const raw = localStorage.getItem('reurb_current_user');
-      return raw ? JSON.parse(raw) : null;
-    } catch {
-      return null;
-    }
-  })();
+  const [user, setUser] = useState<User | null>(lerUsuarioLocalStorage);
+
+  useEffect(() => {
+    if (!getToken()) return;
+
+    request<{ roles: string[]; flags: string[]; acoes: string[] }>('/api/permissoes/')
+      .then((data) => {
+        const flags: FlagsAcesso = {
+          superusuario: data.flags.includes('superusuario'),
+          adminMunicipio: data.flags.includes('admin_municipio'),
+          profissionalInterno: data.flags.includes('profissional_interno'),
+          usuarioExterno: data.flags.includes('usuario_externo'),
+        };
+        setUser((prev) => (prev ? { ...prev, flags } : null));
+      })
+      .catch(() => {
+        // mantém os valores do localStorage em caso de erro de rede
+      });
+  }, []);
 
   const flags: FlagsAcesso = user?.flags ?? FLAGS_PADRAO;
 
-  const isExterno      = flags.usuarioExterno      ?? false;
-  const isAdmin        = flags.adminMunicipio       ?? false;
-  const isSuperAdmin   = flags.superusuario         ?? false;
-  const isProfissional = flags.profissionalInterno  ?? false;
+  const isExterno = flags.usuarioExterno ?? false;
+  const isAdmin = flags.adminMunicipio ?? false;
+  const isSuperAdmin = flags.superusuario ?? false;
+  const isProfissional = flags.profissionalInterno ?? false;
 
-  // Permissões derivadas das flags
-  const pode: Permissoes = {
-    // Navegação — externo só vê painel, processos e modelos
-    verPainel:      true,
-    verProcessos:   true,
-    verModelos:     true,
-    verRelatorios:  !isExterno,
-    verEquipe:      !isExterno,
-    verSettings:    !isExterno,
-
-    // Processos — externo só visualiza
-    criarProcesso:      !isExterno,
-    protocolarProcesso: !isExterno,
-    verMenuAcoes:       !isExterno,
-    baixarZip:          !isExterno,
-
-    // Documentos — externo só lê
-    editarDocumento:    !isExterno,
-    assinarDocumento:   !isExterno && (isProfissional || isAdmin || isSuperAdmin),
-    exportarDocumento:  !isExterno,
-    finalizarDocumento: !isExterno,
-
-    // Equipe — só admin gerencia
-    gerenciarPermissoes: isAdmin || isSuperAdmin,
-    convidarMembro:      isAdmin || isSuperAdmin,
-    removerMembro:       isAdmin || isSuperAdmin,
-  };
+  const pode = computarPermissoes(flags);
 
   return { pode, isExterno, isAdmin, isSuperAdmin, isProfissional, user, flags };
 };

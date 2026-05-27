@@ -18,6 +18,7 @@ class Anexo(models.Model):
         null=True, blank=True,
         related_name='anexos',
     )
+    etapa_numero  = models.PositiveSmallIntegerField(null=True, blank=True)
     adicionado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

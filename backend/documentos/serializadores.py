@@ -96,5 +96,5 @@ class ModeloDocumentoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model  = ModeloDocumento
-        fields = ['id', 'nome', 'tipo', 'versao', 'descricao', 'conteudo', 'campos', 'criado_por', 'criado_em', 'atualizado_em']
-        read_only_fields = ['id', 'criado_por', 'criado_em', 'atualizado_em']
+        fields = ['id', 'nome', 'tipo', 'versao', 'descricao', 'conteudo', 'campos', 'is_sistema', 'criado_por', 'criado_em', 'atualizado_em']
+        read_only_fields = ['id', 'is_sistema', 'criado_por', 'criado_em', 'atualizado_em']

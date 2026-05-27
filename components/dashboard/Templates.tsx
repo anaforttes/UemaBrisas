@@ -16,13 +16,12 @@ import {
   Trash2,
   MoreHorizontal,
 } from 'lucide-react';
-import { MOCK_MODELS } from '../../constants/index';
-import { dbService } from '../../services/databaseService';
 import { listarProcessos } from '../../services/painelService';
 import { REURBProcess, DadosAdicionaisDocumento } from '../../types/index';
 import { useGeolocalizacao, gerarBlocoGeoHTML } from '../../hooks/useGeolocalizacao';
 import { templateProfilesService, TemplateProfile } from '../../services/templateProfilesService';
 import { modelosService, ModeloAPI } from '../../services/modelosService';
+import { documentoService } from '../../services/documentoService';
 
 // ─── Cores por tipo de documento ──────────────────────────────────────────────
 
@@ -42,7 +41,7 @@ const STATUS_BADGE: Record<string, string> = {
   Finalizado: 'bg-green-50 text-green-600',
 };
 
-const TIPOS_BASE = ['Todos', ...Array.from(new Set(MOCK_MODELS.map((m) => m.type)))];
+const TIPOS_BASE = ['Todos', 'Administrativo', 'Notificação', 'Técnico', 'Titularidade'];
 
 type DynamicDados = Record<string, string>;
 
@@ -65,12 +64,10 @@ interface TemplateModelCustom {
   fields: TemplateFieldConfig[];
   createdAt: string;
   updatedAt: string;
-  source: 'custom';
+  source: 'sistema' | 'custom';
 }
 
-type TemplateModelUnified =
-  | ((typeof MOCK_MODELS)[number] & { source?: 'mock' })
-  | TemplateModelCustom;
+type TemplateModelUnified = TemplateModelCustom;
 
 const CUSTOM_TEMPLATES_KEY = 'reurb_custom_templates';
 
@@ -85,7 +82,7 @@ function apiParaCustom(m: ModeloAPI): TemplateModelCustom {
     fields: Array.isArray(m.campos) ? (m.campos as TemplateFieldConfig[]) : [],
     createdAt: m.criado_em,
     updatedAt: m.atualizado_em,
-    source: 'custom',
+    source: m.is_sistema ? 'sistema' : 'custom',
   };
 }
 
@@ -206,6 +203,18 @@ function mascararCpf(valor: string): string {
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d)/, '$1.$2')
     .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+}
+
+function validarCpf(cpf: string): boolean {
+  const nums = cpf.replace(/\D/g, '');
+  if (nums.length !== 11 || /^(\d)\1{10}$/.test(nums)) return false;
+  const calc = (fator: number) => {
+    let soma = 0;
+    for (let i = 0; i < fator - 1; i++) soma += Number(nums[i]) * (fator - i);
+    const resto = (soma * 10) % 11;
+    return resto === 10 || resto === 11 ? 0 : resto;
+  };
+  return calc(10) === Number(nums[9]) && calc(11) === Number(nums[10]);
 }
 
 function extrairMunicipioEstadoDeEndereco(endereco: string): { municipio: string; estado: string } {
@@ -615,7 +624,10 @@ const ModalDadosDocumento: React.FC<ModalDadosDocumentoProps> = ({
   const camposObrigatorios = campos.filter((c) => c.required);
   const faltantes = camposObrigatorios.filter((c) => !String(dados[c.key] || '').trim());
   const preenchidos = campos.filter((c) => String(dados[c.key] || '').trim()).length;
-  const isComplete = faltantes.length === 0;
+  const cpfValor = dados['cpf'] || '';
+  const cpfDigitado = cpfValor.replace(/\D/g, '').length === 11;
+  const cpfInvalidoGlobal = cpfDigitado && !validarCpf(cpfValor);
+  const isComplete = faltantes.length === 0 && !cpfInvalidoGlobal;
 
   const templateBaseAjustado = useMemo(
     () => ajustarTemplateParaSituacaoProfissional(templateBase, situacaoProfissional),
@@ -714,7 +726,16 @@ const ModalDadosDocumento: React.FC<ModalDadosDocumentoProps> = ({
   const renderCampo = (campo: CampoTemplate) => {
     const valor = dados[campo.key] || '';
     const erroObrigatorio = campo.required && !valor.trim();
+    const isCpfCompleto = campo.type === 'cpf' && valor.replace(/\D/g, '').length === 11;
+    const cpfInvalido = isCpfCompleto && !validarCpf(valor);
     const campoInativo = situacaoProfissional !== 'padrao' && campo.key === 'cargo';
+
+    const borderClass = cpfInvalido
+      ? 'border-red-400 focus:ring-red-400'
+      : erroObrigatorio
+        ? 'border-amber-300 focus:ring-amber-400'
+        : 'border-slate-200';
+
     return (
       <div key={campo.key}>
         <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wide">
@@ -728,7 +749,7 @@ const ModalDadosDocumento: React.FC<ModalDadosDocumentoProps> = ({
             placeholder={campo.placeholder}
             onChange={(e) => handleChange(campo.key, e.target.value)}
             disabled={campoInativo}
-            className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all resize-none ${erroObrigatorio ? 'border-amber-300' : 'border-slate-200'} ${campoInativo ? 'opacity-60 cursor-not-allowed' : ''}`}
+            className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm focus:ring-2 outline-none transition-all resize-none ${borderClass} ${campoInativo ? 'opacity-60 cursor-not-allowed' : ''}`}
           />
         ) : (
           <input
@@ -737,8 +758,13 @@ const ModalDadosDocumento: React.FC<ModalDadosDocumentoProps> = ({
             placeholder={campo.placeholder}
             onChange={(e) => handleChange(campo.key, e.target.value)}
             disabled={campoInativo}
-            className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all ${campo.type === 'cpf' ? 'font-mono' : ''} ${erroObrigatorio ? 'border-amber-300' : 'border-slate-200'} ${campoInativo ? 'opacity-60 cursor-not-allowed' : ''}`}
+            className={`w-full px-3 py-2.5 bg-slate-50 border rounded-lg text-sm focus:ring-2 outline-none transition-all ${campo.type === 'cpf' ? 'font-mono' : ''} ${borderClass} ${campoInativo ? 'opacity-60 cursor-not-allowed' : ''}`}
           />
+        )}
+        {cpfInvalido && (
+          <p className="mt-1 text-[11px] font-bold text-red-500 flex items-center gap-1">
+            <span>✕</span> CPF inválido
+          </p>
         )}
       </div>
     );
@@ -897,11 +923,13 @@ const ModalDadosDocumento: React.FC<ModalDadosDocumentoProps> = ({
                 ) : null
               )}
               <div
-                className={`text-xs font-medium p-2.5 rounded-lg border ${isComplete ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                className={`text-xs font-medium p-2.5 rounded-lg border ${isComplete ? 'bg-green-50 text-green-700 border-green-200' : cpfInvalidoGlobal ? 'bg-red-50 text-red-700 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
               >
                 {isComplete
                   ? `Dados prontos (${preenchidos}/${campos.length}).`
-                  : `Campos pendentes: ${faltantes.map((f) => f.label).join(', ')}`}
+                  : cpfInvalidoGlobal && faltantes.length === 0
+                    ? 'CPF inválido — verifique os dígitos informados.'
+                    : `Campos pendentes: ${faltantes.map((f) => f.label).join(', ')}`}
               </div>
             </div>
           </div>
@@ -1195,7 +1223,7 @@ export const Templates: React.FC = () => {
   const navigate = useNavigate();
   const [busca, setBusca] = useState('');
   const [tipoAtivo, setTipoAtivo] = useState('Todos');
-  const [modelosCustom, setModelosCustom] = useState<TemplateModelCustom[]>([]);
+  const [modelos, setModelos] = useState<TemplateModelCustom[]>([]);
   const [builderAberto, setBuilderAberto] = useState(false);
   const [modeloEmEdicao, setModeloEmEdicao] = useState<TemplateModelCustom | null>(null);
   const [menuModeloId, setMenuModeloId] = useState<string | null>(null);
@@ -1215,21 +1243,16 @@ export const Templates: React.FC = () => {
       .catch(() => setProcessos([]));
     modelosService
       .listar()
-      .then((lista) => setModelosCustom(lista.map(apiParaCustom)))
-      .catch(() => setModelosCustom(lerModelosCustom()));
+      .then((lista) => setModelos(lista.map(apiParaCustom)))
+      .catch(() => setModelos(lerModelosCustom()));
   }, []);
 
-  const todosModelos = useMemo<TemplateModelUnified[]>(() => {
-    const mock = MOCK_MODELS.map((m) => ({ ...m, source: 'mock' as const }));
-    return [...mock, ...modelosCustom];
-  }, [modelosCustom]);
-
   const tiposDisponiveis = useMemo(() => {
-    const tipos = Array.from(new Set(todosModelos.map((m) => m.type)));
-    return Array.from(new Set([...TIPOS_BASE, ...tipos]));
-  }, [todosModelos]);
+    const tiposExtras = Array.from(new Set(modelos.map((m) => m.type)));
+    return Array.from(new Set([...TIPOS_BASE, ...tiposExtras]));
+  }, [modelos]);
 
-  const modelosFiltrados = todosModelos.filter((m) => {
+  const modelosFiltrados = modelos.filter((m) => {
     const matchBusca =
       m.name.toLowerCase().includes(busca.toLowerCase()) ||
       m.type.toLowerCase().includes(busca.toLowerCase());
@@ -1246,23 +1269,23 @@ export const Templates: React.FC = () => {
       campos: model.fields,
     };
     try {
-      const existente = modelosCustom.some((m) => m.id === model.id);
+      const existente = modelos.some((m) => m.id === model.id && m.source === 'custom');
       const salvo = existente
         ? await modelosService.atualizar(model.id, payload)
         : await modelosService.criar(payload);
       const convertido = apiParaCustom(salvo);
-      setModelosCustom((prev) =>
+      setModelos((prev) =>
         existente
           ? prev.map((m) => (m.id === convertido.id ? convertido : m))
           : [convertido, ...prev]
       );
     } catch {
       // fallback para localStorage se offline
-      setModelosCustom((prev) => {
+      setModelos((prev) => {
         const next = prev.some((m) => m.id === model.id)
           ? prev.map((m) => (m.id === model.id ? model : m))
           : [model, ...prev];
-        salvarModelosCustom(next);
+        salvarModelosCustom(next.filter((m) => m.source === 'custom'));
         return next;
       });
     }
@@ -1271,20 +1294,20 @@ export const Templates: React.FC = () => {
   };
 
   const handleEditarModelo = (model: TemplateModelUnified) => {
-    if ((model as TemplateModelCustom).source !== 'custom') return;
-    setModeloEmEdicao(model as TemplateModelCustom);
+    if (model.source !== 'custom') return;
+    setModeloEmEdicao(model);
     setBuilderAberto(true);
   };
 
   const handleExcluirModelo = async (model: TemplateModelUnified) => {
-    if ((model as TemplateModelCustom).source !== 'custom') return;
+    if (model.source !== 'custom') return;
     if (!window.confirm(`Excluir o modelo "${model.name}"?`)) return;
     try {
       await modelosService.excluir(model.id);
     } catch {
       // ignora erro de rede, remove localmente mesmo assim
     }
-    setModelosCustom((prev) => prev.filter((m) => m.id !== model.id));
+    setModelos((prev) => prev.filter((m) => m.id !== model.id));
   };
 
   const handleUsarModelo = (model: any) => {
@@ -1321,7 +1344,7 @@ export const Templates: React.FC = () => {
     capturarEValidar(municipio);
   };
 
-  const handleContinuarParaEditor = () => {
+  const handleContinuarParaEditor = async () => {
     if (!processoEscolhido || !modeloSelecionado) return;
     const dadosParaTemplate = mergeWithProcessData(
       (dadosDocumento || {}) as DynamicDados,
@@ -1344,11 +1367,11 @@ export const Templates: React.FC = () => {
       );
       conteudoCompleto = blocoGeo + conteudoCompleto;
     }
-    const newDoc = dbService.documents.upsert({
-      title: modeloSelecionado.name,
-      content: conteudoCompleto,
-      processId: processoEscolhido.id,
-      dadosAdicionais: dadosDocumento,
+    const newDoc = await documentoService.criar({
+      titulo: modeloSelecionado.name,
+      conteudo: conteudoCompleto,
+      processo_id: processoEscolhido.id,
+      status: 'Draft',
     });
     setModeloSelecionado(null);
     setProcessoEscolhido(null);
@@ -1457,7 +1480,7 @@ export const Templates: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {modelosFiltrados.map((model) => {
           const estilo = TIPO_STYLE[model.type] ?? TIPO_STYLE.Administrativo;
-          const isCustom = (model as TemplateModelCustom).source === 'custom';
+          const isCustom = model.source === 'custom';
           return (
             <div
               key={model.id}
@@ -1471,9 +1494,14 @@ export const Templates: React.FC = () => {
               >
                 <FileText size={24} />
               </div>
-              <h3 className="text-base font-black text-slate-800 mb-3 leading-tight flex-1">
+              <h3 className="text-base font-black text-slate-800 mb-1 leading-tight flex-1">
                 {model.name}
               </h3>
+              {model.source === 'sistema' && (
+                <span className="inline-block text-[9px] font-black uppercase tracking-widest text-indigo-500 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md mb-2">
+                  Modelo oficial
+                </span>
+              )}
               <div className="flex items-center gap-2 mb-5">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-md border border-slate-100">
                   v{model.version}
@@ -1486,7 +1514,7 @@ export const Templates: React.FC = () => {
               </div>
               <div className="flex items-center justify-between pt-4 border-t border-slate-50 gap-2">
                 <div className="text-[10px] text-slate-400 font-medium">
-                  {'createdAt' in model ? model.createdAt : model.lastUpdated}
+                  {model.createdAt?.slice(0, 10)}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

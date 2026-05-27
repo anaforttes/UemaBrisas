@@ -36,6 +36,7 @@ class Etapa(models.Model):
     observacoes    = models.TextField(blank=True, default='')
     data_inicio    = models.DateField(null=True, blank=True)
     data_conclusao = models.DateField(null=True, blank=True)
+    prazo          = models.DateField(null=True, blank=True)
     depende_de     = models.JSONField(default=list, blank=True)
 
     class Meta:

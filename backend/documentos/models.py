@@ -163,7 +163,8 @@ class ModeloDocumento(models.Model):
     descricao   = models.TextField(blank=True, default='')
     conteudo    = models.TextField()
     campos      = models.JSONField(default=list)
-    criado_por  = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='modelos_criados')
+    is_sistema  = models.BooleanField(default=False, db_index=True)
+    criado_por  = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True, related_name='modelos_criados')
     criado_em   = models.DateTimeField(auto_now_add=True)
     atualizado_em = models.DateTimeField(auto_now=True)
 

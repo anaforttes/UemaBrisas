@@ -3,6 +3,15 @@ from .models import Processo
 
 
 class ProcessoSerializer(serializers.ModelSerializer):
+    technician_name = serializers.SerializerMethodField()
+    legal_name      = serializers.SerializerMethodField()
+
+    def get_technician_name(self, obj):
+        return obj.technician_id.name if obj.technician_id else None
+
+    def get_legal_name(self, obj):
+        return obj.legal_id.name if obj.legal_id else None
+
     class Meta:
         model = Processo
         fields = [
@@ -20,12 +29,15 @@ class ProcessoSerializer(serializers.ModelSerializer):
             "area",
             "responsible_name",
             "technician_id",
+            "technician_name",
             "legal_id",
+            "legal_name",
             "criado_por_id",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "protocol", "criado_por_id", "created_at", "updated_at"]
+        read_only_fields = ["id", "protocol", "criado_por_id", "created_at", "updated_at",
+                            "technician_name", "legal_name"]
 
     def validate_title(self, value):
         if not value or not value.strip():

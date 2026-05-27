@@ -92,3 +92,33 @@ class Processo(models.Model):
 
     def __str__(self):
         return f"{self.protocol} — {self.title}"
+
+
+class EventoProcesso(models.Model):
+    TIPO_CHOICES = [
+        ('arquivo_adicionado',  'Arquivo adicionado'),
+        ('arquivo_removido',    'Arquivo removido'),
+        ('etapa_status',        'Status de etapa alterado'),
+        ('equipe_alterada',     'Equipe alterada'),
+        ('status_alterado',     'Status alterado'),
+        ('processo_criado',     'Processo criado'),
+        ('processo_protocolado','Processo protocolado'),
+    ]
+
+    processo   = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name='eventos')
+    tipo       = models.CharField(max_length=30, choices=TIPO_CHOICES)
+    descricao  = models.CharField(max_length=500)
+    usuario    = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='eventos_processo',
+    )
+    dados      = models.JSONField(default=dict, blank=True)
+    criado_em  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'{self.tipo} — {self.processo.protocol}'

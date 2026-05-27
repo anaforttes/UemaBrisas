@@ -1,6 +1,8 @@
 import json
+import secrets
 import time
 import threading
+from datetime import timedelta
 from django.utils import timezone
 from django.http import StreamingHttpResponse
 from rest_framework.decorators import api_view, permission_classes, throttle_classes
@@ -10,7 +12,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework_simplejwt.authentication import JWTAuthentication
-from .models import CustomUser
+from .models import CustomUser, ConviteEquipe, PerfilTemplate
 from .sse import sse_register, sse_unregister, sse_broadcast
 import logging
 import queue
@@ -246,3 +248,116 @@ class CustomUserDetail(APIView):
         user.delete()
         sse_broadcast('user_removed', {'id': pk})
         return Response(user_data, status=status.HTTP_200_OK)
+
+
+# ─── Convites de equipe ───────────────────────────────────────────────────────
+
+class ConviteEquipeView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        agora = timezone.now()
+        convites = ConviteEquipe.objects.filter(
+            criado_por=request.user,
+            usado=False,
+            expira_em__gt=agora,
+        )
+        data = [
+            {
+                'id':         c.id,
+                'token':      c.token,
+                'permissao':  c.permissao,
+                'criado_em':  c.criado_em.isoformat(),
+                'expira_em':  c.expira_em.isoformat(),
+                'criado_por': request.user.name,
+                'usado':      c.usado,
+            }
+            for c in convites
+        ]
+        return Response(data)
+
+    def post(self, request):
+        permissao = request.data.get('permissao', 'visualizar')
+        if permissao not in ('visualizar', 'editar'):
+            return Response({'erro': 'Permissão inválida.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        dias = int(request.data.get('expira_dias', 7))
+        if dias < 1 or dias > 30:
+            return Response({'erro': 'Validade deve ser entre 1 e 30 dias.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        token = secrets.token_urlsafe(32)
+        convite = ConviteEquipe.objects.create(
+            token=token,
+            permissao=permissao,
+            criado_por=request.user,
+            expira_em=timezone.now() + timedelta(days=dias),
+        )
+        return Response({
+            'id':         convite.id,
+            'token':      convite.token,
+            'permissao':  convite.permissao,
+            'criado_em':  convite.criado_em.isoformat(),
+            'expira_em':  convite.expira_em.isoformat(),
+            'criado_por': request.user.name,
+            'usado':      convite.usado,
+        }, status=status.HTTP_201_CREATED)
+
+
+class ConviteEquipeDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, token):
+        try:
+            convite = ConviteEquipe.objects.get(token=token, criado_por=request.user)
+        except ConviteEquipe.DoesNotExist:
+            return Response({'erro': 'Convite não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        convite.usado = True
+        convite.save(update_fields=['usado'])
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+# ─── Perfis de template ───────────────────────────────────────────────────────
+
+class PerfilTemplateView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        perfis = PerfilTemplate.objects.filter(usuario=request.user)[:15]
+        return Response([
+            {
+                'id':           p.id,
+                'nomePerfil':   p.nome_perfil,
+                'dados':        p.dados,
+                'atualizadoEm': p.atualizado_em.isoformat(),
+            }
+            for p in perfis
+        ])
+
+    def post(self, request):
+        nome = request.data.get('nomePerfil', '').strip()
+        dados = request.data.get('dados', {})
+        if not nome:
+            return Response({'erro': 'Nome do perfil obrigatório.'}, status=status.HTTP_400_BAD_REQUEST)
+        # limita a 15 perfis por usuário — remove o mais antigo se necessário
+        count = PerfilTemplate.objects.filter(usuario=request.user).count()
+        if count >= 15:
+            PerfilTemplate.objects.filter(usuario=request.user).order_by('atualizado_em').first().delete()
+        perfil = PerfilTemplate.objects.create(usuario=request.user, nome_perfil=nome, dados=dados)
+        return Response({
+            'id':           perfil.id,
+            'nomePerfil':   perfil.nome_perfil,
+            'dados':        perfil.dados,
+            'atualizadoEm': perfil.atualizado_em.isoformat(),
+        }, status=status.HTTP_201_CREATED)
+
+
+class PerfilTemplateDetailView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, pk):
+        try:
+            perfil = PerfilTemplate.objects.get(pk=pk, usuario=request.user)
+        except PerfilTemplate.DoesNotExist:
+            return Response({'erro': 'Perfil não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        perfil.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

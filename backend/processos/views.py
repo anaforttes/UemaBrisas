@@ -1,17 +1,18 @@
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 
-from .models import Processo
+from .models import Processo, EventoProcesso
 from .serializadores import ProcessoSerializer
 from .servicos import (
     listar_processos, criar_processo, processos_do_usuario,
     papeis_no_processo, calcular_stats,
 )
 from .permissoes import pode_editar_processo, pode_deletar_processo
+from .eventos import registrar
 
 
 class ProcessoPagination(PageNumberPagination):
@@ -35,7 +36,8 @@ def processos_view(request):
 
     serializer = ProcessoSerializer(data=request.data)
     if serializer.is_valid():
-        serializer.save(criado_por=request.user)
+        processo = serializer.save(criado_por=request.user)
+        registrar(processo, 'processo_criado', 'Processo criado.', request.user)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -51,6 +53,27 @@ def processo_detalhe(request, pk):
     if request.method == "PATCH":
         if not pode_editar_processo(request.user, processo):
             return Response({'erro': 'Sem permissão para editar.'}, status=status.HTTP_403_FORBIDDEN)
+
+        # Log team changes before saving
+        from autenticacao.models import CustomUser
+        for campo, label in [('technician_id', 'Técnico'), ('legal_id', 'Jurídico')]:
+            novo_id = request.data.get(campo)
+            if novo_id is not None:
+                atual_id = getattr(processo, campo + '_id', None)
+                if str(novo_id) != str(atual_id or ''):
+                    try:
+                        nome = CustomUser.objects.get(pk=novo_id).name if novo_id else 'Nenhum'
+                    except CustomUser.DoesNotExist:
+                        nome = str(novo_id)
+                    registrar(processo, 'equipe_alterada',
+                              f'{label} atribuído: {nome}',
+                              request.user, {'campo': campo, 'novo_id': novo_id, 'nome': nome})
+
+        if 'status' in request.data and request.data['status'] != processo.status:
+            registrar(processo, 'status_alterado',
+                      f'Status alterado: {processo.status} → {request.data["status"]}',
+                      request.user, {'de': processo.status, 'para': request.data['status']})
+
         serializer = ProcessoSerializer(processo, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -90,3 +113,60 @@ def processos_meus(request):
 @permission_classes([IsAuthenticated])
 def dashboard_stats(request):
     return Response(calcular_stats())
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def eventos_processo(request, pk):
+    processo = get_object_or_404(Processo, pk=pk)
+    eventos = processo.eventos.select_related('usuario').all()
+    data = [
+        {
+            'id':        e.id,
+            'tipo':      e.tipo,
+            'descricao': e.descricao,
+            'usuario':   e.usuario.name if e.usuario else 'Sistema',
+            'dados':     e.dados,
+            'criado_em': e.criado_em.isoformat(),
+        }
+        for e in eventos
+    ]
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def consulta_publica(request, protocolo):
+    protocolo_norm = protocolo.strip().upper()
+    try:
+        processo = Processo.objects.get(protocol__iexact=protocolo_norm)
+    except Processo.DoesNotExist:
+        return Response({'erro': 'Protocolo não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+    etapas = processo.etapas.all().order_by('numero')
+
+    return Response({
+        'protocolo':      processo.protocol,
+        'titulo':         processo.title,
+        'requerente':     processo.applicant,
+        'status':         processo.status,
+        'progresso':      processo.progress,
+        'modalidade':     processo.modality,
+        'municipio':      processo.municipio,
+        'estado':         processo.estado,
+        'endereco':       processo.location,
+        'area':           processo.area,
+        'criado_em':      processo.created_at.date().isoformat(),
+        'atualizado_em':  processo.updated_at.date().isoformat(),
+        'etapas': [
+            {
+                'numero':         e.numero,
+                'nome':           e.nome,
+                'eixo':           e.eixo,
+                'status':         e.status,
+                'data_inicio':    e.data_inicio.isoformat() if e.data_inicio else None,
+                'data_conclusao': e.data_conclusao.isoformat() if e.data_conclusao else None,
+            }
+            for e in etapas
+        ],
+    })

@@ -1,249 +1,233 @@
 # RegularizaAI — Plataforma de Regularização Fundiária
 
-Sistema completo para gestão de processos REURB (Regularização Fundiária Urbana), com frontend React e backend Django REST integrado ao PostgreSQL (Neon).
+Sistema de gestão de processos REURB (Regularização Fundiária Urbana). Permite que equipes municipais conduzam processos do protocolo à titulação, com controle de etapas, documentos, arquivos e trilha de auditoria. Cidadãos podem acompanhar o andamento do seu processo via consulta pública sem precisar de conta.
 
 ---
 
-## Integrações realizadas
+## Funcionalidades
 
-### Autenticação 
+### Autenticação e Controle de Acesso
 
-- Cadastro e login integrados com o banco via `POST /api/autenticacao/cadastro/` e `/login/`
-- Autenticação com JWT (access token + refresh token automático ao expirar)
-- Recuperação de senha com e-mail HTML responsivo
-- Login exige conta real no banco — sem fallback local
+- Login e cadastro com JWT (access token de 60 min + refresh de 7 dias com rotação automática)
+- Login com Google (OAuth2 / GSI)
+- Recuperação de senha com e-mail HTML
+- Roles: Admin, Gestor, Jurídico, Técnico, Auditor, Atendente
+- Flags de acesso: `superusuario`, `adminMunicipio`, `profissionalInterno`, `usuarioExterno`
+- Permissões granulares por role — botões e menus ocultados conforme acesso
+- Status Online/Offline em tempo real via SSE + heartbeat a cada 25 s
 
-### Processos 
+### Processos REURB
 
-- Listagem, criação, edição e exclusão via `/api/processos/`
-- Modal de confirmação antes de excluir, com atualização imediata do painel
-- Download de pacote ZIP com metadados + documentos do processo
-- Tags de papel ("Criador", "Técnico", "Jurídico", "Colaborador") nos cards
-- Datas formatadas como DD/MM/AAAA no grid
+- Criação de processos com número de protocolo automático no formato `NNNN-YYYY`
+- Modalidades REURB-S e REURB-E
+- Filtros por status e busca por requerente, núcleo ou protocolo
+- Grid e tabela com papéis do usuário logado por processo (Criador, Técnico, Jurídico, Colaborador)
+- Download de pacote ZIP com metadados e documentos do processo
+- Cada usuário vê apenas os processos nos quais tem papel atribuído ou que criou
 
-### Etapas dos Processos 
+### Fluxo de Etapas
 
-- 14 etapas REURB criadas automaticamente ao protocolar um processo
-- Fluxo: Abertura → Diagnóstico → Levantamento → Classificação → Buscas Dominiais → Notificação → Estudos Técnicos → Vetorização → Saneamento → Elaboração do PRF → Aprovação → Emissão da CRF → Registro em Cartório → Monitoramento
-- Cada etapa registra data de início, data de conclusão, responsável e observações no banco
-- Aprovação de etapa pelo drawer atualiza o banco e avança para a próxima automaticamente
-- Endpoint idempotente: se o processo já foi protocolado, retorna etapas existentes sem duplicar
+Ao protocolar um processo, 14 etapas padrão REURB são criadas automaticamente:
 
-### Painel (Dashboard) 
+1. Abertura / Protocolo
+2. Diagnóstico Prévio
+3. Levantamento Topográfico
+4. Classificação da Modalidade
+5. Buscas Dominiais
+6. Notificação dos Confrontantes
+7. Estudos Técnicos
+8. Vetorização + Cadastro Social
+9. Saneamento
+10. Elaboração do PRF
+11. Aprovação do PRF
+12. Emissão da CRF
+13. Registro em Cartório
+14. Monitoramento Pós-REURB
 
-- Integração completa com `/api/processos/stats/` e `/api/processos/`
-- Skeleton screens substituem o spinner — carregamento visualmente suave
-- Cache com TTL de 60s: navegação instantânea sem requests desnecessários
-- Invalidação automática ao deletar ou protocolar um processo
-- Feedback de erro com botão "Tentar novamente" quando o backend não responde
+Cada etapa registra data de início e conclusão automaticamente. Ao concluir uma etapa é solicitado um **parecer/justificativa**, que fica salvo no banco e aparece na trilha de auditoria. A próxima etapa é iniciada automaticamente.
 
-### Chat da Equipe 
+### Atribuição de Equipe
 
-- Mensagens salvas no banco de dados, compartilhadas entre todos os membros
-- Polling automático a cada 5s — novas mensagens aparecem sem recarregar a página
-- Busca incremental: após a carga inicial, só busca mensagens novas (por timestamp)
-- Sidebar de membros carregada do banco (usuários reais)
+Dentro do painel de cada processo é possível atribuir:
 
-### Documentos 
+- **Responsável Técnico** — passa a ver e gerenciar o processo
+- **Responsável Jurídico** — idem
 
-- Documentos vinculados a processos, armazenados no banco
-- ProcessDrawer lista documentos do backend (qualquer membro vê os mesmos docs)
-- Criar novo documento abre diretamente no editor TipTap e salva no servidor
-- Geração de link de convite para co-edição com papel definido
+Ao salvar, o processo aparece automaticamente na lista de processos do usuário atribuído.
 
-### Anexos dos Processos 
+### Arquivos por Etapa
 
-- Upload de arquivos (PDF, DOC, DOCX, JPG, PNG, ZIP) diretamente para o servidor
-- Arquivos servidos via `/media/` — link permanente independente do navegador
-- Exclusão remove o arquivo do disco e o registro do banco
-- Drag-and-drop e seleção múltipla suportados
+- Cada etapa tem sua própria área de upload de arquivos
+- Arquivos podem ser enviados para a etapa específica (ex.: laudos no Levantamento, pareceres na Análise Jurídica)
+- Arquivos gerais do processo ficam numa seção separada
+- Todos os arquivos têm data de upload e nome de quem enviou
 
-### Relatórios 
+### Trilha de Auditoria
 
-- Dados reais do banco: processos por modalidade, status e município
-- Cache com TTL de 60s e skeleton screen durante carregamento
-- Gráfico de barras e distribuição por categoria
+Toda ação relevante é registrada automaticamente:
 
-### Equipe
+- Processo criado / protocolado
+- Etapa avançada de status (com o parecer registrado)
+- Arquivo adicionado ou removido (com nome do arquivo e etapa)
+- Equipe alterada (técnico/jurídico atribuído)
+- Status do processo alterado
 
-- Listagem de membros via banco (`CustomUser`) — sem dados mock
-- Status Online/Offline em tempo real via SSE + heartbeat a cada 25s
-- Editar nome, salvar permissões e remover colaborador via PATCH/DELETE
+O histórico fica visível na aba **Histórico** do painel do processo, com usuário e timestamp de cada evento.
 
-### Colaboração em Documentos 
+### Documentos
 
-- SSE centralizado em `autenticacao/sse.py` para broadcast em tempo real
-- Aceite de convite via `/convite/:code` — adiciona colaborador com papel definido
+- Criação de documentos rich text (TipTap 3) vinculados ao processo
+- Auto-save de versões no banco
+- Templates de documento com modelos pré-definidos do sistema REURB:
+  - Portaria de Instauração
+  - Notificação de Confrontantes
+  - Relatório Técnico Social
+  - Auto de Demarcação Urbanística
+  - Título de Legitimação Fundiária
+- Preenchimento de campos com validação de CPF (algoritmo módulo 11)
+- Perfis de preenchimento salvos por conta do usuário (até 15 por usuário)
+- Colaboração em documentos com convite por link
 
-### Timeline dos Processos 
+### Convites de Equipe
 
-- Gerada automaticamente a partir dos dados reais: início/conclusão de etapas e criação de documentos
-- Ordenada do evento mais recente ao mais antigo, com código de cor por tipo
+- Geração de links de convite com permissão (visualizar / editar) e validade configurável (1–30 dias)
+- Aceite do convite adiciona o usuário como colaborador no sistema
 
-### Permissões
+### Consulta Pública de Processos
 
-- `GET /api/permissoes/` retorna roles, flags e ações permitidas
-- Botões e menus ocultos conforme permissão (`pode.criarProcesso`, `pode.verMenuAcoes`)
+Cidadãos podem acompanhar o andamento do processo sem precisar de login:
 
----
+- Acesso via botão **"Consultar andamento de processo"** na tela de login
+- Busca pelo número do protocolo (ex.: `0003-2026`)
+- Exibe: status atual, descrição do que está acontecendo, stepper das 5 fases REURB, etapas detalhadas com datas
+- **Não expõe** arquivos, nomes de servidores, observações internas nem dados sensíveis
 
-## Refatoração (branch `feature/andre`)
+### Dashboard e Relatórios
 
-### Backend — Camada de Serviço
+- Painel com totais de processos ativos, em diligência e finalizados
+- Gráficos de distribuição por modalidade, status e município
+- Cache de 60 s com skeleton screen durante carregamento
+- Invalidação automática ao criar, deletar ou protocolar processo
 
-- `processos/servicos.py` — lógica de negócio extraída de `views.py`
-- `documentos/servicos.py` — criar documento, salvar versão, colaboradores, assinaturas, convites
-- `autenticacao/sse.py` — SSE centralizado
-- Migration `0004`: `technician_id` e `legal_id` convertidos para `ForeignKey(CustomUser)`
+### Chat da Equipe
 
-### Frontend — Decomposição de Componentes
-
-- `components/editor/EditorToolbar.tsx` — toolbar extraída do Editor (~200 linhas a menos)
-- `services/exportService.ts` — exportarPDF e exportarDOCX extraídos do Editor
-- `components/dashboard/DeleteProcessModal.tsx` — modal de confirmação extraído
-- `hooks/useProcesses.ts` — lógica de fetch, delete, protocolar e download ZIP
-
-### Shared Kernel
-
-- `shared/services/apiClient.ts` — URL da API, token refresh e `request<T>()` centralizados
-- `shared/contexts/AuthContext.tsx` — contexto de autenticação
-- `shared/utils/date.ts` — helpers de formatação de data
-
----
-
-## Tecnologias
-
-**Frontend**
-
-- React 18 + TypeScript
-- Vite 6
-- Tailwind CSS
-- React Router DOM (HashRouter)
-- TipTap 3 (editor rich text)
-- Lucide React
-
-**Backend**
-
-- Python 3.13 + Django 6
-- Django REST Framework
-- SimpleJWT (autenticação JWT)
-- PostgreSQL — Neon (produção) / SQLite (desenvolvimento)
-- django-cors-headers
+- Mensagens compartilhadas entre todos os membros da equipe
+- Polling incremental a cada 5 s (só busca mensagens novas por timestamp)
 
 ---
 
-## Estrutura do Projeto
+## Stack
+
+| Camada     | Tecnologia                                     |
+| ---------- | ---------------------------------------------- |
+| Frontend   | React 18 + Vite 6 + TypeScript                 |
+| UI         | Tailwind CSS + Lucide React                    |
+| Roteamento | React Router DOM (HashRouter)                  |
+| Editor     | TipTap 3                                       |
+| Backend    | Python 3.13 + Django 6 + Django REST Framework |
+| Auth       | SimpleJWT (JWT com rotação de refresh)         |
+| Banco      | PostgreSQL — Neon (produção) / SQLite (dev)    |
+| Realtime   | SSE (Server-Sent Events)                       |
+
+---
+
+## Estrutura
 
 ```
 UemaBrisas/
 ├── backend/
-│   ├── autenticacao/      # Login, cadastro, JWT, SSE, CustomUser
-│   ├── processos/         # CRUD processos REURB
-│   ├── etapas/            # 14 etapas padrão REURB por processo
-│   ├── chat/              # Mensagens da equipe (polling)
-│   ├── anexos/            # Upload de arquivos por processo
-│   ├── documentos/        # Documentos, versões, assinaturas, convites
+│   ├── autenticacao/      # Login, JWT, SSE, CustomUser, ConviteEquipe, PerfilTemplate
+│   ├── processos/         # CRUD processos, eventos de auditoria, consulta pública
+│   ├── etapas/            # 14 etapas padrão REURB, atualização de progresso
+│   ├── anexos/            # Upload de arquivos por processo e por etapa
+│   ├── documentos/        # Documentos, versões, modelos do sistema, colaboradores
+│   ├── chat/              # Mensagens da equipe
 │   ├── painel/            # Dashboard e estatísticas
-│   ├── equipe/            # Listagem de membros
+│   ├── equipe/            # Listagem de membros ativos
+│   ├── permissoes/        # Controle de acesso por role e flags
 │   ├── notificacoes/      # Notificações in-app
-│   ├── permissoes/        # Controle de acesso
-│   └── configuracao/      # Settings, URLs, WSGI
+│   └── configuracao/      # settings.py, urls.py, wsgi.py
 ├── components/
-│   ├── auth/              # LoginScreen, SignupScreen, ForgotPasswordScreen
-│   ├── dashboard/         # Dashboard, ProcessManagement, ProcessDrawer, Reports…
-│   ├── editor/            # Editor TipTap + EditorToolbar + extensões
+│   ├── auth/              # LoginScreen, SignupScreen, ForgotPassword, ConsultaProcesso
+│   ├── dashboard/         # Dashboard, ProcessManagement, ProcessDrawer, Team, Templates…
+│   ├── editor/            # Editor TipTap + toolbar + extensões
 │   └── layout/            # Sidebar
-├── hooks/                 # useProcesses, useHeartbeat, usePermissoes…
-├── services/              # painelService, chatService, etapasService, anexosService, equipeService…
+├── hooks/                 # useProcesses, useHeartbeat, usePermissoes, useStatusStream
+├── services/              # Todos os serviços de API (um por módulo)
 ├── shared/
-│   ├── components/        # ErrorBoundary, StatusBadge
 │   ├── contexts/          # AuthContext
-│   ├── services/          # apiClient (fetch centralizado)
-│   └── utils/             # date helpers
-├── types/                 # Tipos TypeScript (fonte única)
-└── constants/             # Constantes e modelos mock
+│   ├── services/          # apiClient — fetch centralizado com refresh automático
+│   └── utils/             # Helpers de data
+└── types/                 # Tipos TypeScript globais
 ```
 
 ---
 
 ## Como Executar
 
-### Backend (Django)
-
-**1. Instalar dependências**
+### Backend
 
 ```bash
+# Instalar dependências
 pip install django djangorestframework djangorestframework-simplejwt \
             django-cors-headers dj-database-url python-dotenv google-auth requests
-```
 
-**2. Configurar banco de dados**
-
-Crie `backend/.env`:
-
-```env
+# Configurar banco — criar backend/.env
 DATABASE_URL=postgresql://usuario:senha@host/neondb
 GOOGLE_OAUTH2_CLIENT_ID=seu_client_id   # opcional
-```
 
-**3. Rodar migrations e subir servidor**
-
-```bash
+# Rodar
 cd backend
 python manage.py migrate
-python manage.py createsuperuser
 python manage.py runserver 8000
 ```
 
-API disponível em `http://localhost:8000`
-
----
-
-### Frontend (React + Vite)
+### Frontend
 
 ```bash
 npm install
 npm run dev
+# http://localhost:5173
 ```
-
-Frontend disponível em `http://localhost:5173`
 
 ---
 
 ## Endpoints da API
 
-| Método           | Endpoint                                 | Descrição                             | Auth |
-| ---------------- | ---------------------------------------- | ------------------------------------- | ---- |
-| POST             | `/api/autenticacao/login/`               | Login — retorna JWT                   | Não  |
-| POST             | `/api/autenticacao/cadastro/`            | Criar conta                           | Não  |
-| POST             | `/api/autenticacao/esqueci-senha/`       | Recuperar senha                       | Não  |
-| POST             | `/api/autenticacao/heartbeat/`           | Atualizar status online               | JWT  |
-| GET              | `/api/autenticacao/status-stream/`       | SSE de status da equipe               | JWT  |
-| GET              | `/api/autenticacao/usuarios/`            | Listar membros                        | JWT  |
-| PATCH            | `/api/autenticacao/usuarios/<pk>/`       | Editar membro                         | JWT  |
-| DELETE           | `/api/autenticacao/usuarios/<pk>/`       | Remover membro                        | JWT  |
-| GET/POST         | `/api/processos/`                        | Listar / criar processos              | JWT  |
-| GET/PATCH/DELETE | `/api/processos/<id>/`                   | Detalhe / editar / excluir            | JWT  |
-| GET              | `/api/processos/stats/`                  | Estatísticas do painel                | JWT  |
-| GET              | `/api/processos/<id>/etapas/`            | Listar etapas do processo             | JWT  |
-| POST             | `/api/processos/<id>/etapas/protocolar/` | Protocolar e criar etapas             | JWT  |
-| PATCH            | `/api/etapas/<id>/`                      | Atualizar status/observações de etapa | JWT  |
-| GET/POST         | `/api/processos/<id>/anexos/`            | Listar / fazer upload de anexos       | JWT  |
-| DELETE           | `/api/anexos/<id>/`                      | Remover anexo                         | JWT  |
-| GET/POST         | `/api/chat/`                             | Listar mensagens / enviar             | JWT  |
-| GET              | `/api/equipe/`                           | Listar membros da equipe              | JWT  |
-| GET              | `/api/permissoes/`                       | Permissões do usuário logado          | JWT  |
-| GET/POST         | `/api/documentos/`                       | Listar / criar documentos             | JWT  |
-| POST             | `/api/documentos/<id>/versao/`           | Salvar versão                         | JWT  |
-| POST             | `/api/documentos/<id>/colaboradores/`    | Adicionar colaborador                 | JWT  |
-| POST             | `/api/documentos/<id>/convite/`          | Gerar link de convite                 | JWT  |
-| GET              | `/api/notificacoes/`                     | Listar notificações                   | JWT  |
+| Método           | Endpoint                                     | Descrição                          | Auth |
+| ---------------- | -------------------------------------------- | ---------------------------------- | ---- |
+| POST             | `/api/autenticacao/login/`                   | Login — retorna JWT                | Não  |
+| POST             | `/api/autenticacao/cadastro/`                | Criar conta                        | Não  |
+| POST             | `/api/autenticacao/esqueci-senha/`           | Solicitar recuperação de senha     | Não  |
+| GET              | `/api/processos/consulta/<protocolo>/`       | Consulta pública por protocolo     | Não  |
+| POST             | `/api/autenticacao/heartbeat/`               | Atualizar status online            | JWT  |
+| GET              | `/api/autenticacao/status-stream/`           | SSE de status da equipe            | JWT  |
+| GET/PATCH/DELETE | `/api/autenticacao/usuarios/<pk>/`           | Gerenciar membro                   | JWT  |
+| GET/POST         | `/api/autenticacao/convites-equipe/`         | Listar / criar convites            | JWT  |
+| DELETE           | `/api/autenticacao/convites-equipe/<token>/` | Revogar convite                    | JWT  |
+| GET/POST         | `/api/autenticacao/perfis-template/`         | Perfis de preenchimento do usuário | JWT  |
+| DELETE           | `/api/autenticacao/perfis-template/<pk>/`    | Remover perfil                     | JWT  |
+| GET/POST         | `/api/processos/`                            | Listar / criar processos           | JWT  |
+| GET/PATCH/DELETE | `/api/processos/<id>/`                       | Detalhe / editar / excluir         | JWT  |
+| GET              | `/api/processos/meus/`                       | Processos do usuário com papéis    | JWT  |
+| GET              | `/api/processos/stats/`                      | Estatísticas do painel             | JWT  |
+| GET              | `/api/processos/<id>/eventos/`               | Trilha de auditoria do processo    | JWT  |
+| GET              | `/api/processos/<id>/etapas/`                | Listar etapas                      | JWT  |
+| POST             | `/api/processos/<id>/etapas/protocolar/`     | Protocolar e criar etapas          | JWT  |
+| PATCH            | `/api/etapas/<id>/`                          | Atualizar etapa (status, parecer)  | JWT  |
+| GET/POST         | `/api/processos/<id>/anexos/`                | Listar / upload de arquivos        | JWT  |
+| DELETE           | `/api/anexos/<id>/`                          | Remover arquivo                    | JWT  |
+| GET/POST         | `/api/documentos/`                           | Listar / criar documentos          | JWT  |
+| GET/POST         | `/api/documentos/modelos/`                   | Modelos de documento               | JWT  |
+| GET/POST         | `/api/chat/`                                 | Mensagens da equipe                | JWT  |
+| GET              | `/api/equipe/`                               | Membros ativos                     | JWT  |
+| GET              | `/api/permissoes/`                           | Permissões do usuário logado       | JWT  |
 
-**Autenticação:** `Authorization: Bearer <access_token>`
+**Header de autenticação:** `Authorization: Bearer <access_token>`
 
 ---
 
-## Credenciais de Teste
+## Acesso de Teste
 
 | Campo | Valor                |
 | ----- | -------------------- |
@@ -252,21 +236,4 @@ Frontend disponível em `http://localhost:5173`
 
 ---
 
-## Funcionalidades
-
-- **Painel:** visão geral com skeleton screen, cache de 60s e feedback de erro com retry
-- **Processos:** grid/tabela com filtros, criação, exclusão, protocolo e download ZIP
-- **Etapas:** 14 etapas REURB por processo, criadas ao protocolar, com histórico de datas
-- **Documentos:** editor rich text TipTap com auto-save, versões e assinatura digital
-- **Chat:** mensagens em tempo real compartilhadas entre toda a equipe
-- **Anexos:** upload de arquivos por processo, armazenados no servidor
-- **Timeline:** histórico automático de eventos por processo (etapas + documentos)
-- **Relatórios:** gráficos reais de produtividade, modalidade e status
-- **Equipe:** gestão de membros com status online/offline em tempo real
-- **Permissões:** controle granular por role
-- **Configurações:** tema, fonte e preferências do usuário
-
----
-
-_Desenvolvido para gestão pública de regularização fundiária municipal — UEMA 2026._
-_Equipe: Andre, Carol, Keven, Isabel, Leandro._
+_Sistema desenvolvido para gestão pública de regularização fundiária municipal — REURB (Lei Federal 13.465/2017)._

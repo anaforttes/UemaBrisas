@@ -66,3 +66,37 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             delta = timezone.now() - self.last_access
             return delta.total_seconds() < 35
         return False
+
+
+class PerfilTemplate(models.Model):
+    usuario     = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='perfis_template')
+    nome_perfil = models.CharField(max_length=200)
+    dados       = models.JSONField(default=dict)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    criado_em   = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-atualizado_em']
+
+    def __str__(self):
+        return f'{self.nome_perfil} ({self.usuario.email})'
+
+
+class ConviteEquipe(models.Model):
+    PERMISSAO_CHOICES = [
+        ('visualizar', 'Visualizar'),
+        ('editar', 'Editar'),
+    ]
+
+    token      = models.CharField(max_length=64, unique=True)
+    permissao  = models.CharField(max_length=20, choices=PERMISSAO_CHOICES, default='visualizar')
+    criado_por = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='convites_equipe')
+    criado_em  = models.DateTimeField(auto_now_add=True)
+    expira_em  = models.DateTimeField()
+    usado      = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'Convite {self.token[:8]}… ({self.permissao})'

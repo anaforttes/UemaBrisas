@@ -533,7 +533,10 @@ class ModeloListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        modelos = ModeloDocumento.objects.filter(criado_por=request.user)
+        from django.db.models import Q
+        modelos = ModeloDocumento.objects.filter(
+            Q(is_sistema=True) | Q(criado_por=request.user)
+        )
         return Response(ModeloDocumentoSerializer(modelos, many=True).data)
 
     def post(self, request):
@@ -547,22 +550,28 @@ class ModeloListView(APIView):
 class ModeloDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def _get_modelo(self, pk, user):
+    def _get_modelo(self, pk):
         try:
-            return ModeloDocumento.objects.get(pk=pk, criado_por=user)
+            return ModeloDocumento.objects.get(pk=pk)
         except ModeloDocumento.DoesNotExist:
             return None
 
     def get(self, request, pk):
-        modelo = self._get_modelo(pk, request.user)
+        modelo = self._get_modelo(pk)
         if not modelo:
             return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if not modelo.is_sistema and modelo.criado_por != request.user:
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         return Response(ModeloDocumentoSerializer(modelo).data)
 
     def put(self, request, pk):
-        modelo = self._get_modelo(pk, request.user)
+        modelo = self._get_modelo(pk)
         if not modelo:
             return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if modelo.is_sistema:
+            return Response({'erro': 'Modelos do sistema não podem ser editados.'}, status=status.HTTP_403_FORBIDDEN)
+        if modelo.criado_por != request.user:
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         serializer = ModeloDocumentoSerializer(modelo, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -570,8 +579,12 @@ class ModeloDetailView(APIView):
         return Response(serializer.data)
 
     def delete(self, request, pk):
-        modelo = self._get_modelo(pk, request.user)
+        modelo = self._get_modelo(pk)
         if not modelo:
             return Response({'erro': 'Não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+        if modelo.is_sistema:
+            return Response({'erro': 'Modelos do sistema não podem ser excluídos.'}, status=status.HTTP_403_FORBIDDEN)
+        if modelo.criado_por != request.user:
+            return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
         modelo.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)

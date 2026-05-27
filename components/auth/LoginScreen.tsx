@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
+import { Mail, Lock, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { API_BASE } from '../../shared/services/apiClient';
 import type { User } from '../../types/index';
@@ -195,6 +195,16 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCa
             Solicitar cadastro
           </Link>
         </p>
+
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <Link
+            to="/consulta"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl border border-slate-200 text-slate-600 text-sm font-semibold hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-all"
+          >
+            <Search size={15} />
+            Consultar andamento de processo
+          </Link>
+        </div>
       </div>
     </div>
   );

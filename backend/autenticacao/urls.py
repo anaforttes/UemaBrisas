@@ -11,6 +11,10 @@ from .views import (
     status_stream,
     CustomUserList,
     CustomUserDetail,
+    ConviteEquipeView,
+    ConviteEquipeDetailView,
+    PerfilTemplateView,
+    PerfilTemplateDetailView,
 )
 
 urlpatterns = [
@@ -25,4 +29,8 @@ urlpatterns = [
     path('usuarios/<int:pk>/',   CustomUserDetail.as_view(),  name='usuario_detail'),
     path('esqueci-senha/',       solicitar_recuperacao_senha, name='esqueci_senha'),
     path('redefinir-senha/',     redefinir_senha,             name='redefinir_senha'),
+    path('convites-equipe/',     ConviteEquipeView.as_view(), name='convites_equipe'),
+    path('convites-equipe/<str:token>/', ConviteEquipeDetailView.as_view(), name='convite_equipe_detail'),
+    path('perfis-template/',     PerfilTemplateView.as_view(), name='perfis_template'),
+    path('perfis-template/<int:pk>/', PerfilTemplateDetailView.as_view(), name='perfil_template_detail'),
 ]

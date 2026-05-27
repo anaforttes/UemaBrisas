@@ -22,5 +22,5 @@ class EtapaSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'processo_id', 'numero', 'nome', 'eixo',
             'status', 'responsavel_id', 'responsavel_nome',
-            'observacoes', 'data_inicio', 'data_conclusao', 'depende_de',
+            'observacoes', 'data_inicio', 'data_conclusao', 'prazo', 'depende_de',
         ]
