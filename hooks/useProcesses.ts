@@ -1,25 +1,22 @@
 import { useState, useCallback } from 'react';
 import { dbService } from '../services/databaseService';
-import {
-  listarProcessos,
-  meusProcessos,
-  deletarProcesso,
-  ProcessoMeu,
-} from '../services/painelService';
+import { listarProcessos, deletarProcesso } from '../services/painelService';
 import { etapasService } from '../services/etapasService';
 import { REURBProcess } from '../types/index';
 
 export function useProcesses() {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
-  const [meusProcs, setMeusProcs] = useState<ProcessoMeu[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
+    setLoading(true);
     try {
-      const [data, meus] = await Promise.all([listarProcessos(), meusProcessos().catch(() => [])]);
+      const data = await listarProcessos();
       setProcesses(data.results);
-      setMeusProcs(meus);
     } catch {
       setProcesses([]);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -104,5 +101,5 @@ export function useProcesses() {
     window.dispatchEvent(new CustomEvent('reurb:processos-alterados'));
   }, []);
 
-  return { processes, meusProcs, fetchData, handleProtocolar, handleDownloadZip, deleteProcess };
+  return { processes, loading, fetchData, handleProtocolar, handleDownloadZip, deleteProcess };
 }

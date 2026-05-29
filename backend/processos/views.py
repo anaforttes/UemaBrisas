@@ -32,7 +32,20 @@ def processos_view(request):
         paginator = ProcessoPagination()
         page = paginator.paginate_queryset(qs, request)
         serializer = ProcessoSerializer(page, many=True)
-        return paginator.get_paginated_response(serializer.data)
+
+        # Inclui meus_papeis em uma única query extra (evita chamada separada /meus/)
+        from documentos.models import Documento, ColaboradorDocumento
+        uid = request.user.pk
+        doc_pids = (
+            set(Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)) |
+            set(ColaboradorDocumento.objects.filter(usuario_id=uid).values_list('documento__processo_id', flat=True))
+        )
+        processo_ids_docs = {str(pid) for pid in doc_pids if pid}
+        dados = [
+            {**proc, 'meus_papeis': papeis_no_processo(request.user, obj, processo_ids_docs)}
+            for proc, obj in zip(serializer.data, page)
+        ]
+        return paginator.get_paginated_response(dados)
 
     serializer = ProcessoSerializer(data=request.data)
     if serializer.is_valid():
@@ -94,12 +107,12 @@ def processos_meus(request):
 
     uid = request.user.pk
     doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
-    doc_ids_colab   = Documento.objects.filter(
-        colaboradores__usuario_id=uid
-    ).values_list('processo_id', flat=True)
+    doc_ids_colab   = ColaboradorDocumento.objects.filter(
+        usuario_id=uid
+    ).values_list('documento__processo_id', flat=True)
     processo_ids_docs = {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
 
-    qs = processos_do_usuario(request.user)
+    qs = processos_do_usuario(request.user, processo_ids_docs)
     serializer = ProcessoSerializer(qs, many=True)
 
     dados = [

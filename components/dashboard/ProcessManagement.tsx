@@ -41,7 +41,7 @@ const PAPEL_STYLE: Record<string, string> = {
 };
 
 export const ProcessManagement: React.FC = () => {
-  const { processes, meusProcs, fetchData, handleProtocolar, handleDownloadZip, deleteProcess } =
+  const { processes, loading, fetchData, handleProtocolar, handleDownloadZip, deleteProcess } =
     useProcesses();
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
@@ -217,14 +217,32 @@ export const ProcessManagement: React.FC = () => {
       </div>
 
       {/* Conteúdo */}
-      {viewMode === 'table' ? (
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+          {[1, 2, 3].map((i) => (
+            <div
+              key={i}
+              className="bg-white border border-slate-100 rounded-[32px] p-6 animate-pulse"
+            >
+              <div className="flex justify-between mb-6">
+                <div className="w-12 h-12 bg-slate-100 rounded-2xl" />
+                <div className="w-20 h-6 bg-slate-100 rounded-full" />
+              </div>
+              <div className="h-5 bg-slate-100 rounded-lg mb-2 w-3/4" />
+              <div className="h-3 bg-slate-100 rounded-lg mb-6 w-1/2" />
+              <div className="h-2 bg-slate-100 rounded-full mb-8" />
+              <div className="h-10 bg-slate-100 rounded-2xl" />
+            </div>
+          ))}
+        </div>
+      ) : viewMode === 'table' ? (
         <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2">
           <ProcessTable processes={filteredProcesses} />
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {filteredProcesses.map((proc) => {
-            const meuPapel = meusProcs.find((mp) => mp.id === proc.id);
+            const meuPapel = proc;
             return (
               <div
                 key={proc.id}
@@ -236,7 +254,8 @@ export const ProcessManagement: React.FC = () => {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     <div className="flex flex-wrap gap-1 justify-end">
-                      {meuPapel &&
+                      {meuPapel.meus_papeis &&
+                        meuPapel.meus_papeis.length > 0 &&
                         meuPapel.meus_papeis.map((papel) => (
                           <span
                             key={papel}

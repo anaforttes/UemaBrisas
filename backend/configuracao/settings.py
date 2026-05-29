@@ -5,7 +5,7 @@ Django settings for configuracao project.
 from pathlib import Path
 from datetime import timedelta
 import os
-import dj_database_url
+from urllib.parse import urlparse, parse_qsl
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -119,12 +119,18 @@ TEMPLATES = [
 WSGI_APPLICATION = 'configuracao.wsgi.application'
 
 # ── Banco de dados ────────────────────────────────────────────────────────────
+tmpPostgres = urlparse(os.getenv("DATABASE_URL"))
+
 DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
-        conn_health_checks=True,
-    )
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': tmpPostgres.path.replace('/', ''),
+        'USER': tmpPostgres.username,
+        'PASSWORD': tmpPostgres.password,
+        'HOST': tmpPostgres.hostname,
+        'PORT': 5432,
+        'OPTIONS': dict(parse_qsl(tmpPostgres.query)),
+    }
 }
 
 # Testes sempre usam SQLite em memória (evita conflito com banco remoto Neon)

@@ -5,7 +5,7 @@ from .constantes import STATUS_CONCLUIDOS, STATUS_EM_REVISAO, STATUS_FECHADOS
 
 
 def listar_processos(search: str = '', status_filtro: str = ''):
-    qs = Processo.objects.all()
+    qs = Processo.objects.select_related('technician_id', 'legal_id', 'criado_por')
     if search:
         qs = qs.filter(
             Q(title__icontains=search) |
@@ -24,26 +24,29 @@ def criar_processo(user, dados: dict) -> Processo:
     return serializer.save(criado_por=user)
 
 
-def processos_do_usuario(user):
+def processos_do_usuario(user, processo_ids_docs: set = None):
     """Retorna todos os processos em que o usuário tem algum papel."""
     from documentos.models import Documento, ColaboradorDocumento
 
     uid = user.pk
-    doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
-    doc_ids_colab   = ColaboradorDocumento.objects.filter(usuario_id=uid).values_list('documento__processo_id', flat=True)
-    processo_ids_docs = {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
 
-    qs = (
-        Processo.objects.filter(technician_id=uid) |
-        Processo.objects.filter(legal_id=uid) |
-        Processo.objects.filter(criado_por_id=uid)
-    )
+    if processo_ids_docs is None:
+        doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
+        doc_ids_colab   = ColaboradorDocumento.objects.filter(usuario_id=uid).values_list('documento__processo_id', flat=True)
+        processo_ids_docs = {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
+
+    filtro = Q(technician_id=uid) | Q(legal_id=uid) | Q(criado_por_id=uid)
     if processo_ids_docs:
         pk_ints = {int(pid) for pid in processo_ids_docs if pid.isdigit()}
         if pk_ints:
-            qs = qs | Processo.objects.filter(pk__in=pk_ints)
+            filtro |= Q(pk__in=pk_ints)
 
-    return qs.distinct()
+    return (
+        Processo.objects
+        .filter(filtro)
+        .select_related('technician_id', 'legal_id', 'criado_por')
+        .distinct()
+    )
 
 
 def papeis_no_processo(user, processo, processo_ids_docs: set = None) -> list:

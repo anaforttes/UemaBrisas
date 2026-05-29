@@ -23,7 +23,7 @@ export interface ProcessoAPI {
   updated_at: string;
 }
 
-function apiParaFrontend(p: ProcessoAPI): REURBProcess {
+function apiParaFrontend(p: ProcessoAPI & { meus_papeis?: string[] }): REURBProcess {
   return {
     id: String(p.id),
     protocol: p.protocol,
@@ -42,6 +42,7 @@ function apiParaFrontend(p: ProcessoAPI): REURBProcess {
     legalId: String(p.legal_id ?? ''),
     createdAt: p.created_at,
     updatedAt: p.updated_at,
+    meus_papeis: p.meus_papeis ?? [],
   };
 }
 
