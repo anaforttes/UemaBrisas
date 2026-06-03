@@ -39,13 +39,14 @@ import {
 import { User } from '../../types/index';
 import { dbService } from '../../services/databaseService';
 import { documentoService, DocDetalhe, ConflictError } from '../../services/documentoService';
-import { exportarPDF, exportarDOCX } from '../../services/exportService';
+import { exportarDOCX } from '../../services/exportService';
 import { SignatureModal } from './SignatureModal';
 import type { SignatureRecord } from '../../services/assinaturaService';
 import PainelComentarios from './PainelComentarios';
 import PainelColaboradores from './PainelColaboradores';
 import HistoricoVersoes, { Versao, EventoAuditoria } from './components/HistoricoVersoes';
 import EditorToolbar from './EditorToolbar';
+import EditorRuler from './EditorRuler';
 import { usePresenca } from '../../hooks/usePresenca';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
@@ -434,83 +435,6 @@ const ModalSairSemSalvar: React.FC<{
   </div>
 );
 
-// ─── Painel de Membros do Banco ───────────────────────────────────────────────
-
-const PainelMembros: React.FC<{ onInserir: (texto: string) => void }> = ({ onInserir }) => {
-  const [busca, setBusca] = useState('');
-  const [membros, setMembros] = useState<User[]>([]);
-  useEffect(() => {
-    dbService.users.selectAll().then(setMembros);
-  }, []);
-  const filtrados = membros.filter(
-    (u) =>
-      u.name.toLowerCase().includes(busca.toLowerCase()) ||
-      (u.role || '').toLowerCase().includes(busca.toLowerCase())
-  );
-  return (
-    <div className="flex flex-col h-full">
-      <div className="p-3 border-b border-slate-100">
-        <input
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Buscar membro..."
-          className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-400"
-        />
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
-        {filtrados.length === 0 && (
-          <p className="text-xs text-slate-400 text-center py-6">Nenhum membro encontrado.</p>
-        )}
-        {filtrados.map((u) => (
-          <div
-            key={u.id}
-            className="bg-slate-50 border border-slate-100 rounded-xl p-3 hover:border-blue-200 hover:bg-blue-50 transition-all"
-          >
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-black shrink-0">
-                {u.name.charAt(0)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-black text-slate-800 truncate">{u.name}</p>
-                <p className="text-[10px] text-slate-400">
-                  {u.role} · {u.tipoProfissional || ''}
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-1">
-              <button
-                onClick={() => onInserir(u.name)}
-                className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-              >
-                + Nome
-              </button>
-              <button
-                onClick={() => onInserir(`${u.name} — ${u.role}`)}
-                className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-              >
-                + Nome/Cargo
-              </button>
-              {u.email && (
-                <button
-                  onClick={() => onInserir(u.email)}
-                  className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded-lg text-slate-600 hover:border-blue-400 hover:text-blue-600 transition-all font-medium"
-                >
-                  + E-mail
-                </button>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="p-3 border-t border-slate-100">
-        <p className="text-[10px] text-slate-400 text-center">
-          Clique para inserir no cursor do documento
-        </p>
-      </div>
-    </div>
-  );
-};
-
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 const Editor: React.FC<EditorProps> = ({
@@ -537,6 +461,17 @@ const Editor: React.FC<EditorProps> = ({
   const [fonteFamilia, setFonteFamilia] = useState('Times New Roman');
   const [espacamento, setEspacamento] = useState('1.5');
   const [alturaConteudo, setAlturaConteudo] = useState(0);
+  const [zoom, setZoom] = React.useState(1);
+  const ZOOM_LEVELS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2];
+  const [margemEsq, setMargemEsq] = React.useState(96);
+  const [margemDir, setMargemDir] = React.useState(96);
+
+  const numPaginas = Math.max(1, Math.ceil(alturaConteudo / PAGE_CONTENT_H));
+  const CONTENT_PAD = 48;
+  const pageBreakLines = React.useMemo(
+    () => Array.from({ length: numPaginas - 1 }, (_, i) => CONTENT_PAD + (i + 1) * PAGE_CONTENT_H),
+    [numPaginas]
+  );
 
   // ── Colaboração backend ───────────────────────────────────────────────────
   const [docBackend, setDocBackend] = useState<DocDetalhe | null>(null);
@@ -578,6 +513,7 @@ const Editor: React.FC<EditorProps> = ({
   const refCabecalho = useRef<HTMLDivElement>(null);
   const refRodape = useRef<HTMLDivElement>(null);
   const prosemirrorWrapRef = useRef<HTMLDivElement>(null);
+  const printAreaRef = useRef<HTMLDivElement>(null);
   const conteudoSalvoRef = useRef(initialContent);
   const somenteLeitura = documentoFinalizado || !!registroAssinatura;
 
@@ -850,10 +786,6 @@ const Editor: React.FC<EditorProps> = ({
     return () => obs.disconnect();
   }, []);
 
-  const handleInserirMembro = (texto: string) => {
-    if (!editor) return;
-    editor.chain().focus().insertContent(texto).run();
-  };
   const inserirTabela = () => {
     editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
   };
@@ -1006,16 +938,85 @@ const Editor: React.FC<EditorProps> = ({
     }
   };
 
-  const handleExportarPDF = async () => {
-    if (!editor) return;
-    setExportando(true);
+  const handleExportarPDF = () => {
     setMostrarMenuExportar(false);
-    try {
-      await exportarPDF(tituloLocal, editor.getHTML(), registroAssinatura);
-      registrarEvento('exportacao', 'PDF');
-    } finally {
-      setExportando(false);
+    registrarEvento('exportacao', 'PDF');
+
+    const area = printAreaRef.current;
+    if (!area) {
+      window.print();
+      return;
     }
+
+    const clone = area.cloneNode(true) as HTMLElement;
+    // Remove indicadores de quebra de página e decorações visuais
+    clone.querySelectorAll('[aria-hidden="true"]').forEach((el) => el.remove());
+    // Remove placeholders editáveis (cabeçalho/rodapé vazios)
+    clone.querySelectorAll('.pointer-events-none').forEach((el) => el.remove());
+    // Remove transform do zoom (inline style)
+    clone.style.transform = 'none';
+    // Remove padding inline do conteúdo — deixa @page controlar as margens
+    const conteudoEl = clone.querySelector<HTMLElement>('.editor-conteudo');
+    if (conteudoEl) {
+      conteudoEl.style.paddingLeft = '0';
+      conteudoEl.style.paddingRight = '0';
+      conteudoEl.style.paddingTop = '0';
+      conteudoEl.style.paddingBottom = '0';
+    }
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      window.print();
+      return;
+    }
+
+    win.document.write(`<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: white; }
+@page { size: A4; margin: 2.54cm; }
+.editor-cabecalho { padding-bottom: 8px; border-bottom: 1px dashed #e2e8f0; font-size: 11px; color: #9ca3af; min-height: 28px; margin-bottom: 8px; }
+.editor-conteudo { padding: 0; }
+.editor-rodape { padding-top: 8px; border-top: 1px dashed #e2e8f0; font-size: 11px; color: #9ca3af; min-height: 28px; margin-top: 8px; }
+.ProseMirror { outline: none; font-family: '${fonteFamilia}', 'Times New Roman', serif; line-height: ${espacamento}; font-size: 12pt; color: #1f2937; }
+.ProseMirror p { margin: 0; padding: 2px 0; }
+.ProseMirror p.is-editor-empty:first-child::before { content: none; }
+.ProseMirror h1 { font-size: 1.6em; font-weight: 800; margin: 16px 0 8px; }
+.ProseMirror h2 { font-size: 1.3em; font-weight: 700; margin: 14px 0 6px; }
+.ProseMirror h3 { font-size: 1.1em; font-weight: 600; margin: 12px 0 4px; }
+.ProseMirror table { border-collapse: collapse; width: 100%; margin: 12px 0; break-inside: avoid; }
+.ProseMirror td, .ProseMirror th { border: 1px solid #cbd5e1; padding: 6px 10px; vertical-align: top; }
+.ProseMirror th { background: #f1f5f9; font-weight: 700; }
+.ProseMirror blockquote { border-left: 4px solid #3b82f6; padding-left: 16px; color: #475569; font-style: italic; margin: 12px 0; }
+.ProseMirror ul { list-style: disc; padding-left: 24px; }
+.ProseMirror ol { list-style: decimal; padding-left: 24px; }
+.ProseMirror a { color: #2563eb; text-decoration: underline; }
+.ProseMirror code { background: #f1f5f9; border-radius: 4px; padding: 2px 6px; font-family: monospace; font-size: 0.9em; }
+.ProseMirror pre { background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 16px; font-family: monospace; }
+@media screen {
+  #__overlay__ { display: none; position: fixed; inset: 0; background: white; z-index: 9999; align-items: center; justify-content: center; font-family: sans-serif; color: #64748b; font-size: 14px; }
+  #__overlay__.show { display: flex; }
+}
+@media print { #__overlay__ { display: none !important; } }
+</style>
+</head>
+<body>
+${clone.outerHTML}
+<div id="__overlay__">Fechando...</div>
+<script>
+window.onafterprint = function() {
+  document.getElementById('__overlay__').classList.add('show');
+  setTimeout(function() { window.close(); }, 300);
+};
+window.print();
+</script>
+</body>
+</html>`);
+
+    win.document.close();
   };
 
   const handleExportarDOCX = async () => {
@@ -1041,7 +1042,6 @@ const Editor: React.FC<EditorProps> = ({
 
   const charCount = editor.storage.characterCount?.characters() ?? 0;
   const wordCount = editor.storage.characterCount?.words() ?? 0;
-  const numPaginas = Math.max(1, Math.ceil(alturaConteudo / PAGE_CONTENT_H));
 
   // Calcula posição dos cursores remotos
   const cursoresVisiveis = usuariosOnline
@@ -1162,82 +1162,44 @@ const Editor: React.FC<EditorProps> = ({
         .ProseMirror ol { list-style: decimal; padding-left: 24px; }
         .ProseMirror a { color: #2563eb; text-decoration: underline; }
         /* ── Página do documento ──────────────────────────────────── */
+        /* ── Página A4 — cresce com o conteúdo ───────────────────── */
         .editor-page {
-          background: white;
           width: 100%;
           max-width: 816px;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.12);
-          border: 1px solid #e5e7eb;
+          background: white;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 28px rgba(0,0,0,0.13);
           box-sizing: border-box;
           position: relative;
-        }
-        .editor-page::after {
-          content: '';
-          position: absolute;
-          bottom: -8px;
-          left: 0;
-          right: 0;
-          height: 8px;
-          background: linear-gradient(to bottom, rgba(0,0,0,0.04) 0%, rgba(0,0,0,0) 100%);
-          border-radius: 0 0 12px 12px;
-          pointer-events: none;
+          /* SEM flex — bloco normal, cresce com os filhos */
         }
         .editor-cabecalho {
-          padding: 12px 96px;
-          border-bottom: 1px solid #e5e7eb;
-          font-size: 11px;
-          color: #9ca3af;
-          min-height: 40px;
-          box-sizing: border-box;
-          background: #fafafa;
+          padding: 10px var(--margem-h, 96px);
+          border-bottom: 1px dashed #e2e8f0;
+          font-size: 11px; color: #9ca3af;
+          min-height: 36px; box-sizing: border-box;
         }
         .editor-conteudo {
+          /* min-height = 1 página A4 descontando cabeçalho/rodapé/padding */
+          min-height: 966px;
           padding: 48px 96px;
           box-sizing: border-box;
           position: relative;
-          min-height: 600px;
+          /* bloco normal — ProseMirror determina a altura */
         }
         .editor-rodape {
-          padding: 12px 96px;
-          border-top: 1px solid #e5e7eb;
-          font-size: 11px;
-          color: #9ca3af;
-          min-height: 40px;
-          box-sizing: border-box;
-          background: #fafafa;
+          padding: 10px var(--margem-h, 96px);
+          border-top: 1px dashed #e2e8f0;
+          font-size: 11px; color: #9ca3af;
+          min-height: 36px; box-sizing: border-box;
         }
-        .page-break-indicator {
-          width: 100%;
-          max-width: 816px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          color: #d1d5db;
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.05em;
-          text-transform: uppercase;
-          user-select: none;
-          pointer-events: none;
-          margin: 16px 0;
-        }
-        .page-break-indicator::before, .page-break-indicator::after {
-          content: '';
-          flex: 1;
-          height: 1px;
-          background: #e5e7eb;
-        }
+        /* ── Impressão (fallback Ctrl+P) ──────────────────────────── */
         @media print {
-          .editor-page {
-            box-shadow: none;
-            border: none;
-            min-height: unset;
-            page-break-after: always;
-          }
-          .editor-page::after { display: none; }
-          .page-break-indicator { display: none; }
+          body > *:not(.editor-outer-wrap) { display: none !important; }
+          .editor-outer-wrap { overflow: visible !important; height: auto !important; display: block !important; background: white !important; }
+          .editor-page { box-shadow: none !important; max-width: none !important; transform: none !important; }
+          .editor-conteudo { min-height: unset !important; }
+          [aria-hidden="true"] { display: none !important; }
+          @page { size: A4; margin: 2.54cm; }
         }
       `}</style>
 
@@ -1438,154 +1400,190 @@ const Editor: React.FC<EditorProps> = ({
         />
 
         {/* ÁREA DO DOCUMENTO + SIDEBAR */}
-        <div className="flex flex-1 overflow-hidden">
-          <div
-            ref={editorWrapRef}
-            className="flex-1 overflow-y-auto flex flex-col items-center gap-6 relative"
-            style={
-              {
-                '--editor-fonte': fonteFamilia,
-                '--editor-espacamento': espacamento,
-                background: 'linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%)',
-                padding: '32px 16px',
-              } as React.CSSProperties
-            }
-          >
-            {/* Cursores remotos */}
-            {cursoresVisiveis.map((u) => (
-              <div
-                key={u.usuario_id}
-                style={{
-                  position: 'absolute',
-                  top: u.coords!.top - 20,
-                  left: u.coords!.left + 48,
-                  zIndex: 20,
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                }}
-              >
+        <div className="flex flex-1 min-h-0">
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {/* Régua — alinhada apenas à área do editor, não à sidebar */}
+            <EditorRuler
+              zoom={zoom}
+              marginLeft={margemEsq}
+              marginRight={margemDir}
+              onMarginChange={(l, r) => {
+                setMargemEsq(l);
+                setMargemDir(r);
+              }}
+            />
+            <div
+              ref={editorWrapRef}
+              className="editor-outer-wrap flex-1 overflow-y-auto overflow-x-hidden flex flex-col items-center gap-6 relative"
+              style={
+                {
+                  '--editor-fonte': fonteFamilia,
+                  '--editor-espacamento': espacamento,
+                  background: '#e8eaed',
+                  padding: '28px 16px 60px',
+                } as React.CSSProperties
+              }
+            >
+              {/* Cursores remotos */}
+              {cursoresVisiveis.map((u) => (
                 <div
-                  style={{
-                    width: 2,
-                    height: 20,
-                    background: corCursor(u.usuario_id),
-                    borderRadius: 2,
-                  }}
-                />
-                <span
+                  key={u.usuario_id}
                   style={{
                     position: 'absolute',
-                    top: -18,
-                    left: 4,
-                    background: corCursor(u.usuario_id),
-                    color: '#fff',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    padding: '1px 6px',
-                    borderRadius: 4,
-                    whiteSpace: 'nowrap',
+                    top: u.coords!.top - 20,
+                    left: u.coords!.left + 48,
+                    zIndex: 20,
+                    pointerEvents: 'none',
+                    userSelect: 'none',
                   }}
                 >
-                  {u.usuario_name}
-                </span>
-              </div>
-            ))}
-            <div className="editor-page" style={{ minHeight: 224 + numPaginas * PAGE_CONTENT_H }}>
-              {/* Cabeçalho */}
-              <div
-                ref={refCabecalho}
-                contentEditable={!somenteLeitura}
-                suppressContentEditableWarning
-                className="editor-cabecalho focus:outline-none focus:bg-blue-50 transition-colors"
-                style={{ fontFamily: fonteFamilia }}
-              >
-                {!somenteLeitura && (
-                  <span className="pointer-events-none select-none italic text-gray-400">
-                    Cabeçalho — clique para editar
-                  </span>
-                )}
-              </div>
-
-              {/* Conteúdo editável */}
-              <div className="editor-conteudo">
-                {/* Separadores de página virtuais */}
-                {Array.from({ length: numPaginas - 1 }, (_, i) => (
-                  <React.Fragment key={i}>
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        right: 0,
-                        top: 48 + (i + 1) * PAGE_CONTENT_H,
-                        height: 2,
-                        borderTop: '2px dashed #d1d5db',
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                        zIndex: 2,
-                      }}
-                    />
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        position: 'absolute',
-                        right: 24,
-                        top: 48 + (i + 1) * PAGE_CONTENT_H - 11,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: '#d1d5db',
-                        letterSpacing: '0.08em',
-                        textTransform: 'uppercase',
-                        background: 'white',
-                        padding: '2px 8px',
-                        borderRadius: 4,
-                        border: '1px solid #e5e7eb',
-                        pointerEvents: 'none',
-                        userSelect: 'none',
-                        zIndex: 3,
-                      }}
-                    >
-                      Página {i + 2}
-                    </div>
-                  </React.Fragment>
-                ))}
-                <div ref={prosemirrorWrapRef}>
-                  <EditorContent editor={editor} />
-                </div>
-              </div>
-
-              {/* Rodapé */}
-              <div
-                ref={refRodape}
-                contentEditable={!somenteLeitura}
-                suppressContentEditableWarning
-                className="editor-rodape focus:outline-none focus:bg-blue-50 transition-colors"
-                style={{ fontFamily: fonteFamilia }}
-              >
-                {!somenteLeitura && (
-                  <span className="pointer-events-none select-none italic text-gray-400">
-                    Rodapé — clique para editar
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {registroAssinatura && (
-              <>
-                <div className="page-break-indicator" aria-hidden>
-                  Página de Assinaturas
-                </div>
-                <div className="editor-page" style={{ minHeight: 'auto' }}>
                   <div
-                    className="editor-conteudo"
-                    style={{ minHeight: 'auto', paddingTop: 32, paddingBottom: 32 }}
+                    style={{
+                      width: 2,
+                      height: 20,
+                      background: corCursor(u.usuario_id),
+                      borderRadius: 2,
+                    }}
+                  />
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: -18,
+                      left: 4,
+                      background: corCursor(u.usuario_id),
+                      color: '#fff',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      whiteSpace: 'nowrap',
+                    }}
                   >
-                    <BlocoAssinatura record={registroAssinatura} />
+                    {u.usuario_name}
+                  </span>
+                </div>
+              ))}
+              <div
+                ref={printAreaRef}
+                className="editor-page editor-print-area"
+                style={
+                  {
+                    transform: zoom !== 1 ? `scale(${zoom})` : undefined,
+                    transformOrigin: 'top center',
+                    '--margem-h': `${margemEsq}px`,
+                  } as React.CSSProperties
+                }
+              >
+                {/* sem frame divs - papel branco único via CSS */}
+
+                {/* Cabeçalho */}
+                <div
+                  ref={refCabecalho}
+                  contentEditable={!somenteLeitura}
+                  suppressContentEditableWarning
+                  className="editor-cabecalho focus:outline-none focus:bg-blue-50 transition-colors"
+                  style={{ fontFamily: fonteFamilia }}
+                >
+                  {!somenteLeitura && (
+                    <span className="pointer-events-none select-none italic text-gray-400">
+                      Cabeçalho — clique para editar
+                    </span>
+                  )}
+                </div>
+
+                {/* Conteúdo editável */}
+                <div
+                  className="editor-conteudo"
+                  style={{ paddingLeft: margemEsq, paddingRight: margemDir }}
+                >
+                  {/* Indicadores de quebra de página — apenas nas margens, sem cobrir texto */}
+                  {pageBreakLines.map((y, i) => (
+                    <React.Fragment key={i}>
+                      {/* linha na margem esquerda */}
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          width: margemEsq - 12,
+                          top: y,
+                          height: 1,
+                          background: '#94a3b8',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                      {/* rótulo "Pg N" na margem esquerda */}
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          left: 4,
+                          top: y - 14,
+                          fontSize: 9,
+                          fontWeight: 700,
+                          color: '#94a3b8',
+                          letterSpacing: '0.06em',
+                          textTransform: 'uppercase',
+                          pointerEvents: 'none',
+                          userSelect: 'none',
+                        }}
+                      >
+                        Pg {i + 2}
+                      </div>
+                      {/* linha na margem direita */}
+                      <div
+                        aria-hidden="true"
+                        style={{
+                          position: 'absolute',
+                          right: 0,
+                          width: margemDir - 12,
+                          top: y,
+                          height: 1,
+                          background: '#94a3b8',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </React.Fragment>
+                  ))}
+                  <div ref={prosemirrorWrapRef}>
+                    <EditorContent editor={editor} />
                   </div>
                 </div>
-              </>
-            )}
+
+                {/* Rodapé */}
+                <div
+                  ref={refRodape}
+                  contentEditable={!somenteLeitura}
+                  suppressContentEditableWarning
+                  className="editor-rodape focus:outline-none focus:bg-blue-50 transition-colors"
+                  style={{ fontFamily: fonteFamilia }}
+                >
+                  {!somenteLeitura && (
+                    <span className="pointer-events-none select-none italic text-gray-400">
+                      Rodapé — clique para editar
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {registroAssinatura && (
+                <>
+                  <div className="page-break-indicator" aria-hidden>
+                    Página de Assinaturas
+                  </div>
+                  <div className="editor-page" style={{ minHeight: 'auto' }}>
+                    <div
+                      className="editor-conteudo"
+                      style={{ minHeight: 'auto', paddingTop: 32, paddingBottom: 32 }}
+                    >
+                      <BlocoAssinatura record={registroAssinatura} />
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+          {/* fecha flex-1 flex-col (wrapper da régua + scroll) */}
 
           {/* SIDEBAR */}
           <div className="w-80 border-l border-slate-200 bg-white flex flex-col">
@@ -1651,6 +1649,65 @@ const Editor: React.FC<EditorProps> = ({
                 />
               )}
             </>
+          </div>
+        </div>
+
+        {/* ── BARRA DE STATUS ── */}
+        <div className="flex items-center justify-between px-4 py-1 border-t border-slate-200 bg-white text-[11px] text-slate-500 shrink-0 select-none">
+          <div className="flex items-center gap-4">
+            <span>
+              Página{' '}
+              <strong className="text-slate-700">
+                {Math.min(numPaginas, Math.max(1, Math.ceil(alturaConteudo / PAGE_CONTENT_H)))}
+              </strong>{' '}
+              de <strong className="text-slate-700">{numPaginas}</strong>
+            </span>
+            <span className="text-slate-300">|</span>
+            <span>
+              <strong className="text-slate-700">{wordCount}</strong> palavras
+            </span>
+            <span className="text-slate-300">|</span>
+            <span>
+              <strong className="text-slate-700">{charCount}</strong> caracteres
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() =>
+                setZoom((z) => {
+                  const idx = ZOOM_LEVELS.indexOf(z);
+                  return idx > 0 ? ZOOM_LEVELS[idx - 1] : z;
+                })
+              }
+              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500 font-bold"
+              title="Diminuir zoom"
+            >
+              −
+            </button>
+            <select
+              value={zoom}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="text-[11px] border border-slate-200 rounded px-1 py-0.5 text-slate-600 focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white"
+              title="Zoom"
+            >
+              {ZOOM_LEVELS.map((z) => (
+                <option key={z} value={z}>
+                  {Math.round(z * 100)}%
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() =>
+                setZoom((z) => {
+                  const idx = ZOOM_LEVELS.indexOf(z);
+                  return idx < ZOOM_LEVELS.length - 1 ? ZOOM_LEVELS[idx + 1] : z;
+                })
+              }
+              className="w-5 h-5 flex items-center justify-center rounded hover:bg-slate-100 text-slate-500 font-bold"
+              title="Aumentar zoom"
+            >
+              +
+            </button>
           </div>
         </div>
       </div>
