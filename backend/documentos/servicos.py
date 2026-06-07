@@ -7,7 +7,37 @@ from .models import (
     AssinaturaDocumento, ConviteDocumento, AuditoriaDocumento,
     PresencaDocumento,
 )
+from controleadmin.servicos import usuario_possui_permissao_codigo
 
+def _pode_editar(request, doc):
+    user = request.user
+    # Superusuário edita tudo
+    if user.is_superuser or user.is_staff:
+        return True
+    # Criador tem controle total
+    if doc.criado_por == user:
+        return True
+    # Colaborador com papel editor
+    collab = doc.colaboradores.filter(usuario=user).first()
+    if collab and collab.papel == 'editor':
+        return True
+    # Permissão global de editor no controleadmin
+    return usuario_possui_permissao_codigo(user, 'editor')
+
+
+def _pode_ver(request, doc):
+    user = request.user
+    # Superusuário vê tudo
+    if user.is_superuser or user.is_staff:
+        return True
+    # Criador vê sempre
+    if doc.criado_por == user:
+        return True
+    # Qualquer colaborador pode ver
+    if doc.colaboradores.filter(usuario=user).exists():
+        return True
+    # Permissão global de visualizar no controleadmin
+    return usuario_possui_permissao_codigo(user, 'visualizar')
 
 def registrar_auditoria(doc: Documento, usuario: CustomUser, tipo: str, descricao: str = '', versao: int = None):
     """Registra ação de auditoria no documento."""

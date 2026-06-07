@@ -21,6 +21,7 @@ from .servicos import (
     criar_documento, salvar_versao, adicionar_colaborador,
     iniciar_assinaturas, registrar_assinatura,
     gerar_convite, aceitar_convite, registrar_auditoria, atualizar_presenca,
+    _pode_editar, _pode_ver,
 )
 from notificacoes.servicos import criar_notificacao
 
@@ -35,19 +36,6 @@ def _sse_doc(doc_id, doc_ref, tipo, autor_nome):
         })
     except Exception:
         pass
-
-
-def _pode_editar(request, doc):
-    if doc.criado_por == request.user:
-        return True
-    collab = doc.colaboradores.filter(usuario=request.user).first()
-    return collab is not None and collab.papel == 'editor'
-
-
-def _pode_ver(request, doc):
-    if doc.criado_por == request.user:
-        return True
-    return doc.colaboradores.filter(usuario=request.user).exists()
 
 
 # ─── Documentos ───────────────────────────────────────────────────────────────
