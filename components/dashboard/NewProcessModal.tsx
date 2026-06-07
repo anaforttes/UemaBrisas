@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { X, Loader2, Plus, MapPin, User, FileText, Ruler, Building2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import {
+  X,
+  Loader2,
+  Plus,
+  MapPin,
+  User,
+  FileText,
+  Ruler,
+  Building2,
+  ChevronDown,
+} from 'lucide-react';
 import { criarProcesso } from '../../services/painelService';
 import { User as UserType } from '../../types/index';
 
@@ -21,6 +31,17 @@ interface FormData {
   responsible_name: string;
 }
 
+interface UF {
+  id: number;
+  sigla: string;
+  nome: string;
+}
+
+interface Municipio {
+  id: number;
+  nome: string;
+}
+
 const initialForm: FormData = {
   title: '',
   applicant: '',
@@ -34,6 +55,9 @@ const initialForm: FormData = {
 
 const inputClass =
   'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all placeholder:text-slate-300';
+
+const selectClass =
+  'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none focus:border-blue-400 focus:bg-white focus:ring-4 focus:ring-blue-50 transition-all appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
 
 const labelClass = 'block text-[10px] font-black uppercase tracking-widest text-slate-400 mb-1.5';
 
@@ -55,6 +79,42 @@ const Field = ({
   </div>
 );
 
+// Wrapper com ícone de chevron para selects
+const SelectWrapper = ({ children }: { children: React.ReactNode }) => (
+  <div className="relative">
+    {children}
+    <ChevronDown
+      size={14}
+      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
+    />
+  </div>
+);
+
+// Cache em memória para evitar múltiplas chamadas à API do IBGE
+let _ufsCache: UF[] | null = null;
+const _municipiosCache: Record<string, Municipio[]> = {};
+
+async function buscarUFs(): Promise<UF[]> {
+  if (_ufsCache) return _ufsCache;
+  const res = await fetch(
+    'https://servicodados.ibge.gov.br/api/v1/localidades/estados?orderBy=nome'
+  );
+  if (!res.ok) throw new Error('Erro ao buscar estados');
+  _ufsCache = await res.json();
+  return _ufsCache!;
+}
+
+async function buscarMunicipios(ufSigla: string): Promise<Municipio[]> {
+  if (_municipiosCache[ufSigla]) return _municipiosCache[ufSigla];
+  const res = await fetch(
+    `https://servicodados.ibge.gov.br/api/v1/localidades/estados/${ufSigla}/municipios?orderBy=nome`
+  );
+  if (!res.ok) throw new Error('Erro ao buscar municípios');
+  const data = await res.json();
+  _municipiosCache[ufSigla] = data;
+  return data;
+}
+
 export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   isOpen,
   onClose,
@@ -65,10 +125,46 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState('');
 
+  // IBGE
+  const [ufs, setUfs] = useState<UF[]>([]);
+  const [municipios, setMunicipios] = useState<Municipio[]>([]);
+  const [loadingUfs, setLoadingUfs] = useState(false);
+  const [loadingMunis, setLoadingMunis] = useState(false);
+  const [erroIbge, setErroIbge] = useState('');
+
+  // Busca UFs ao abrir o modal
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoadingUfs(true);
+    setErroIbge('');
+    buscarUFs()
+      .then(setUfs)
+      .catch(() => setErroIbge('Não foi possível carregar os estados. Verifique sua conexão.'))
+      .finally(() => setLoadingUfs(false));
+  }, [isOpen]);
+
+  // Busca municípios quando o estado muda
+  useEffect(() => {
+    if (!form.estado) {
+      setMunicipios([]);
+      return;
+    }
+    setLoadingMunis(true);
+    setErroIbge('');
+    buscarMunicipios(form.estado)
+      .then(setMunicipios)
+      .catch(() => setErroIbge('Não foi possível carregar os municípios.'))
+      .finally(() => setLoadingMunis(false));
+  }, [form.estado]);
+
   if (!isOpen) return null;
 
   const updateField = (field: keyof FormData, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
+
+  const handleEstadoChange = (sigla: string) => {
+    setForm((prev) => ({ ...prev, estado: sigla, municipio: '' }));
+  };
 
   const validarFormulario = () => {
     if (!form.title.trim()) return 'O título do processo é obrigatório.';
@@ -76,15 +172,26 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
     return '';
   };
 
-  const limparFormulario = () => { setForm(initialForm); setErro(''); };
+  const limparFormulario = () => {
+    setForm(initialForm);
+    setErro('');
+    setMunicipios([]);
+  };
 
-  const handleClose = () => { if (loading) return; limparFormulario(); onClose(); };
+  const handleClose = () => {
+    if (loading) return;
+    limparFormulario();
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErro('');
     const erroValidacao = validarFormulario();
-    if (erroValidacao) { setErro(erroValidacao); return; }
+    if (erroValidacao) {
+      setErro(erroValidacao);
+      return;
+    }
     setLoading(true);
     try {
       await criarProcesso({
@@ -112,7 +219,6 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
       <div className="w-full max-w-xl rounded-[28px] bg-white shadow-2xl border border-slate-100 overflow-hidden flex flex-col max-h-[90vh]">
-
         {/* Header */}
         <div className="flex items-center justify-between px-7 py-5 border-b border-slate-100 shrink-0">
           <div className="flex items-center gap-3">
@@ -121,7 +227,9 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-black text-slate-800 leading-tight">Novo Processo</h2>
-              <p className="text-xs text-slate-400 font-medium">Preencha os dados iniciais do processo REURB</p>
+              <p className="text-xs text-slate-400 font-medium">
+                Preencha os dados iniciais do processo REURB
+              </p>
             </div>
           </div>
           <button
@@ -134,11 +242,20 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
         </div>
 
         {/* Form */}
-        <form id="novo-processo-form" onSubmit={handleSubmit} className="px-7 py-5 space-y-4 overflow-y-auto">
-
+        <form
+          id="novo-processo-form"
+          onSubmit={handleSubmit}
+          className="px-7 py-5 space-y-4 overflow-y-auto"
+        >
           {erro && (
             <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
               {erro}
+            </div>
+          )}
+
+          {erroIbge && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs font-medium text-amber-700">
+              ⚠ {erroIbge}
             </div>
           )}
 
@@ -178,14 +295,16 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
           {/* Modalidade + Área */}
           <div className="grid grid-cols-2 gap-3">
             <Field label="Modalidade *">
-              <select
-                value={form.modality}
-                onChange={(e) => updateField('modality', e.target.value as 'REURB-S' | 'REURB-E')}
-                className={inputClass}
-              >
-                <option value="REURB-S">REURB-S</option>
-                <option value="REURB-E">REURB-E</option>
-              </select>
+              <SelectWrapper>
+                <select
+                  value={form.modality}
+                  onChange={(e) => updateField('modality', e.target.value as 'REURB-S' | 'REURB-E')}
+                  className={selectClass}
+                >
+                  <option value="REURB-S">REURB-S</option>
+                  <option value="REURB-E">REURB-E</option>
+                </select>
+              </SelectWrapper>
             </Field>
 
             <Field label="Área (m²)" icon={Ruler}>
@@ -206,29 +325,62 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
             </Field>
           </div>
 
-          {/* Município + Estado */}
+          {/* Estado + Município — via API IBGE */}
           <div className="grid grid-cols-3 gap-3">
+            {/* Estado */}
+            <Field label={loadingUfs ? 'Carregando...' : 'Estado'}>
+              <SelectWrapper>
+                <select
+                  value={form.estado}
+                  onChange={(e) => handleEstadoChange(e.target.value)}
+                  disabled={loadingUfs || ufs.length === 0}
+                  className={selectClass}
+                >
+                  <option value="">{loadingUfs ? 'Aguarde...' : 'UF'}</option>
+                  {ufs.map((uf) => (
+                    <option key={uf.id} value={uf.sigla}>
+                      {uf.sigla}
+                    </option>
+                  ))}
+                </select>
+              </SelectWrapper>
+            </Field>
+
+            {/* Município */}
             <div className="col-span-2">
-              <Field label="Município" icon={Building2}>
-                <input
-                  type="text"
-                  value={form.municipio}
-                  onChange={(e) => updateField('municipio', e.target.value)}
-                  placeholder="Ex: São Luís"
-                  className={inputClass}
-                />
+              <Field
+                label={
+                  loadingMunis
+                    ? 'Carregando municípios...'
+                    : !form.estado
+                      ? 'Município (selecione o estado)'
+                      : 'Município'
+                }
+                icon={Building2}
+              >
+                <SelectWrapper>
+                  <select
+                    value={form.municipio}
+                    onChange={(e) => updateField('municipio', e.target.value)}
+                    disabled={!form.estado || loadingMunis || municipios.length === 0}
+                    className={selectClass}
+                  >
+                    <option value="">
+                      {loadingMunis
+                        ? 'Carregando...'
+                        : !form.estado
+                          ? 'Selecione o estado'
+                          : 'Selecione o município'}
+                    </option>
+                    {municipios.map((m) => (
+                      <option key={m.id} value={m.nome}>
+                        {m.nome}
+                      </option>
+                    ))}
+                  </select>
+                </SelectWrapper>
               </Field>
             </div>
-            <Field label="Estado">
-              <input
-                type="text"
-                value={form.estado}
-                onChange={(e) => updateField('estado', e.target.value.toUpperCase().slice(0, 2))}
-                placeholder="MA"
-                maxLength={2}
-                className={`${inputClass} text-center uppercase font-bold tracking-widest`}
-              />
-            </Field>
           </div>
 
           {/* Responsável Técnico */}
@@ -262,14 +414,17 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
               className="px-6 py-2.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-all disabled:opacity-60 flex items-center gap-2 shadow-sm shadow-blue-200"
             >
               {loading ? (
-                <><Loader2 size={15} className="animate-spin" /> Salvando...</>
+                <>
+                  <Loader2 size={15} className="animate-spin" /> Salvando...
+                </>
               ) : (
-                <><Plus size={15} /> Criar Processo</>
+                <>
+                  <Plus size={15} /> Criar Processo
+                </>
               )}
             </button>
           </div>
         </div>
-
       </div>
     </div>
   );
