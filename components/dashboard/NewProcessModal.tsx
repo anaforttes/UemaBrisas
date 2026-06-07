@@ -11,7 +11,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { criarProcesso } from '../../services/painelService';
-import { API_BASE, getToken } from '../../shared/services/apiClient';
+import { request } from '../../shared/services/apiClient';
 import { User as UserType } from '../../types/index';
 
 interface NewProcessModalProps {
@@ -106,13 +106,13 @@ const _municipiosCache: Record<string, Municipio[]> = {};
 // Cache de usuários
 let _usuariosCache: UsuarioSimples[] | null = null;
 
+export async function precarregarUsuarios(): Promise<void> {
+  await buscarUsuarios();
+}
+
 async function buscarUsuarios(): Promise<UsuarioSimples[]> {
   if (_usuariosCache) return _usuariosCache;
-  const res = await fetch(`${API_BASE}/api/autenticacao/usuarios/`, {
-    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
-  });
-  if (!res.ok) throw new Error('Erro ao buscar usuários');
-  const data = await res.json();
+  const data = await request<any[]>('/api/autenticacao/usuarios/');
   _usuariosCache = data
     .filter((u: any) => u.is_active !== false)
     .map((u: any) => ({ id: String(u.id), name: u.name, role: u.role || '' }))
@@ -157,7 +157,7 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   const [loadingUfs, setLoadingUfs] = useState(false);
   const [loadingMunis, setLoadingMunis] = useState(false);
   const [erroIbge, setErroIbge] = useState('');
-  const [usuarios, setUsuarios] = useState<UsuarioSimples[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioSimples[]>(() => _usuariosCache ?? []);
   const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Busca UFs ao abrir o modal
@@ -170,13 +170,15 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
       .catch(() => setErroIbge('Não foi possível carregar os estados. Verifique sua conexão.'))
       .finally(() => setLoadingUfs(false));
 
-    setLoadingUsers(true);
-    buscarUsuarios()
-      .then(setUsuarios)
-      .catch(() => {
-        /* silencia — campo continua funcional como texto */
-      })
-      .finally(() => setLoadingUsers(false));
+    if (!_usuariosCache) {
+      setLoadingUsers(true);
+      buscarUsuarios()
+        .then(setUsuarios)
+        .catch((err) => {
+          console.error('[NewProcessModal] Erro ao buscar usuários:', err);
+        })
+        .finally(() => setLoadingUsers(false));
+    }
   }, [isOpen]);
 
   // Busca municípios quando o estado muda
