@@ -1,10 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import forge from 'node-forge';
 import {
-  X, CheckCircle2, Clock, Lock, Shield, Hash,
-  Download, AlertCircle, Key, FileKey, ShieldCheck,
-  Fingerprint, RefreshCw, UserCheck, Users, ExternalLink,
-  Upload, FileUp, UserPlus, Trash2, Search, Loader2
+  X,
+  CheckCircle2,
+  Clock,
+  Lock,
+  Shield,
+  Hash,
+  Download,
+  AlertCircle,
+  Key,
+  FileKey,
+  ShieldCheck,
+  Fingerprint,
+  RefreshCw,
+  UserCheck,
+  Users,
+  ExternalLink,
+  Upload,
+  FileUp,
+  UserPlus,
+  Trash2,
+  Search,
+  Loader2,
 } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
 
@@ -36,7 +54,7 @@ export interface SignatureRecord {
   status: 'pending' | 'partial' | 'completed' | 'rejected';
   qrCodeData: string;
   documentHash: string;
-  events: any[];
+  events: unknown[];
 }
 
 // ─── Dados extraídos de um certificado real ──────────────────────────────────
@@ -80,8 +98,12 @@ const generateProtocol = () => {
 const formatDate = (d: Date | string) => {
   const date = typeof d === 'string' ? new Date(d) : d;
   return date.toLocaleString('pt-BR', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', second: '2-digit'
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
   });
 };
 
@@ -122,16 +144,25 @@ const parsePKCS12 = (arrayBuffer: ArrayBuffer, password: string): ParsedCertific
     }
     if (!cpf) {
       try {
-        const sanExt = cert.getExtension('subjectAltName') as any;
+        const sanExt = cert.getExtension('subjectAltName') as
+          | { altNames?: Array<{ type: number; value?: string }> }
+          | undefined;
         if (sanExt?.altNames) {
           for (const altName of sanExt.altNames) {
             if (altName.type === 0 && altName.value) {
-              const cpfMatch = (typeof altName.value === 'string' ? altName.value : '').match(/\d{11}/);
-              if (cpfMatch) { const c = cpfMatch[0]; cpf = `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`; }
+              const cpfMatch = (typeof altName.value === 'string' ? altName.value : '').match(
+                /\d{11}/
+              );
+              if (cpfMatch) {
+                const c = cpfMatch[0];
+                cpf = `${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6, 9)}-${c.slice(9)}`;
+              }
             }
           }
         }
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     }
 
     const emailAttr = cert.subject.getField('E') || cert.subject.getField({ name: 'emailAddress' });
@@ -140,9 +171,15 @@ const parsePKCS12 = (arrayBuffer: ArrayBuffer, password: string): ParsedCertific
     const issuerOrgAttr = cert.issuer.getField('O');
     const issuerCN = issuerCNAttr ? issuerCNAttr.value : 'Desconhecido';
     const issuerOrg = issuerOrgAttr ? issuerOrgAttr.value : '';
-    const serialNumber = cert.serialNumber.match(/.{1,2}/g)?.join(':').toUpperCase() || cert.serialNumber;
+    const serialNumber =
+      cert.serialNumber
+        .match(/.{1,2}/g)
+        ?.join(':')
+        .toUpperCase() || cert.serialNumber;
 
-    const kuExt = cert.getExtension('keyUsage') as any;
+    const kuExt = cert.getExtension('keyUsage') as
+      | { digitalSignature?: boolean; nonRepudiation?: boolean; keyEncipherment?: boolean }
+      | undefined;
     const keyUsage: string[] = [];
     if (kuExt) {
       if (kuExt.digitalSignature) keyUsage.push('Assinatura Digital');
@@ -155,54 +192,114 @@ const parsePKCS12 = (arrayBuffer: ArrayBuffer, password: string): ParsedCertific
     const keySize = pubKey.n ? pubKey.n.bitLength() : 2048;
 
     const certChain: string[] = [];
-    for (const bag of certs) { if (bag.cert) { const c = bag.cert.subject.getField('CN'); if (c) certChain.push(c.value); } }
+    for (const bag of certs) {
+      if (bag.cert) {
+        const c = bag.cert.subject.getField('CN');
+        if (c) certChain.push(c.value);
+      }
+    }
 
     const now = new Date();
     const isExpired = cert.validity.notAfter < now;
     const isValid = cert.validity.notBefore <= now && !isExpired;
 
     return {
-      cn, cpf, email, issuerCN, issuerOrg, serialNumber,
-      validFrom: cert.validity.notBefore, validTo: cert.validity.notAfter,
-      keyUsage, algorithm: `RSA ${keySize} bits`, keySize, rawCert: cert,
-      privateKey, certChain, isValid, isExpired,
+      cn,
+      cpf,
+      email,
+      issuerCN,
+      issuerOrg,
+      serialNumber,
+      validFrom: cert.validity.notBefore,
+      validTo: cert.validity.notAfter,
+      keyUsage,
+      algorithm: `RSA ${keySize} bits`,
+      keySize,
+      rawCert: cert,
+      privateKey,
+      certChain,
+      isValid,
+      isExpired,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Erro ao parsear PKCS#12:', err);
-    if (err.message?.includes('Invalid password') || err.message?.includes('PKCS#12 MAC') || err.message?.includes('decryption')) {
-      throw new Error('Senha incorreta do certificado.');
+
+    const message = err instanceof Error ? err.message : 'Erro ao ler o certificado.';
+
+    if (
+      message.includes('Invalid password') ||
+      message.includes('PKCS#12 MAC') ||
+      message.includes('decryption')
+    ) {
+      throw new Error('Senha incorreta do certificado.', {
+        cause: err,
+      });
     }
-    throw new Error(err.message || 'Erro ao ler o certificado.');
+
+    throw new Error(message, {
+      cause: err,
+    });
   }
 };
 
 // ─── Assinatura digital com chave privada ────────────────────────────────────
+type PrivateKeyWithSign = forge.pki.rsa.PrivateKey & {
+  sign: (md: forge.md.MessageDigest) => string;
+};
+
 const signWithPrivateKey = (privateKey: forge.pki.rsa.PrivateKey, data: string): string => {
   const md = forge.md.sha256.create();
   md.update(data, 'utf8');
-  const signature = (privateKey as any).sign(md);
+  const signature = (privateKey as PrivateKeyWithSign).sign(md);
   return forge.util.bytesToHex(signature).toUpperCase();
 };
 
 // ─── QR Code SVG ─────────────────────────────────────────────────────────────
 const SimpleQRCode: React.FC<{ value: string; size?: number }> = ({ value, size = 120 }) => {
-  const cells = 21; const cellSize = size / cells;
+  const cells = 21;
+  const cellSize = size / cells;
   const getCell = (row: number, col: number): boolean => {
-    const inFinder = (r: number, c: number) => (r < 7 && c < 7) || (r < 7 && c >= cells - 7) || (r >= cells - 7 && c < 7);
+    const inFinder = (r: number, c: number) =>
+      (r < 7 && c < 7) || (r < 7 && c >= cells - 7) || (r >= cells - 7 && c < 7);
     if (inFinder(row, col)) {
-      const isOuter = row === 0 || row === 6 || col === 0 || col === 6 || row === cells - 1 || row === cells - 7 || col === cells - 1 || col === cells - 7;
-      const isInner = (row >= 2 && row <= 4 && col >= 2 && col <= 4) || (row >= 2 && row <= 4 && col >= cells - 5 && col <= cells - 3) || (row >= cells - 5 && row <= cells - 3 && col >= 2 && col <= 4);
+      const isOuter =
+        row === 0 ||
+        row === 6 ||
+        col === 0 ||
+        col === 6 ||
+        row === cells - 1 ||
+        row === cells - 7 ||
+        col === cells - 1 ||
+        col === cells - 7;
+      const isInner =
+        (row >= 2 && row <= 4 && col >= 2 && col <= 4) ||
+        (row >= 2 && row <= 4 && col >= cells - 5 && col <= cells - 3) ||
+        (row >= cells - 5 && row <= cells - 3 && col >= 2 && col <= 4);
       return isOuter || isInner;
     }
     const seed = value.charCodeAt((row * cells + col) % value.length) ^ (row * 7 + col * 13);
-    return (seed % 3) !== 0;
+    return seed % 3 !== 0;
   };
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="border border-slate-200 rounded">
+    <svg
+      width={size}
+      height={size}
+      viewBox={`0 0 ${size} ${size}`}
+      className="border border-slate-200 rounded"
+    >
       <rect width={size} height={size} fill="white" />
       {Array.from({ length: cells }, (_, row) =>
         Array.from({ length: cells }, (_, col) =>
-          getCell(row, col) ? <rect key={`${row}-${col}`} x={col * cellSize} y={row * cellSize} width={cellSize} height={cellSize} fill="#1e293b" /> : null
+          getCell(row, col) ? (
+            <rect
+              key={`${row}-${col}`}
+              x={col * cellSize}
+              y={row * cellSize}
+              width={cellSize}
+              height={cellSize}
+              fill="#1e293b"
+            />
+          ) : null
         )
       )}
     </svg>
@@ -222,7 +319,12 @@ interface SignatureModalProps {
 type Step = 'signers' | 'upload' | 'details' | 'validating' | 'complete';
 
 export const SignatureModal: React.FC<SignatureModalProps> = ({
-  isOpen, onClose, documentTitle, documentContent, currentUser, onSignatureComplete
+  isOpen,
+  onClose,
+  documentTitle,
+  documentContent,
+  currentUser,
+  onSignatureComplete,
 }) => {
   const [step, setStep] = useState<Step>('signers');
   const [certFile, setCertFile] = useState<File | null>(null);
@@ -250,7 +352,7 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
   }, [documentContent, documentTitle]);
 
   // Signers finais (o usuário atual + os selecionados)
-  const buildSignersList = (): Signer[] => {
+  const buildSignersList = useCallback((): Signer[] => {
     const me: Signer = {
       id: currentUser?.id || 'current',
       name: currentUser?.name || 'Usuário Atual',
@@ -265,10 +367,10 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
       role: tm.role,
       email: tm.email,
       order: i + 2,
-    status: 'pending' as const,
+      status: 'pending' as const,
     }));
     return [me, ...others];
-  };
+  }, [currentUser, selectedSigners]);
 
   const [signers, setSigners] = useState<Signer[]>(buildSignersList());
 
@@ -284,34 +386,42 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
       setSearchQuery('');
     } else if (availableTeam.length === 0) {
       setLoadingTeam(true);
-      dbService.users.selectAll().then((users) => {
-        setAvailableTeam(users.map((u) => ({
-          id: String(u.id),
-          name: u.name,
-          role: u.role ?? 'Operador',
-          email: u.email,
-        })));
-      }).catch(() => {}).finally(() => setLoadingTeam(false));
+      dbService.users
+        .selectAll()
+        .then((users) => {
+          setAvailableTeam(
+            users.map((u) => ({
+              id: String(u.id),
+              name: u.name,
+              role: u.role ?? 'Operador',
+              email: u.email,
+            }))
+          );
+        })
+        .catch(() => {})
+        .finally(() => setLoadingTeam(false));
     }
-  }, [isOpen]);
+  }, [isOpen, availableTeam.length]);
 
   // Atualiza signers quando seleção muda
   useEffect(() => {
     setSigners(buildSignersList());
-  }, [selectedSigners]);
+  }, [buildSignersList]);
 
   // Filtra membros da equipe
-  const filteredTeam = availableTeam.filter(tm => {
-    const isAlreadySelected = selectedSigners.some(s => s.id === tm.id);
+  const filteredTeam = availableTeam.filter((tm) => {
+    const isAlreadySelected = selectedSigners.some((s) => s.id === tm.id);
     const isCurrentUser = tm.email === currentUser?.email;
-    const matchesSearch = !searchQuery ||
+    const matchesSearch =
+      !searchQuery ||
       tm.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       tm.role.toLowerCase().includes(searchQuery.toLowerCase());
     return !isAlreadySelected && !isCurrentUser && matchesSearch;
   });
 
-  const addSigner = (tm: TeamMember) => setSelectedSigners(prev => [...prev, tm]);
-  const removeSigner = (tmId: string) => setSelectedSigners(prev => prev.filter(s => s.id !== tmId));
+  const addSigner = (tm: TeamMember) => setSelectedSigners((prev) => [...prev, tm]);
+  const removeSigner = (tmId: string) =>
+    setSelectedSigners((prev) => prev.filter((s) => s.id !== tmId));
 
   // ─── Upload e parse ────────────────────────────────────────────────────────
   const handleFileSelect = (file: File) => {
@@ -331,19 +441,29 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
   };
 
   const handleParseCertificate = async () => {
-    if (!certFile) { setCertError('Selecione o arquivo do certificado.'); return; }
-    if (!certPassword) { setCertError('Digite a senha do certificado.'); return; }
+    if (!certFile) {
+      setCertError('Selecione o arquivo do certificado.');
+      return;
+    }
+    if (!certPassword) {
+      setCertError('Digite a senha do certificado.');
+      return;
+    }
     setIsParsing(true);
     setCertError('');
     try {
       const ab = await certFile.arrayBuffer();
       const parsed = parsePKCS12(ab, certPassword);
       if (!parsed) throw new Error('Não foi possível ler o certificado.');
-      if (parsed.isExpired) { setCertError(`Certificado expirado em ${formatDateShort(parsed.validTo)}.`); setIsParsing(false); return; }
+      if (parsed.isExpired) {
+        setCertError(`Certificado expirado em ${formatDateShort(parsed.validTo)}.`);
+        setIsParsing(false);
+        return;
+      }
       setParsedCert(parsed);
       setStep('details');
-    } catch (err: any) {
-      setCertError(err.message || 'Erro ao ler certificado.');
+    } catch (err: unknown) {
+      setCertError(err instanceof Error ? err.message : 'Erro ao ler certificado.');
     } finally {
       setIsParsing(false);
     }
@@ -365,34 +485,39 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
     setStep('validating');
     for (let i = 0; i < validationSteps.length; i++) {
       setValidationStep(i);
-      await new Promise(r => setTimeout(r, 600 + Math.random() * 400));
+      await new Promise((r) => setTimeout(r, 600 + Math.random() * 400));
     }
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise((r) => setTimeout(r, 400));
 
     const now = new Date().toISOString();
     const signatureHex = signWithPrivateKey(parsedCert.privateKey, documentHash + now);
 
-    const updated = signers.map(s =>
+    const updated = signers.map((s) =>
       s.id === (currentUser?.id || 'current')
         ? {
-          ...s, status: 'signed' as const, signedAt: now,
-          signatureHash: signatureHex.slice(0, 64),
-          ip: '187.xxx.xxx.xxx',
-          certificateCN: parsedCert.cn,
-          certificateCPF: parsedCert.cpf || undefined,
-          certificateSerial: parsedCert.serialNumber,
-          certificateIssuer: parsedCert.issuerCN,
-          certificateType: 'A1',
-          certificateValidFrom: parsedCert.validFrom.toISOString(),
-          certificateValidTo: parsedCert.validTo.toISOString(),
-        }
+            ...s,
+            status: 'signed' as const,
+            signedAt: now,
+            signatureHash: signatureHex.slice(0, 64),
+            ip: '187.xxx.xxx.xxx',
+            certificateCN: parsedCert.cn,
+            certificateCPF: parsedCert.cpf || undefined,
+            certificateSerial: parsedCert.serialNumber,
+            certificateIssuer: parsedCert.issuerCN,
+            certificateType: 'A1',
+            certificateValidFrom: parsedCert.validFrom.toISOString(),
+            certificateValidTo: parsedCert.validTo.toISOString(),
+          }
         : s
     );
     setSigners(updated);
 
-    const allSigned = updated.every(s => s.status === 'signed');
+    const allSigned = updated.every((s) => s.status === 'signed');
     const finalRecord: SignatureRecord = {
-      protocol, documentTitle, createdAt: now, signers: updated,
+      protocol,
+      documentTitle,
+      createdAt: now,
+      signers: updated,
       status: allSigned ? 'completed' : 'partial',
       qrCodeData: `https://verificador.iti.gov.br/${protocol}`,
       documentHash,
@@ -408,17 +533,22 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-gradient-to-r from-emerald-800 to-emerald-950 rounded-t-2xl">
           <div className="flex items-center gap-3 text-white">
-            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center"><Shield size={22} /></div>
+            <div className="w-10 h-10 bg-white/10 rounded-xl flex items-center justify-center">
+              <Shield size={22} />
+            </div>
             <div>
               <p className="font-bold text-sm">Assinatura Digital ICP-Brasil</p>
-              <p className="text-[11px] text-emerald-300">Protocolo: {protocol} • MP 2.200-2/2001</p>
+              <p className="text-[11px] text-emerald-300">
+                Protocolo: {protocol} • MP 2.200-2/2001
+              </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-emerald-300 hover:text-white transition-colors"><X size={20} /></button>
+          <button onClick={onClose} className="text-emerald-300 hover:text-white transition-colors">
+            <X size={20} />
+          </button>
         </div>
 
         {/* ─── STEP 1: SELECIONAR SIGNATÁRIOS ─────────────────────────── */}
@@ -430,9 +560,13 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                 {currentUser?.name?.charAt(0) || 'U'}
               </div>
               <div className="flex-1">
-                <p className="text-xs text-blue-500 uppercase font-bold">Você está assinando como:</p>
+                <p className="text-xs text-blue-500 uppercase font-bold">
+                  Você está assinando como:
+                </p>
                 <p className="text-sm font-black text-blue-900">{currentUser?.name || 'Usuário'}</p>
-                <p className="text-xs text-blue-600">{currentUser?.email} • {currentUser?.role}</p>
+                <p className="text-xs text-blue-600">
+                  {currentUser?.email} • {currentUser?.role}
+                </p>
               </div>
               <UserCheck size={24} className="text-blue-400" />
             </div>
@@ -443,7 +577,9 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
               <p className="font-semibold text-slate-800">{documentTitle}</p>
               <div className="flex items-center gap-2 mt-2">
                 <Hash size={12} className="text-slate-400" />
-                <p className="text-[11px] text-slate-400 font-mono">SHA-256: {documentHash.slice(0, 32)}...</p>
+                <p className="text-[11px] text-slate-400 font-mono">
+                  SHA-256: {documentHash.slice(0, 32)}...
+                </p>
               </div>
             </div>
 
@@ -455,25 +591,41 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
 
               {/* Eu (fixo) */}
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl mb-2 flex items-center gap-3">
-                <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">1</div>
+                <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                  1
+                </div>
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-slate-800">{currentUser?.name}</p>
-                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold uppercase">Você</span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-600 text-white font-bold uppercase">
+                      Você
+                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-400">{currentUser?.role} • {currentUser?.email}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {currentUser?.role} • {currentUser?.email}
+                  </p>
                 </div>
               </div>
 
               {/* Outros selecionados */}
               {selectedSigners.map((tm, i) => (
-                <div key={tm.id} className="p-3 bg-white border border-slate-200 rounded-xl mb-2 flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">{i + 2}</div>
+                <div
+                  key={tm.id}
+                  className="p-3 bg-white border border-slate-200 rounded-xl mb-2 flex items-center gap-3"
+                >
+                  <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center text-xs font-bold shrink-0">
+                    {i + 2}
+                  </div>
                   <div className="flex-1">
                     <p className="text-sm font-semibold text-slate-800">{tm.name}</p>
-                    <p className="text-[11px] text-slate-400">{tm.role} • {tm.email}</p>
+                    <p className="text-[11px] text-slate-400">
+                      {tm.role} • {tm.email}
+                    </p>
                   </div>
-                  <button onClick={() => removeSigner(tm.id)} className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <button
+                    onClick={() => removeSigner(tm.id)}
+                    className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </div>
@@ -486,11 +638,14 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                 <UserPlus size={14} className="text-blue-600" /> Adicionar Signatários
               </p>
               <div className="relative mb-2">
-                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <Search
+                  size={16}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
+                />
                 <input
                   type="text"
                   value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Buscar por nome ou cargo..."
                   className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
                 />
@@ -501,9 +656,11 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                     <Loader2 size={14} className="animate-spin" /> Carregando equipe...
                   </div>
                 ) : filteredTeam.length === 0 ? (
-                  <p className="text-xs text-slate-400 text-center py-3">Nenhum membro disponível</p>
+                  <p className="text-xs text-slate-400 text-center py-3">
+                    Nenhum membro disponível
+                  </p>
                 ) : (
-                  filteredTeam.map(tm => (
+                  filteredTeam.map((tm) => (
                     <div
                       key={tm.id}
                       onClick={() => addSigner(tm)}
@@ -526,7 +683,8 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
               <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
               <p className="text-[11px] text-amber-700 leading-relaxed">
-                Após sua assinatura, os demais signatários receberão uma notificação para assinar do próprio perfil com seu certificado digital ICP-Brasil.
+                Após sua assinatura, os demais signatários receberão uma notificação para assinar do
+                próprio perfil com seu certificado digital ICP-Brasil.
               </p>
             </div>
 
@@ -561,30 +719,47 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
                 <Key size={14} className="text-emerald-600" /> Certificado Digital A1 (.pfx / .p12)
               </p>
               <div
-                onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragActive(true);
+                }}
                 onDragLeave={() => setDragActive(false)}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
-                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${dragActive ? 'border-emerald-500 bg-emerald-50' :
-                    certFile ? 'border-green-400 bg-green-50' :
-                      'border-slate-300 bg-slate-50 hover:border-emerald-400'
-                  }`}
+                className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all ${
+                  dragActive
+                    ? 'border-emerald-500 bg-emerald-50'
+                    : certFile
+                      ? 'border-green-400 bg-green-50'
+                      : 'border-slate-300 bg-slate-50 hover:border-emerald-400'
+                }`}
               >
-                <input ref={fileInputRef} type="file" accept=".pfx,.p12" className="hidden"
-                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} />
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pfx,.p12"
+                  className="hidden"
+                  onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
+                />
                 {certFile ? (
                   <div className="flex items-center justify-center gap-3">
-                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center"><FileKey size={20} className="text-green-600" /></div>
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                      <FileKey size={20} className="text-green-600" />
+                    </div>
                     <div className="text-left">
                       <p className="text-sm font-bold text-green-800">{certFile.name}</p>
-                      <p className="text-[11px] text-green-600">{(certFile.size / 1024).toFixed(1)} KB</p>
+                      <p className="text-[11px] text-green-600">
+                        {(certFile.size / 1024).toFixed(1)} KB
+                      </p>
                     </div>
                     <CheckCircle2 size={20} className="text-green-500" />
                   </div>
                 ) : (
                   <>
                     <Upload size={32} className="mx-auto text-slate-400 mb-2" />
-                    <p className="text-sm font-medium text-slate-600">Arraste seu <strong>.pfx</strong> ou <strong>.p12</strong> aqui</p>
+                    <p className="text-sm font-medium text-slate-600">
+                      Arraste seu <strong>.pfx</strong> ou <strong>.p12</strong> aqui
+                    </p>
                     <p className="text-xs text-slate-400 mt-1">ou clique para selecionar</p>
                   </>
                 )}
@@ -592,22 +767,55 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
             </div>
 
             <div>
-              <p className="text-xs font-bold text-slate-600 uppercase mb-2 flex items-center gap-1"><Lock size={12} /> Senha do Certificado</p>
-              <input type="password" value={certPassword} onChange={e => { setCertPassword(e.target.value); setCertError(''); }}
-                placeholder="Digite a senha do certificado" className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none" />
-              {certError && <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1"><AlertCircle size={12} /> {certError}</p>}
+              <p className="text-xs font-bold text-slate-600 uppercase mb-2 flex items-center gap-1">
+                <Lock size={12} /> Senha do Certificado
+              </p>
+              <input
+                type="password"
+                value={certPassword}
+                onChange={(e) => {
+                  setCertPassword(e.target.value);
+                  setCertError('');
+                }}
+                placeholder="Digite a senha do certificado"
+                className="w-full border border-slate-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+              />
+              {certError && (
+                <p className="text-xs text-red-500 mt-1.5 flex items-center gap-1">
+                  <AlertCircle size={12} /> {certError}
+                </p>
+              )}
             </div>
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 flex gap-3">
               <AlertCircle size={16} className="text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-[11px] text-amber-700">O certificado é lido <strong>localmente</strong> e <strong>nunca é enviado ao servidor</strong>.</p>
+              <p className="text-[11px] text-amber-700">
+                O certificado é lido <strong>localmente</strong> e{' '}
+                <strong>nunca é enviado ao servidor</strong>.
+              </p>
             </div>
 
             <div className="flex gap-3">
-              <button onClick={() => setStep('signers')} className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-slate-50">← Voltar</button>
-              <button onClick={handleParseCertificate} disabled={isParsing || !certFile}
-                className="flex-1 py-3.5 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-800 flex items-center justify-center gap-2 disabled:opacity-50">
-                {isParsing ? <><RefreshCw size={18} className="animate-spin" /> Lendo...</> : <><FileUp size={18} /> Ler Certificado</>}
+              <button
+                onClick={() => setStep('signers')}
+                className="px-4 py-3 border border-slate-200 text-slate-600 rounded-xl font-medium text-sm hover:bg-slate-50"
+              >
+                ← Voltar
+              </button>
+              <button
+                onClick={handleParseCertificate}
+                disabled={isParsing || !certFile}
+                className="flex-1 py-3.5 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-800 flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isParsing ? (
+                  <>
+                    <RefreshCw size={18} className="animate-spin" /> Lendo...
+                  </>
+                ) : (
+                  <>
+                    <FileUp size={18} /> Ler Certificado
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -616,55 +824,129 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
         {/* ─── STEP 3: DETALHES do certificado ───────────────────────── */}
         {step === 'details' && parsedCert && (
           <div className="p-6 space-y-5">
-            <div className={`flex items-center gap-3 p-4 rounded-xl border ${parsedCert.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-              {parsedCert.isValid ? <ShieldCheck size={24} className="text-green-600" /> : <AlertCircle size={24} className="text-red-600" />}
+            <div
+              className={`flex items-center gap-3 p-4 rounded-xl border ${parsedCert.isValid ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}
+            >
+              {parsedCert.isValid ? (
+                <ShieldCheck size={24} className="text-green-600" />
+              ) : (
+                <AlertCircle size={24} className="text-red-600" />
+              )}
               <div>
-                <p className={`text-sm font-bold ${parsedCert.isValid ? 'text-green-800' : 'text-red-800'}`}>
+                <p
+                  className={`text-sm font-bold ${parsedCert.isValid ? 'text-green-800' : 'text-red-800'}`}
+                >
                   {parsedCert.isValid ? 'Certificado Válido' : 'Certificado Inválido'}
                 </p>
-                <p className={`text-xs ${parsedCert.isValid ? 'text-green-600' : 'text-red-600'}`}>Lido de: {certFile?.name}</p>
+                <p className={`text-xs ${parsedCert.isValid ? 'text-green-600' : 'text-red-600'}`}>
+                  Lido de: {certFile?.name}
+                </p>
               </div>
             </div>
 
             <div className="bg-slate-800 rounded-xl p-5 text-white">
-              <p className="text-[10px] text-slate-400 uppercase font-bold mb-3 flex items-center gap-2"><ShieldCheck size={12} /> Dados do Certificado</p>
+              <p className="text-[10px] text-slate-400 uppercase font-bold mb-3 flex items-center gap-2">
+                <ShieldCheck size={12} /> Dados do Certificado
+              </p>
               <div className="space-y-3">
                 <div>
                   <p className="text-slate-400 text-[10px] uppercase">Titular (CN)</p>
                   <p className="font-bold text-white text-sm">{parsedCert.cn}</p>
                 </div>
-                {parsedCert.cpf && <div><p className="text-slate-400 text-[10px] uppercase">CPF</p><p className="font-medium text-emerald-300">{parsedCert.cpf}</p></div>}
-                {parsedCert.email && <div><p className="text-slate-400 text-[10px] uppercase">E-mail</p><p className="font-medium text-slate-200 text-xs">{parsedCert.email}</p></div>}
+                {parsedCert.cpf && (
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">CPF</p>
+                    <p className="font-medium text-emerald-300">{parsedCert.cpf}</p>
+                  </div>
+                )}
+                {parsedCert.email && (
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">E-mail</p>
+                    <p className="font-medium text-slate-200 text-xs">{parsedCert.email}</p>
+                  </div>
+                )}
                 <div className="h-px bg-slate-700" />
                 <div className="grid grid-cols-2 gap-3">
-                  <div><p className="text-slate-400 text-[10px] uppercase">AC Emissora</p><p className="font-medium text-slate-200 text-xs">{parsedCert.issuerCN}</p></div>
-                  <div><p className="text-slate-400 text-[10px] uppercase">Algoritmo</p><p className="font-medium text-slate-200 text-xs">{parsedCert.algorithm}</p></div>
-                  <div><p className="text-slate-400 text-[10px] uppercase">Válido De</p><p className="font-medium text-slate-200 text-xs">{formatDateShort(parsedCert.validFrom)}</p></div>
-                  <div><p className="text-slate-400 text-[10px] uppercase">Válido Até</p><p className={`font-medium text-xs ${parsedCert.isExpired ? 'text-red-400' : 'text-emerald-300'}`}>{formatDateShort(parsedCert.validTo)}</p></div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">AC Emissora</p>
+                    <p className="font-medium text-slate-200 text-xs">{parsedCert.issuerCN}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">Algoritmo</p>
+                    <p className="font-medium text-slate-200 text-xs">{parsedCert.algorithm}</p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">Válido De</p>
+                    <p className="font-medium text-slate-200 text-xs">
+                      {formatDateShort(parsedCert.validFrom)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-slate-400 text-[10px] uppercase">Válido Até</p>
+                    <p
+                      className={`font-medium text-xs ${parsedCert.isExpired ? 'text-red-400' : 'text-emerald-300'}`}
+                    >
+                      {formatDateShort(parsedCert.validTo)}
+                    </p>
+                  </div>
                 </div>
-                <div><p className="text-slate-400 text-[10px] uppercase">Uso da Chave</p>
-                  <div className="flex gap-1.5 flex-wrap mt-1">{parsedCert.keyUsage.map((ku, i) => <span key={i} className="text-[10px] px-2 py-0.5 rounded bg-emerald-900 text-emerald-300 font-medium">{ku}</span>)}</div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Uso da Chave</p>
+                  <div className="flex gap-1.5 flex-wrap mt-1">
+                    {parsedCert.keyUsage.map((ku, i) => (
+                      <span
+                        key={i}
+                        className="text-[10px] px-2 py-0.5 rounded bg-emerald-900 text-emerald-300 font-medium"
+                      >
+                        {ku}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <div><p className="text-slate-400 text-[10px] uppercase">Serial</p><p className="font-mono text-[10px] text-slate-300 break-all">{parsedCert.serialNumber}</p></div>
+                <div>
+                  <p className="text-slate-400 text-[10px] uppercase">Serial</p>
+                  <p className="font-mono text-[10px] text-slate-300 break-all">
+                    {parsedCert.serialNumber}
+                  </p>
+                </div>
               </div>
             </div>
 
             <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
-              <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Hash SHA-256 do Documento</p>
+              <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">
+                Hash SHA-256 do Documento
+              </p>
               <p className="text-[11px] font-mono text-slate-600 break-all">{documentHash}</p>
             </div>
 
             <div className="flex items-center gap-2 text-xs text-slate-400 bg-slate-50 rounded-lg p-3 border border-slate-100">
               <Clock size={14} />
-              <span>TSA: <strong className="text-slate-600">{new Date().toLocaleString('pt-BR')}</strong></span>
-              <span className="ml-auto text-[10px] text-emerald-600 font-bold flex items-center gap-1"><ShieldCheck size={10} /> Pronto</span>
+              <span>
+                TSA:{' '}
+                <strong className="text-slate-600">{new Date().toLocaleString('pt-BR')}</strong>
+              </span>
+              <span className="ml-auto text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                <ShieldCheck size={10} /> Pronto
+              </span>
             </div>
 
-            <button onClick={handleSign} className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-800 flex items-center justify-center gap-2 shadow-lg shadow-emerald-100">
+            <button
+              onClick={handleSign}
+              className="w-full py-3.5 bg-emerald-700 text-white rounded-xl font-bold hover:bg-emerald-800 flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
+            >
               <Fingerprint size={18} /> Assinar com este Certificado
             </button>
-            <button onClick={() => { setStep('upload'); setParsedCert(null); setCertFile(null); setCertPassword(''); }}
-              className="w-full py-2.5 text-slate-500 text-sm font-medium hover:text-slate-700">← Selecionar outro certificado</button>
+            <button
+              onClick={() => {
+                setStep('upload');
+                setParsedCert(null);
+                setCertFile(null);
+                setCertPassword('');
+              }}
+              className="w-full py-2.5 text-slate-500 text-sm font-medium hover:text-slate-700"
+            >
+              ← Selecionar outro certificado
+            </button>
           </div>
         )}
 
@@ -672,21 +954,44 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
         {step === 'validating' && (
           <div className="p-8 space-y-4">
             <div className="text-center mb-4">
-              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3"><RefreshCw size={28} className="text-emerald-700 animate-spin" /></div>
+              <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <RefreshCw size={28} className="text-emerald-700 animate-spin" />
+              </div>
               <h3 className="text-lg font-black text-slate-800">Processando Assinatura</h3>
-              <p className="text-sm text-slate-500 mt-1">Assinando como <strong>{parsedCert?.cn?.split(':')[0] || currentUser?.name}</strong></p>
+              <p className="text-sm text-slate-500 mt-1">
+                Assinando como <strong>{parsedCert?.cn?.split(':')[0] || currentUser?.name}</strong>
+              </p>
             </div>
             <div className="space-y-2">
               {validationSteps.map((vs, i) => {
-                const IconComp = vs.icon; const isDone = i < validationStep; const isCurrent = i === validationStep;
+                const IconComp = vs.icon;
+                const isDone = i < validationStep;
+                const isCurrent = i === validationStep;
                 return (
-                  <div key={i} className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${isDone ? 'bg-green-50 border border-green-200' : isCurrent ? 'bg-emerald-50 border border-emerald-300 shadow-sm' : 'bg-slate-50 border border-slate-100 opacity-40'}`}>
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDone ? 'bg-green-200 text-green-700' : isCurrent ? 'bg-emerald-200 text-emerald-700' : 'bg-slate-200 text-slate-400'}`}>
-                      {isDone ? <CheckCircle2 size={16} /> : isCurrent ? <IconComp size={16} className="animate-pulse" /> : <IconComp size={16} />}
+                  <div
+                    key={i}
+                    className={`flex items-center gap-3 p-3 rounded-xl transition-all duration-300 ${isDone ? 'bg-green-50 border border-green-200' : isCurrent ? 'bg-emerald-50 border border-emerald-300 shadow-sm' : 'bg-slate-50 border border-slate-100 opacity-40'}`}
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isDone ? 'bg-green-200 text-green-700' : isCurrent ? 'bg-emerald-200 text-emerald-700' : 'bg-slate-200 text-slate-400'}`}
+                    >
+                      {isDone ? (
+                        <CheckCircle2 size={16} />
+                      ) : isCurrent ? (
+                        <IconComp size={16} className="animate-pulse" />
+                      ) : (
+                        <IconComp size={16} />
+                      )}
                     </div>
-                    <p className={`text-xs font-medium flex-1 ${isDone ? 'text-green-700' : isCurrent ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}>{vs.label}</p>
+                    <p
+                      className={`text-xs font-medium flex-1 ${isDone ? 'text-green-700' : isCurrent ? 'text-emerald-800 font-bold' : 'text-slate-400'}`}
+                    >
+                      {vs.label}
+                    </p>
                     {isDone && <CheckCircle2 size={14} className="text-green-500" />}
-                    {isCurrent && <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />}
+                    {isCurrent && (
+                      <div className="w-4 h-4 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+                    )}
                   </div>
                 );
               })}
@@ -698,10 +1003,14 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
         {step === 'complete' && record && (
           <div className="p-6 space-y-5">
             <div className="text-center py-4">
-              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3"><ShieldCheck size={32} className="text-green-600" /></div>
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <ShieldCheck size={32} className="text-green-600" />
+              </div>
               <h3 className="text-lg font-black text-slate-800">Assinatura Registrada!</h3>
               <p className="text-sm text-slate-500 mt-1">
-                {record.status === 'completed' ? 'Todas as assinaturas coletadas.' : 'Demais signatários serão notificados.'}
+                {record.status === 'completed'
+                  ? 'Todas as assinaturas coletadas.'
+                  : 'Demais signatários serão notificados.'}
               </p>
             </div>
 
@@ -716,24 +1025,44 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
 
             <div className="space-y-2">
               <p className="text-xs font-bold text-slate-500 uppercase">Signatários</p>
-              {record.signers.map(s => {
+              {record.signers.map((s) => {
                 const isSigned = s.status === 'signed';
                 return (
-                  <div key={s.id} className={`p-3 rounded-xl border ${isSigned ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'}`}>
+                  <div
+                    key={s.id}
+                    className={`p-3 rounded-xl border ${isSigned ? 'bg-green-50 border-green-100' : 'bg-amber-50 border-amber-100'}`}
+                  >
                     <div className="flex items-center gap-2 mb-1">
-                      {isSigned ? <CheckCircle2 size={14} className="text-green-600" /> : <Clock size={14} className="text-amber-500" />}
-                      <p className={`text-xs font-bold ${isSigned ? 'text-green-800' : 'text-amber-800'}`}>{s.order}. {s.name} — {s.role}</p>
+                      {isSigned ? (
+                        <CheckCircle2 size={14} className="text-green-600" />
+                      ) : (
+                        <Clock size={14} className="text-amber-500" />
+                      )}
+                      <p
+                        className={`text-xs font-bold ${isSigned ? 'text-green-800' : 'text-amber-800'}`}
+                      >
+                        {s.order}. {s.name} — {s.role}
+                      </p>
                     </div>
                     {isSigned ? (
                       <>
                         <p className="text-[10px] text-green-700 ml-6">CN: {s.certificateCN}</p>
-                        {s.certificateCPF && <p className="text-[10px] text-green-700 ml-6">CPF: {s.certificateCPF}</p>}
+                        {s.certificateCPF && (
+                          <p className="text-[10px] text-green-700 ml-6">CPF: {s.certificateCPF}</p>
+                        )}
                         <p className="text-[10px] text-green-700 ml-6">AC: {s.certificateIssuer}</p>
-                        <p className="text-[10px] text-green-600 font-mono ml-6 truncate">Sig: {s.signatureHash}</p>
-                        <p className="text-[10px] text-green-500 ml-6">{s.signedAt ? formatDate(s.signedAt) : ''}</p>
+                        <p className="text-[10px] text-green-600 font-mono ml-6 truncate">
+                          Sig: {s.signatureHash}
+                        </p>
+                        <p className="text-[10px] text-green-500 ml-6">
+                          {s.signedAt ? formatDate(s.signedAt) : ''}
+                        </p>
                       </>
                     ) : (
-                      <p className="text-[10px] text-amber-600 ml-6 flex items-center gap-1"><ExternalLink size={10} /> Aguardando assinatura pelo perfil de {s.name.split(' ')[0]}</p>
+                      <p className="text-[10px] text-amber-600 ml-6 flex items-center gap-1">
+                        <ExternalLink size={10} /> Aguardando assinatura pelo perfil de{' '}
+                        {s.name.split(' ')[0]}
+                      </p>
                     )}
                   </div>
                 );
@@ -748,12 +1077,16 @@ export const SignatureModal: React.FC<SignatureModalProps> = ({
             <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-4 flex gap-3">
               <Shield size={16} className="text-emerald-500 shrink-0 mt-0.5" />
               <p className="text-[11px] text-emerald-700 leading-relaxed">
-                Assinatura qualificada com certificado ICP-Brasil. <strong>MP nº 2.200-2/2001</strong> e <strong>Lei nº 14.063/2020</strong>.
-                O certificado foi processado localmente e não foi transmitido ao servidor.
+                Assinatura qualificada com certificado ICP-Brasil.{' '}
+                <strong>MP nº 2.200-2/2001</strong> e <strong>Lei nº 14.063/2020</strong>. O
+                certificado foi processado localmente e não foi transmitido ao servidor.
               </p>
             </div>
 
-            <button onClick={onClose} className="w-full py-3.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 flex items-center justify-center gap-2">
+            <button
+              onClick={onClose}
+              className="w-full py-3.5 bg-slate-800 text-white rounded-xl font-bold hover:bg-slate-900 flex items-center justify-center gap-2"
+            >
               <Download size={18} /> Fechar
             </button>
           </div>

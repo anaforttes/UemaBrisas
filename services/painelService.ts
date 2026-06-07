@@ -1,8 +1,6 @@
 import { request } from '../shared/services/apiClient';
 import { REURBProcess, ProcessStatus } from '../types/index';
 
-// ─── Tipos locais (mapeamento backend → frontend) ─────────────────────────────
-
 export interface ProcessoAPI {
   id: number;
   protocol: string;
@@ -53,8 +51,6 @@ interface PaginatedResponse<T> {
   results: T[];
 }
 
-// ─── API pública ──────────────────────────────────────────────────────────────
-
 export async function listarProcessos(params?: {
   search?: string;
   status?: string;
@@ -65,7 +61,6 @@ export async function listarProcessos(params?: {
   if (params?.status) qs.set('status', params.status);
   if (params?.page) qs.set('page', String(params.page));
   const query = qs.toString() ? `?${qs}` : '';
-
   const dados = await request<PaginatedResponse<ProcessoAPI>>(`/api/processos/${query}`);
   return {
     count: dados.count,
@@ -76,8 +71,7 @@ export async function listarProcessos(params?: {
 }
 
 export async function obterProcesso(id: string | number) {
-  const dado = await request<ProcessoAPI>(`/api/processos/${id}/`);
-  return apiParaFrontend(dado);
+  return apiParaFrontend(await request<ProcessoAPI>(`/api/processos/${id}/`));
 }
 
 export async function criarProcesso(data: {
@@ -92,19 +86,18 @@ export async function criarProcesso(data: {
   technician_id?: number | null;
   legal_id?: number | null;
 }) {
-  const dado = await request<ProcessoAPI>('/api/processos/', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return apiParaFrontend(dado);
+  return apiParaFrontend(
+    await request<ProcessoAPI>('/api/processos/', { method: 'POST', body: JSON.stringify(data) })
+  );
 }
 
 export async function atualizarProcesso(id: string | number, patch: Partial<ProcessoAPI>) {
-  const dado = await request<ProcessoAPI>(`/api/processos/${id}/`, {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
-  return apiParaFrontend(dado);
+  return apiParaFrontend(
+    await request<ProcessoAPI>(`/api/processos/${id}/`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    })
+  );
 }
 
 export async function deletarProcesso(id: string | number): Promise<void> {
@@ -137,17 +130,39 @@ export async function buscarAgregacoes(
   return request<AgregacoesAPI>(`/api/painel/agregacoes/?${qs}`);
 }
 
-export async function buscarDashboard(statusFiltro?: string) {
+// ─── Tipos do Dashboard ───────────────────────────────────────────────────────
+
+export interface DashboardData {
+  cards: { ativos: number; em_revisao: number; concluidos: number };
+  status: {
+    em_edicao: number;
+    em_revisao: number;
+    pendente: number;
+    assinado: number;
+    arquivado: number;
+  };
+  recentes: ProcessoAPI[];
+  mais_antigos?: {
+    id: number;
+    protocol: string;
+    title: string;
+    applicant: string;
+    created_at: string;
+    status: string;
+  }[];
+  sem_movimentacao?: {
+    id: number;
+    protocol: string;
+    title: string;
+    applicant: string;
+    updated_at: string;
+    status: string;
+  }[];
+  processos_por_responsavel?: { responsible_name: string; total: number }[];
+  por_etapa?: { numero: number; etapa: string; total: number }[];
+}
+
+export async function buscarDashboard(statusFiltro?: string): Promise<DashboardData> {
   const qs = statusFiltro ? `?status=${encodeURIComponent(statusFiltro)}` : '';
-  return request<{
-    cards: { ativos: number; em_revisao: number; concluidos: number };
-    status: {
-      em_edicao: number;
-      em_revisao: number;
-      pendente: number;
-      assinado: number;
-      arquivado: number;
-    };
-    recentes: any[];
-  }>(`/api/painel/dashboard/${qs}`);
+  return request<DashboardData>(`/api/painel/dashboard/${qs}`);
 }

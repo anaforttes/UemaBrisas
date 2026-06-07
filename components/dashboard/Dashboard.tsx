@@ -7,296 +7,267 @@ import {
   FileText,
   ArrowUpRight,
   CheckCheck,
-  Plus,
-  AlertTriangle,
+  TrendingUp,
+  Users,
+  PenSquare,
+  AlertCircle,
+  CalendarClock,
+  Timer,
+  BarChart3,
 } from 'lucide-react';
-import { buscarDashboard } from '../../services/painelService';
-import { dbService } from '../../services/databaseService';
+import { buscarDashboard, DashboardData } from '../../services/painelService';
 import {
   listarNotificacoes,
   marcarLida,
   marcarTodasLidas,
   type Notificacao,
 } from '../../services/notificacoesService';
-import { MOCK_MODELS } from '../../constants/index';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
 
-// Cache de módulo — evita spinner em toda navegação para o painel (TTL: 30s)
-let _dashboardCache: any = null;
+// ─── Cache (TTL 30s) ──────────────────────────────────────────────────────────
+let _cache: DashboardData | null = null;
 let _cacheAt = 0;
 const CACHE_TTL = 30_000;
-
-function isCacheValid() {
-  return _dashboardCache !== null && Date.now() - _cacheAt < CACHE_TTL;
+function cacheValido() {
+  return _cache !== null && Date.now() - _cacheAt < CACHE_TTL;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function diasDesde(d: string) {
+  return d ? Math.floor((Date.now() - new Date(d).getTime()) / 86_400_000) : 0;
+}
+
+function badgeStatus(status: string) {
+  const m: Record<string, string> = {
+    Pendente: 'bg-red-100 text-red-700',
+    'Em Andamento': 'bg-blue-100 text-blue-700',
+    Concluído: 'bg-green-100 text-green-700',
+    Finalizado: 'bg-emerald-100 text-emerald-700',
+    Aprovado: 'bg-teal-100 text-teal-700',
+    Arquivado: 'bg-gray-100 text-gray-500',
+    Cancelado: 'bg-red-100 text-red-500',
+    'Em Edital': 'bg-purple-100 text-purple-700',
+    'Análise Jurídica': 'bg-indigo-100 text-indigo-700',
+    'Levantamento Técnico': 'bg-cyan-100 text-cyan-700',
+    Diligência: 'bg-orange-100 text-orange-700',
+  };
+  return m[status] ?? 'bg-slate-100 text-slate-600';
+}
+
+// ─── Gráfico de barras horizontal ─────────────────────────────────────────────
+function Barra({
+  label,
+  sublabel,
+  value,
+  max,
+  color,
+  warn,
+}: {
+  label: string;
+  sublabel?: string;
+  value: number;
+  max: number;
+  color: string;
+  warn?: boolean;
+}) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="flex items-center gap-3">
+      <div className="w-40 shrink-0">
+        <p className="text-xs font-bold text-slate-700 truncate leading-tight" title={label}>
+          {label}
+        </p>
+        {sublabel && <p className="text-[9px] text-slate-400 font-medium">{sublabel}</p>}
+      </div>
+      <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
+        <div
+          className={`h-2.5 rounded-full transition-all duration-700 ${color}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span
+        className={`text-xs font-black w-7 text-right shrink-0 ${warn && value > 0 ? 'text-amber-600' : 'text-slate-600'}`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
+// ─── Componente principal ─────────────────────────────────────────────────────
 export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
-  const [dadosPainel, setDadosPainel] = useState<any>(isCacheValid() ? _dashboardCache : null);
-  const [loading, setLoading] = useState(!isCacheValid());
+  const [dados, setDados] = useState<DashboardData | null>(cacheValido() ? _cache : null);
+  const [loading, setLoading] = useState(!cacheValido());
   const [erro, setErro] = useState('');
-  const [statusFiltro, setStatusFiltro] = useState('');
-  const [showNewProcessModal, setShowNewProcessModal] = useState(false);
-  const [showNotificacoes, setShowNotificacoes] = useState(false);
-  const [notificacoes, setNotificacoes] = useState<Notificacao[]>([]);
+  const [filtro, setFiltro] = useState('');
+  const [showModal, setShowModal] = useState(false);
+  const [showNotif, setShowNotif] = useState(false);
+  const [notifs, setNotifs] = useState<Notificacao[]>([]);
   const [naoLidas, setNaoLidas] = useState(0);
-  const notificacoesRef = useRef<HTMLDivElement>(null);
+  const notifRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
 
-  const carregarNotificacoes = useCallback(async () => {
+  const carregarNotifs = useCallback(async () => {
     try {
-      const dados = await listarNotificacoes();
-      setNotificacoes(dados.resultados);
-      setNaoLidas(dados.nao_lidas);
-    } catch {
-      // falha silenciosa — não bloqueia o painel
+      const d = await listarNotificacoes();
+      setNotifs(d.resultados);
+      setNaoLidas(d.nao_lidas);
+    } catch (error) {
+      console.error('Erro ao carregar notificações:', error);
     }
   }, []);
 
-  const handleMarcarLida = async (id: number) => {
-    await marcarLida(id);
-    setNotificacoes((prev) => prev.map((n) => (n.id === id ? { ...n, lida: true } : n)));
-    setNaoLidas((c) => Math.max(0, c - 1));
-  };
-
-  const handleMarcarTodas = async () => {
-    await marcarTodasLidas();
-    setNotificacoes((prev) => prev.map((n) => ({ ...n, lida: true })));
-    setNaoLidas(0);
-  };
-
-  const carregarDashboard = async (silencioso = false) => {
-    if (!silencioso) {
-      setErro('');
-      if (!isCacheValid()) setLoading(true);
-    }
-    try {
-      const dados = await buscarDashboard(statusFiltro || undefined);
-      _dashboardCache = dados;
-      _cacheAt = Date.now();
-      setDadosPainel(dados);
-      setErro('');
-    } catch (e: any) {
-      if (!_dashboardCache) {
-        setErro(e?.message || 'Erro ao carregar painel. Verifique se o backend está rodando.');
+  const carregar = useCallback(
+    async (silencioso = false) => {
+      if (!silencioso) {
+        setErro('');
+        if (!cacheValido()) setLoading(true);
       }
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const prevFiltroRef = useRef<string | undefined>(undefined);
+      try {
+        const d = await buscarDashboard(filtro || undefined);
+        _cache = d;
+        _cacheAt = Date.now();
+        setDados(d);
+        setErro('');
+      } catch (e: unknown) {
+        if (!_cache) {
+          setErro(e instanceof Error ? e.message : 'Erro ao carregar painel.');
+        }
+      } finally {
+        setLoading(false);
+      }
+    },
+    [filtro]
+  );
+
+  const prevFiltro = useRef<string | undefined>(undefined);
   useEffect(() => {
-    if (prevFiltroRef.current !== undefined && prevFiltroRef.current !== statusFiltro) {
-      _dashboardCache = null;
-    }
-    prevFiltroRef.current = statusFiltro;
-    carregarDashboard();
-  }, [statusFiltro]);
+    if (prevFiltro.current !== undefined && prevFiltro.current !== filtro) _cache = null;
+
+    prevFiltro.current = filtro;
+    carregar();
+  }, [filtro, carregar]);
 
   useEffect(() => {
-    carregarNotificacoes();
-
-    const interval = setInterval(carregarNotificacoes, 60_000);
-
-    const handleFocus = () => {
-      carregarDashboard(true);
-      carregarNotificacoes();
+    carregarNotifs();
+    const iv = setInterval(carregarNotifs, 60_000);
+    const onFocus = () => {
+      carregar(true);
+      carregarNotifs();
     };
-    window.addEventListener('focus', handleFocus);
-
-    const handleAlteracao = () => {
-      _dashboardCache = null;
-      carregarDashboard();
+    const onAlter = () => {
+      _cache = null;
+      carregar();
     };
-    window.addEventListener('reurb:processos-alterados', handleAlteracao);
-
-    const handler = (e: MouseEvent) => {
-      if (notificacoesRef.current && !notificacoesRef.current.contains(e.target as Node)) {
-        setShowNotificacoes(false);
-      }
+    const onClickOut = (e: MouseEvent) => {
+      if (notifRef.current && !notifRef.current.contains(e.target as Node)) setShowNotif(false);
     };
-    document.addEventListener('mousedown', handler);
-
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('reurb:processos-alterados', onAlter);
+    document.addEventListener('mousedown', onClickOut);
     return () => {
-      clearInterval(interval);
-      window.removeEventListener('focus', handleFocus);
-      window.removeEventListener('reurb:processos-alterados', handleAlteracao);
-      document.removeEventListener('mousedown', handler);
+      clearInterval(iv);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('reurb:processos-alterados', onAlter);
+      document.removeEventListener('mousedown', onClickOut);
     };
-  }, [carregarNotificacoes]);
+  }, [carregarNotifs, carregar]);
 
-  const processosBase = dbService.processes.selectAll();
-  const documentosBase = processosBase.flatMap((p) => dbService.documents.findByProcessId(p.id));
-  const protocolos = processosBase.map((p) => p.protocol).filter(Boolean);
-  const protocolosDuplicados = protocolos.filter((p, i) => protocolos.indexOf(p) !== i);
-  const documentosComCpfPendente = documentosBase.filter(
-    (d) => /cpf|cnpj/i.test(d.content || d.title || '') && /_{3,}|__\./.test(d.content || '')
-  );
-  const datasInconsistentes = processosBase.filter((p) => {
-    if (!p.createdAt || !p.updatedAt) return true;
-    return new Date(p.createdAt).getTime() > new Date(p.updatedAt).getTime();
-  });
-  const processosSemReferencia = processosBase.filter(
-    (p) => !p.protocol || !p.title || !p.applicant || !p.modality || !p.status
-  );
-  const modelosComCpfCnpj = MOCK_MODELS.filter((m) =>
-    /portaria|notifica|relat|demarca|título|titulo/i.test(m.name)
-  ).length;
-
-  const alertasInconsistencia = [
-    {
-      label: 'CPF/CNPJ',
-      value: documentosComCpfPendente.length,
-      detail:
-        documentosComCpfPendente.length > 0
-          ? 'documentos com identificação pendente'
-          : `${modelosComCpfCnpj} modelos monitorados`,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-    },
-    {
-      label: 'Datas',
-      value: datasInconsistentes.length,
-      detail:
-        datasInconsistentes.length > 0
-          ? 'processos com datas inconsistentes'
-          : 'cronologia dos processos conferida',
-      color: 'text-blue-600',
-      bg: 'bg-blue-50',
-    },
-    {
-      label: 'Numeração',
-      value: protocolosDuplicados.length,
-      detail:
-        protocolosDuplicados.length > 0
-          ? 'protocolos duplicados encontrados'
-          : `${protocolos.length} protocolos únicos`,
-      color: 'text-purple-600',
-      bg: 'bg-purple-50',
-    },
-    {
-      label: 'Referências',
-      value: processosSemReferencia.length,
-      detail:
-        processosSemReferencia.length > 0
-          ? 'processos com campos essenciais ausentes'
-          : 'processos com referências básicas preenchidas',
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-    },
-  ];
+  // ── Dados derivados ───────────────────────────────────────────────────────
+  const maisAntigos = dados?.mais_antigos ?? [];
+  const semMov = dados?.sem_movimentacao ?? [];
+  const porResponsavel = dados?.processos_por_responsavel ?? [];
+  const porEtapa = dados?.por_etapa ?? [];
+  const maxResp = Math.max(...porResponsavel.map((r) => r.total), 1);
+  const maxEtapa = Math.max(...porEtapa.map((e) => e.total), 1);
 
   const stats = [
     {
-      label: 'Processos Ativos',
-      value: String(dadosPainel?.cards?.ativos ?? 0),
-      change: '+2',
+      label: 'Ativos',
+      value: dados?.cards?.ativos ?? 0,
       icon: Briefcase,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
-      filter: 'ativo',
+      f: 'ativo',
     },
     {
       label: 'Em Revisão',
-      value: String(dadosPainel?.cards?.em_revisao ?? 0),
-      change: '0',
+      value: dados?.cards?.em_revisao ?? 0,
       icon: Clock,
       color: 'text-amber-600',
       bg: 'bg-amber-50',
-      filter: 'em_revisao',
+      f: 'em_revisao',
     },
     {
       label: 'Concluídos',
-      value: String(dadosPainel?.cards?.concluidos ?? 0),
-      change: '+1',
-      icon: FileText,
+      value: dados?.cards?.concluidos ?? 0,
+      icon: CheckCheck,
       color: 'text-green-600',
       bg: 'bg-green-50',
-      filter: 'concluido',
+      f: 'concluido',
     },
     {
       label: 'Em Edição',
-      value: String(dadosPainel?.status?.em_edicao ?? 0),
-      change: '0',
-      icon: FileText,
+      value: dados?.status?.em_edicao ?? 0,
+      icon: PenSquare,
       color: 'text-slate-600',
       bg: 'bg-slate-50',
-      filter: 'em_edicao',
+      f: 'em_edicao',
     },
     {
       label: 'Pendentes',
-      value: String(dadosPainel?.status?.pendente ?? 0),
-      change: '0',
-      icon: Clock,
+      value: dados?.status?.pendente ?? 0,
+      icon: AlertCircle,
       color: 'text-red-600',
       bg: 'bg-red-50',
-      filter: 'pendente',
+      f: 'pendente',
     },
     {
       label: 'Assinados',
-      value: String(dadosPainel?.status?.assinado ?? 0),
-      change: '0',
-      icon: Briefcase,
+      value: dados?.status?.assinado ?? 0,
+      icon: TrendingUp,
       color: 'text-emerald-600',
       bg: 'bg-emerald-50',
-      filter: 'assinado',
+      f: 'assinado',
     },
     {
       label: 'Arquivados',
-      value: String(dadosPainel?.status?.arquivado ?? 0),
-      change: '0',
+      value: dados?.status?.arquivado ?? 0,
       icon: FileText,
-      color: 'text-gray-600',
+      color: 'text-gray-500',
       bg: 'bg-gray-100',
-      filter: 'arquivado',
+      f: 'arquivado',
     },
   ];
 
-  if (loading) {
+  // ─────────────────────────────────────────────────────────────────────────
+  if (loading)
     return (
-      <div className="p-10 max-w-7xl mx-auto">
-        <div className="mb-12 flex justify-between items-end">
-          <div className="space-y-3">
-            <div className="h-10 w-56 bg-slate-200 rounded-xl animate-pulse" />
-            <div className="h-4 w-80 bg-slate-100 rounded-lg animate-pulse" />
-          </div>
-          <div className="w-12 h-12 bg-slate-100 rounded-2xl animate-pulse" />
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
+      <div className="p-10 max-w-7xl mx-auto space-y-8">
+        <div className="h-10 w-64 bg-slate-200 rounded-xl animate-pulse" />
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4">
           {Array.from({ length: 7 }).map((_, i) => (
-            <div key={i} className="bg-white p-8 rounded-[32px] border border-slate-100">
-              <div className="flex justify-between items-start mb-6">
-                <div className="w-16 h-16 bg-slate-100 rounded-[20px] animate-pulse" />
-                <div className="w-20 h-7 bg-slate-100 rounded-full animate-pulse" />
-              </div>
-              <div className="h-3 w-24 bg-slate-100 rounded animate-pulse mb-3" />
-              <div className="h-10 w-16 bg-slate-200 rounded-lg animate-pulse" />
-            </div>
+            <div key={i} className="h-28 bg-slate-100 rounded-[24px] animate-pulse" />
           ))}
         </div>
-        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
-          <div className="h-6 w-48 bg-slate-200 rounded-lg animate-pulse mb-6" />
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex gap-6 py-4 border-b border-slate-50 last:border-0">
-              <div className="h-4 w-32 bg-slate-100 rounded animate-pulse" />
-              <div className="h-4 w-48 bg-slate-100 rounded animate-pulse" />
-              <div className="h-4 w-20 bg-slate-100 rounded animate-pulse ml-auto" />
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="h-64 bg-slate-100 rounded-[28px] animate-pulse" />
           ))}
         </div>
       </div>
     );
-  }
 
-  if (erro) {
+  if (erro)
     return (
       <div className="p-10 flex items-center justify-center min-h-[400px]">
         <div className="text-center">
           <p className="text-red-500 font-semibold">{erro}</p>
           <button
-            onClick={() => carregarDashboard()}
+            onClick={() => carregar()}
             className="mt-4 px-5 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700"
           >
             Tentar novamente
@@ -304,11 +275,11 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </div>
     );
-  }
 
   return (
     <div className="p-10 max-w-7xl mx-auto animate-in fade-in duration-700">
-      <header className="mb-12 flex justify-between items-end">
+      {/* ── Header ──────────────────────────────────────────────────────────── */}
+      <header className="mb-10 flex justify-between items-end">
         <div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tight">
             Bem-vindo, {user.name.split(' ')[0]}
@@ -317,14 +288,12 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
             Controle central de regularização fundiária municipal.
           </p>
         </div>
-
         <div className="flex items-center gap-4">
-          <div className="relative" ref={notificacoesRef}>
+          <div className="relative" ref={notifRef}>
             <button
-              type="button"
               onClick={() => {
-                setShowNotificacoes(!showNotificacoes);
-                if (!showNotificacoes) carregarNotificacoes();
+                setShowNotif(!showNotif);
+                if (!showNotif) carregarNotifs();
               }}
               className="p-3 bg-white border border-slate-200 rounded-2xl text-slate-500 relative hover:shadow-md transition-all"
             >
@@ -335,36 +304,45 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                 </span>
               )}
             </button>
-
-            {showNotificacoes && (
+            {showNotif && (
               <div className="absolute right-0 top-14 w-96 bg-white rounded-2xl border border-slate-100 shadow-xl z-50 overflow-hidden">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-slate-50">
                   <h3 className="font-black text-slate-800">Notificações</h3>
                   {naoLidas > 0 && (
                     <button
-                      onClick={handleMarcarTodas}
-                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                      onClick={async () => {
+                        await marcarTodasLidas();
+                        setNotifs((p) => p.map((n) => ({ ...n, lida: true })));
+                        setNaoLidas(0);
+                      }}
+                      className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-800"
                     >
-                      <CheckCheck size={14} /> Marcar todas como lidas
+                      <CheckCheck size={14} /> Marcar todas
                     </button>
                   )}
                 </div>
                 <div className="max-h-80 overflow-y-auto divide-y divide-slate-50">
-                  {notificacoes.length === 0 ? (
+                  {notifs.length === 0 ? (
                     <div className="px-5 py-8 text-center">
                       <Bell size={28} className="text-slate-200 mx-auto mb-2" />
                       <p className="text-sm text-slate-400 font-medium">Nenhuma notificação.</p>
                     </div>
                   ) : (
-                    notificacoes.map((n) => (
+                    notifs.map((n) => (
                       <div
                         key={n.id}
-                        className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer transition-colors hover:bg-slate-50 ${!n.lida ? 'bg-blue-50/40' : ''}`}
-                        onClick={() => {
-                          if (!n.lida) handleMarcarLida(n.id);
+                        className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors ${!n.lida ? 'bg-blue-50/40' : ''}`}
+                        onClick={async () => {
+                          if (!n.lida) {
+                            await marcarLida(n.id);
+                            setNotifs((p) =>
+                              p.map((x) => (x.id === n.id ? { ...x, lida: true } : x))
+                            );
+                            setNaoLidas((c) => Math.max(0, c - 1));
+                          }
                           if (n.link) {
                             navigate(n.link);
-                            setShowNotificacoes(false);
+                            setShowNotif(false);
                           }
                         }}
                       >
@@ -401,137 +379,213 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-12">
-        {stats.map((stat, i) => (
+      {/* ── Cards de status ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-8">
+        {stats.map((s, i) => (
           <div
             key={i}
-            onClick={() => setStatusFiltro(stat.filter)}
-            className="bg-white p-8 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all group cursor-pointer"
+            onClick={() => setFiltro(filtro === s.f ? '' : s.f)}
+            className={`bg-white p-5 rounded-[24px] border transition-all cursor-pointer hover:shadow-lg hover:-translate-y-0.5 ${filtro === s.f ? 'border-blue-300 ring-2 ring-blue-100' : 'border-slate-100 shadow-sm'}`}
           >
-            <div className="flex justify-between items-start mb-6">
-              <div
-                className={`${stat.bg} ${stat.color} p-4 rounded-[20px] transition-transform group-hover:rotate-3`}
-              >
-                <stat.icon size={28} />
-              </div>
-              <span
-                className={`text-[10px] font-black tracking-widest px-3 py-1.5 rounded-full uppercase ${stat.change.startsWith('+') ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-600'}`}
-              >
-                {stat.change} Hoje
-              </span>
+            <div
+              className={`${s.bg} ${s.color} w-10 h-10 rounded-[14px] flex items-center justify-center mb-3`}
+            >
+              <s.icon size={20} />
             </div>
-            <h3 className="text-slate-400 text-xs font-black uppercase tracking-widest">
-              {stat.label}
+            <p className="text-3xl font-black text-slate-800">{s.value}</p>
+            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1 leading-tight">
+              {s.label}
             </h3>
-            <p className="text-4xl font-black text-slate-800 mt-2">{stat.value}</p>
           </div>
         ))}
       </div>
 
-      <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm p-8 mb-12">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="font-black text-slate-800 text-lg">Alertas de Inconsistência</h3>
-            <p className="text-xs text-slate-400 font-medium mt-1">
-              CPF/CNPJ, datas, numeração e referências dos processos.
-            </p>
-          </div>
-          <div className="w-11 h-11 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center">
-            <AlertTriangle size={22} />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {alertasInconsistencia.map((alerta) => (
-            <div
-              key={alerta.label}
-              className="p-5 rounded-2xl border border-slate-100 bg-slate-50/50"
-            >
-              <div className="flex items-start justify-between gap-3 mb-4">
-                <div
-                  className={`${alerta.bg} ${alerta.color} w-10 h-10 rounded-xl flex items-center justify-center`}
-                >
-                  <AlertTriangle size={18} />
-                </div>
-                <span className="text-3xl font-black text-slate-800">{alerta.value}</span>
-              </div>
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                {alerta.label}
-              </h4>
-              <p className="text-xs font-bold text-slate-600 mt-1 leading-relaxed">
-                {alerta.detail}
+      {/* ── Rankings: Mais antigos + Sem movimentação ───────────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
+            <div className="w-9 h-9 bg-red-50 text-red-500 rounded-xl flex items-center justify-center shrink-0">
+              <CalendarClock size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-sm">Processos Mais Antigos</h3>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Não finalizados — por data de abertura
               </p>
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 shadow-sm flex flex-col overflow-hidden">
-          <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
-            <div>
-              <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
-              {statusFiltro && (
-                <button
-                  type="button"
-                  onClick={() => setStatusFiltro('')}
-                  className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline mt-1"
+          </div>
+          <div className="divide-y divide-slate-50">
+            {maisAntigos.length === 0 ? (
+              <p className="px-7 py-6 text-sm text-slate-400">Nenhum processo encontrado.</p>
+            ) : (
+              maisAntigos.map((p, i) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-4 px-7 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => navigate(`/processos/${p.id}`)}
                 >
-                  Limpar Filtro
-                </button>
-              )}
-            </div>
-            <Link
-              to="/processes"
-              className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2"
-            >
-              Ver Todos <ArrowUpRight size={16} />
-            </Link>
-          </div>
-          <ProcessTable processes={dadosPainel?.recentes || []} />
-        </div>
-
-        <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden h-fit">
-          <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-900 text-white">
-            <h3 className="font-black text-lg">Modelos Oficiais</h3>
-          </div>
-          <div className="p-6 space-y-4">
-            {MOCK_MODELS.slice(0, 4).map((model) => (
-              <div
-                key={model.id}
-                className="p-4 bg-slate-50/50 border border-slate-100 rounded-2xl hover:border-blue-200 hover:bg-white transition-all group flex items-center justify-between cursor-pointer"
-              >
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-white rounded-xl border border-slate-200 flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:border-blue-100 transition-all">
-                    <FileText size={20} />
+                  <span className="text-lg font-black text-slate-200 w-5 text-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-700 truncate">{p.title}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {p.protocol || 'Sem protocolo'} · {p.applicant}
+                    </p>
                   </div>
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-800 group-hover:text-blue-600 transition-all">
-                      {model.name}
-                    </h4>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                      Versão {model.version}
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeStatus(p.status)}`}
+                    >
+                      {p.status}
+                    </span>
+                    <p className="text-[10px] text-red-400 font-bold mt-1">
+                      {diasDesde(p.created_at)}d aberto
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navigate('/templates')}
-                  className="p-2 bg-white border border-slate-200 rounded-xl text-slate-400 hover:text-blue-600 hover:border-blue-200"
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
+            <div className="w-9 h-9 bg-amber-50 text-amber-500 rounded-xl flex items-center justify-center shrink-0">
+              <Timer size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-sm">Sem Movimentação</h3>
+              <p className="text-[10px] text-slate-400 font-medium">Maior tempo sem atualização</p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-50">
+            {semMov.length === 0 ? (
+              <p className="px-7 py-6 text-sm text-slate-400">Nenhum processo encontrado.</p>
+            ) : (
+              semMov.map((p, i) => (
+                <div
+                  key={p.id}
+                  className="flex items-center gap-4 px-7 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
+                  onClick={() => navigate(`/processos/${p.id}`)}
                 >
-                  <ArrowUpRight size={18} />
-                </button>
-              </div>
-            ))}
+                  <span className="text-lg font-black text-slate-200 w-5 text-center shrink-0">
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-slate-700 truncate">{p.title}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {p.protocol || 'Sem protocolo'} · {p.applicant}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span
+                      className={`text-[10px] font-black px-2 py-0.5 rounded-full ${badgeStatus(p.status)}`}
+                    >
+                      {p.status}
+                    </span>
+                    <p className="text-[10px] text-amber-500 font-bold mt-1">
+                      {diasDesde(p.updated_at)}d parado
+                    </p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
+      {/* ── Processos por responsável + Processos por etapa ─────────────────── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
+            <div className="w-9 h-9 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center shrink-0">
+              <Users size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-sm">Processos por Responsável</h3>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Processos ativos atribuídos a cada responsável
+              </p>
+            </div>
+          </div>
+          <div className="px-7 py-5 space-y-3">
+            {porResponsavel.length === 0 ? (
+              <p className="text-sm text-slate-400 py-4">Nenhum dado disponível.</p>
+            ) : (
+              porResponsavel.map((r) => (
+                <Barra
+                  key={r.responsible_name}
+                  label={r.responsible_name || 'Não atribuído'}
+                  value={r.total}
+                  max={maxResp}
+                  color="bg-purple-400"
+                />
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
+            <div className="w-9 h-9 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center shrink-0">
+              <BarChart3 size={18} />
+            </div>
+            <div>
+              <h3 className="font-black text-slate-800 text-sm">Processos por Etapa</h3>
+              <p className="text-[10px] text-slate-400 font-medium">
+                Distribuição nas 14 etapas do fluxo REURB
+              </p>
+            </div>
+          </div>
+          <div className="px-7 py-5 space-y-2.5 max-h-96 overflow-y-auto">
+            {porEtapa.length === 0 ? (
+              <p className="text-sm text-slate-400 py-4">Nenhum dado disponível.</p>
+            ) : (
+              porEtapa.map((e) => (
+                <Barra
+                  key={e.numero}
+                  label={`${e.numero}. ${e.etapa}`}
+                  value={e.total}
+                  max={maxEtapa}
+                  color={e.total === 0 ? 'bg-slate-200' : 'bg-blue-400'}
+                />
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Processos recentes ────────────────────────────────────────────────── */}
+      <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="p-7 border-b border-slate-50 flex items-center justify-between bg-slate-50/20">
+          <div>
+            <h3 className="font-black text-slate-800 text-lg">Processos Recentes</h3>
+            {filtro && (
+              <button
+                onClick={() => setFiltro('')}
+                className="text-xs font-black text-blue-600 uppercase tracking-widest hover:underline mt-1"
+              >
+                Limpar Filtro
+              </button>
+            )}
+          </div>
+          <Link
+            to="/processes"
+            className="text-blue-600 text-sm font-black hover:underline flex items-center gap-2"
+          >
+            Ver Todos <ArrowUpRight size={16} />
+          </Link>
+        </div>
+        <ProcessTable processes={dados?.recentes || []} />
+      </div>
+
       <NewProcessModal
-        isOpen={showNewProcessModal}
-        onClose={() => setShowNewProcessModal(false)}
+        isOpen={showModal}
+        onClose={() => setShowModal(false)}
         onSuccess={() => {
-          _dashboardCache = null;
-          carregarDashboard();
+          _cache = null;
+          carregar();
         }}
         currentUser={user}
       />
