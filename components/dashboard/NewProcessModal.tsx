@@ -11,6 +11,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import { criarProcesso } from '../../services/painelService';
+import { API_BASE, getToken } from '../../shared/services/apiClient';
 import { User as UserType } from '../../types/index';
 
 interface NewProcessModalProps {
@@ -29,12 +30,19 @@ interface FormData {
   municipio: string;
   estado: string;
   responsible_name: string;
+  technicianId: string;
 }
 
 interface UF {
   id: number;
   sigla: string;
   nome: string;
+}
+
+interface UsuarioSimples {
+  id: string;
+  name: string;
+  role: string;
 }
 
 interface Municipio {
@@ -51,6 +59,7 @@ const initialForm: FormData = {
   municipio: '',
   estado: '',
   responsible_name: '',
+  technicianId: '',
 };
 
 const inputClass =
@@ -94,6 +103,23 @@ const SelectWrapper = ({ children }: { children: React.ReactNode }) => (
 let _ufsCache: UF[] | null = null;
 const _municipiosCache: Record<string, Municipio[]> = {};
 
+// Cache de usuários
+let _usuariosCache: UsuarioSimples[] | null = null;
+
+async function buscarUsuarios(): Promise<UsuarioSimples[]> {
+  if (_usuariosCache) return _usuariosCache;
+  const res = await fetch(`${API_BASE}/api/autenticacao/usuarios/`, {
+    headers: { Authorization: `Bearer ${getToken() ?? ''}` },
+  });
+  if (!res.ok) throw new Error('Erro ao buscar usuários');
+  const data = await res.json();
+  _usuariosCache = data
+    .filter((u: any) => u.is_active !== false)
+    .map((u: any) => ({ id: String(u.id), name: u.name, role: u.role || '' }))
+    .sort((a: UsuarioSimples, b: UsuarioSimples) => a.name.localeCompare(b.name, 'pt-BR'));
+  return _usuariosCache!;
+}
+
 async function buscarUFs(): Promise<UF[]> {
   if (_ufsCache) return _ufsCache;
   const res = await fetch(
@@ -131,6 +157,8 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
   const [loadingUfs, setLoadingUfs] = useState(false);
   const [loadingMunis, setLoadingMunis] = useState(false);
   const [erroIbge, setErroIbge] = useState('');
+  const [usuarios, setUsuarios] = useState<UsuarioSimples[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
 
   // Busca UFs ao abrir o modal
   useEffect(() => {
@@ -141,6 +169,14 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
       .then(setUfs)
       .catch(() => setErroIbge('Não foi possível carregar os estados. Verifique sua conexão.'))
       .finally(() => setLoadingUfs(false));
+
+    setLoadingUsers(true);
+    buscarUsuarios()
+      .then(setUsuarios)
+      .catch(() => {
+        /* silencia — campo continua funcional como texto */
+      })
+      .finally(() => setLoadingUsers(false));
   }, [isOpen]);
 
   // Busca municípios quando o estado muda
@@ -200,10 +236,18 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
         location: form.location || `${form.municipio} - ${form.estado}`.trim(),
         modality: form.modality,
         area: form.area ? `${form.area} m²` : '',
-        responsible_name: form.responsible_name || currentUser?.name || 'Administrador',
+        responsible_name: (() => {
+          if (form.technicianId) {
+            const u = usuarios.find((u) => u.id === form.technicianId);
+            return u ? u.name : form.responsible_name || currentUser?.name || 'Administrador';
+          }
+          return form.responsible_name || currentUser?.name || 'Administrador';
+        })(),
         municipio: form.municipio,
         estado: form.estado,
-        technician_id: Number(currentUser?.id) || null,
+        technician_id: form.technicianId
+          ? Number(form.technicianId)
+          : Number(currentUser?.id) || null,
         legal_id: null,
       });
       limparFormulario();
@@ -384,14 +428,45 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
           </div>
 
           {/* Responsável Técnico */}
-          <Field label="Responsável Técnico" icon={User}>
-            <input
-              type="text"
-              value={form.responsible_name}
-              onChange={(e) => updateField('responsible_name', e.target.value)}
-              placeholder={currentUser?.name || 'Administrador'}
-              className={inputClass}
-            />
+          <Field
+            label={loadingUsers ? 'Carregando usuários...' : 'Responsável Técnico'}
+            icon={User}
+          >
+            {usuarios.length > 0 ? (
+              <SelectWrapper>
+                <select
+                  value={form.technicianId}
+                  onChange={(e) => {
+                    const uid = e.target.value;
+                    const user = usuarios.find((u) => u.id === uid);
+                    setForm((prev) => ({
+                      ...prev,
+                      technicianId: uid,
+                      responsible_name: user ? user.name : '',
+                    }));
+                  }}
+                  disabled={loadingUsers}
+                  className={selectClass}
+                >
+                  <option value="">— Selecione o responsável —</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                      {u.role ? ` (${u.role})` : ''}
+                    </option>
+                  ))}
+                </select>
+              </SelectWrapper>
+            ) : (
+              <input
+                type="text"
+                value={form.responsible_name}
+                onChange={(e) => updateField('responsible_name', e.target.value)}
+                placeholder={loadingUsers ? 'Carregando...' : currentUser?.name || 'Administrador'}
+                disabled={loadingUsers}
+                className={inputClass}
+              />
+            )}
           </Field>
         </form>
 
