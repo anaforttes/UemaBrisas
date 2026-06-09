@@ -8,12 +8,10 @@ import {
   ArrowUpRight,
   CheckCheck,
   TrendingUp,
-  Users,
   PenSquare,
   AlertCircle,
   CalendarClock,
   Timer,
-  BarChart3,
 } from 'lucide-react';
 import { buscarDashboard, DashboardData } from '../../services/painelService';
 import {
@@ -54,46 +52,6 @@ function badgeStatus(status: string) {
     Diligência: 'bg-orange-100 text-orange-700',
   };
   return m[status] ?? 'bg-slate-100 text-slate-600';
-}
-
-// ─── Gráfico de barras horizontal ─────────────────────────────────────────────
-function Barra({
-  label,
-  sublabel,
-  value,
-  max,
-  color,
-  warn,
-}: {
-  label: string;
-  sublabel?: string;
-  value: number;
-  max: number;
-  color: string;
-  warn?: boolean;
-}) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-40 shrink-0">
-        <p className="text-xs font-bold text-slate-700 truncate leading-tight" title={label}>
-          {label}
-        </p>
-        {sublabel && <p className="text-[9px] text-slate-400 font-medium">{sublabel}</p>}
-      </div>
-      <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden">
-        <div
-          className={`h-2.5 rounded-full transition-all duration-700 ${color}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <span
-        className={`text-xs font-black w-7 text-right shrink-0 ${warn && value > 0 ? 'text-amber-600' : 'text-slate-600'}`}
-      >
-        {value}
-      </span>
-    </div>
-  );
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
@@ -180,11 +138,6 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
   // ── Dados derivados ───────────────────────────────────────────────────────
   const maisAntigos = dados?.mais_antigos ?? [];
   const semMov = dados?.sem_movimentacao ?? [];
-  const porResponsavel = dados?.processos_por_responsavel ?? [];
-  const porEtapa = dados?.por_etapa ?? [];
-  const maxResp = Math.max(...porResponsavel.map((r) => r.total), 1);
-  const maxEtapa = Math.max(...porEtapa.map((e) => e.total), 1);
-
   const stats = [
     {
       label: 'Ativos',
@@ -490,67 +443,6 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                     </p>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Processos por responsável + Processos por etapa ─────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
-            <div className="w-9 h-9 bg-purple-50 text-purple-500 rounded-xl flex items-center justify-center shrink-0">
-              <Users size={18} />
-            </div>
-            <div>
-              <h3 className="font-black text-slate-800 text-sm">Processos por Responsável</h3>
-              <p className="text-[10px] text-slate-400 font-medium">
-                Processos ativos atribuídos a cada responsável
-              </p>
-            </div>
-          </div>
-          <div className="px-7 py-5 space-y-3">
-            {porResponsavel.length === 0 ? (
-              <p className="text-sm text-slate-400 py-4">Nenhum dado disponível.</p>
-            ) : (
-              porResponsavel.map((r) => (
-                <Barra
-                  key={r.responsible_name}
-                  label={r.responsible_name || 'Não atribuído'}
-                  value={r.total}
-                  max={maxResp}
-                  color="bg-purple-400"
-                />
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[28px] border border-slate-100 shadow-sm overflow-hidden">
-          <div className="px-7 py-5 border-b border-slate-50 flex items-center gap-3">
-            <div className="w-9 h-9 bg-blue-50 text-blue-500 rounded-xl flex items-center justify-center shrink-0">
-              <BarChart3 size={18} />
-            </div>
-            <div>
-              <h3 className="font-black text-slate-800 text-sm">Processos por Etapa</h3>
-              <p className="text-[10px] text-slate-400 font-medium">
-                Distribuição nas 14 etapas do fluxo REURB
-              </p>
-            </div>
-          </div>
-          <div className="px-7 py-5 space-y-2.5 max-h-96 overflow-y-auto">
-            {porEtapa.length === 0 ? (
-              <p className="text-sm text-slate-400 py-4">Nenhum dado disponível.</p>
-            ) : (
-              porEtapa.map((e) => (
-                <Barra
-                  key={e.numero}
-                  label={`${e.numero}. ${e.etapa}`}
-                  value={e.total}
-                  max={maxEtapa}
-                  color={e.total === 0 ? 'bg-slate-200' : 'bg-blue-400'}
-                />
               ))
             )}
           </div>

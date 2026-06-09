@@ -55,6 +55,18 @@ def obter_agregacoes(periodo: str = 'all', modalidade: str = 'todos') -> dict:
     progress_vals = list(qs.values_list('progress', flat=True))
     progresso_medio = round(sum(progress_vals) / len(progress_vals)) if progress_vals else 0
 
+    # ── Processos por etapa (reutiliza mesma lógica do dashboard) ─────────────
+    etapas_em_andamento = (
+        Etapa.objects.filter(status='em_andamento')
+        .values('numero')
+        .annotate(total=Count('id'))
+    )
+    etapas_dict = {e['numero']: e['total'] for e in etapas_em_andamento}
+    por_etapa_lista = [
+        {'numero': num, 'etapa': nome, 'total': etapas_dict.get(num, 0)}
+        for num, nome in ETAPAS_PADRAO
+    ]
+
     return {
         'total': total,
         'progresso_medio': progresso_medio,
@@ -67,6 +79,7 @@ def obter_agregacoes(periodo: str = 'all', modalidade: str = 'todos') -> dict:
             .annotate(total=Count('id'))
             .order_by('-total')[:10]
         ),
+        'por_etapa': por_etapa_lista,
     }
 
 

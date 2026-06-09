@@ -120,6 +120,7 @@ export interface AgregacoesAPI {
   por_modalidade: { modality: string; total: number }[];
   por_status: { status: string; total: number }[];
   por_responsavel: { responsible_name: string; total: number }[];
+  por_etapa: { numero: number; etapa: string; total: number }[];
 }
 
 export async function buscarAgregacoes(
