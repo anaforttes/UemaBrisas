@@ -537,7 +537,6 @@ const Editor: React.FC<EditorProps> = ({
 
   const editor = useEditor({
     extensions: [
-      // @ts-expect-error StarterKit options mismatch with TipTap 3 types
       StarterKit.configure({
         link: false,
         underline: false,

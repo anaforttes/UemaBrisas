@@ -22,7 +22,7 @@ import {
 } from '../../services/notificacoesService';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
-import { NewProcessModal, precarregarUsuarios } from './NewProcessModal';
+import { NewProcessModal } from './NewProcessModal';
 
 // ─── Cache (TTL 30s) ──────────────────────────────────────────────────────────
 let _cache: DashboardData | null = null;
@@ -111,7 +111,6 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
 
   useEffect(() => {
     carregarNotifs();
-    precarregarUsuarios(); // pré-carrega usuários no cache antes do modal abrir
     const iv = setInterval(carregarNotifs, 60_000);
     const onFocus = () => {
       carregar(true);

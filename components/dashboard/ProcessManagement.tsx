@@ -21,7 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { ProcessoMeu } from '../../services/painelService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
-import { NewProcessModal, precarregarUsuarios } from './NewProcessModal';
+import { NewProcessModal } from './NewProcessModal';
 import { ProcessDrawer } from './ProcessDrawer';
 import { DeleteProcessModal } from './DeleteProcessModal';
 import { usePermissoes } from '../../hooks/usePermissoes';
@@ -57,7 +57,6 @@ export const ProcessManagement: React.FC = () => {
 
   useEffect(() => {
     fetchData();
-    precarregarUsuarios(); // pré-carrega usuários no cache
   }, [fetchData]);
 
   useEffect(() => {

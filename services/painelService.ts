@@ -142,7 +142,7 @@ export interface DashboardData {
     assinado: number;
     arquivado: number;
   };
-  recentes: ProcessoAPI[];
+  recentes: REURBProcess[];
   mais_antigos?: {
     id: number;
     protocol: string;
@@ -165,5 +165,8 @@ export interface DashboardData {
 
 export async function buscarDashboard(statusFiltro?: string): Promise<DashboardData> {
   const qs = statusFiltro ? `?status=${encodeURIComponent(statusFiltro)}` : '';
-  return request<DashboardData>(`/api/painel/dashboard/${qs}`);
+  const data = await request<Omit<DashboardData, 'recentes'> & { recentes: ProcessoAPI[] }>(
+    `/api/painel/dashboard/${qs}`
+  );
+  return { ...data, recentes: data.recentes.map(apiParaFrontend) };
 }

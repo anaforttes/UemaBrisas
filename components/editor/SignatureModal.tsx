@@ -25,6 +25,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { dbService } from '../../services/databaseService';
+import type { SignatureEvent } from '../../services/assinaturaService';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 export interface Signer {
@@ -54,7 +55,7 @@ export interface SignatureRecord {
   status: 'pending' | 'partial' | 'completed' | 'rejected';
   qrCodeData: string;
   documentHash: string;
-  events: unknown[];
+  events: SignatureEvent[];
 }
 
 // ─── Dados extraídos de um certificado real ──────────────────────────────────
