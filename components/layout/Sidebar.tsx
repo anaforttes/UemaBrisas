@@ -11,6 +11,7 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { User } from '../../types/index';
+import { usePermissoes } from '../../hooks/usePermissoes';
 import { Logo } from '../common/Logo';
 
 interface SidebarProps {
@@ -20,6 +21,8 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   const location = useLocation();
+  const { isAdmin, isSuperAdmin } = usePermissoes();
+  const podeVerControleAdmin = isAdmin || isSuperAdmin;
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Painel', path: '/' },
@@ -27,7 +30,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
     { icon: FileText, label: 'Modelos', path: '/templates' },
     { icon: BarChart3, label: 'Relatórios', path: '/reports' },
     { icon: Users, label: 'Equipe', path: '/team' },
-    { icon: ShieldCheck, label: 'Controle Admin', path: '/admin-control' },
+    ...(podeVerControleAdmin
+      ? [{ icon: ShieldCheck, label: 'Controle Admin', path: '/admin-control' }]
+      : []),
     { icon: Settings, label: 'Configurações', path: '/settings' },
   ];
 
