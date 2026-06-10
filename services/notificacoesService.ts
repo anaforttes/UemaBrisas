@@ -1,12 +1,22 @@
 import { request } from '../shared/services/apiClient';
 
+export interface ConviteNotificacao {
+  id: number;
+  status: 'pendente' | 'aceito' | 'recusado' | 'cancelado';
+  papel: 'tecnico' | 'juridico';
+  papel_display: string;
+  processo_id: number;
+  processo_titulo: string;
+}
+
 export interface Notificacao {
   id: number;
-  tipo: 'comentario' | 'colaborador' | 'conflito' | 'sistema';
+  tipo: 'comentario' | 'colaborador' | 'conflito' | 'atribuicao' | 'sistema';
   titulo: string;
   descricao: string;
   lida: boolean;
   link: string;
+  convite: ConviteNotificacao | null;
   criado_em: string;
 }
 

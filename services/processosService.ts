@@ -9,14 +9,46 @@ export interface EventoAPI {
   criado_em: string;
 }
 
+export type PapelEquipe = 'tecnico' | 'juridico';
+
+export interface ConviteAtribuicao {
+  id: number;
+  processo: number;
+  processo_titulo: string;
+  processo_protocol: string;
+  papel: PapelEquipe;
+  papel_display: string;
+  convidado: number;
+  convidado_nome: string | null;
+  solicitante_nome: string | null;
+  status: 'pendente' | 'aceito' | 'recusado' | 'cancelado';
+  criado_em: string;
+  respondido_em: string | null;
+}
+
+export interface ResultadoAtribuicao {
+  resultado: 'removido' | 'atribuido' | 'convite_enviado';
+  processo: Record<string, unknown>;
+  convite?: ConviteAtribuicao;
+}
+
 export const processosService = {
-  atribuirEquipe: (
+  atribuir: (
     processoId: string | number,
-    dados: { technician_id?: number | null; legal_id?: number | null }
-  ) =>
-    request<unknown>(`/api/processos/${processoId}/`, {
-      method: 'PATCH',
+    dados: { papel: PapelEquipe; usuario_id: number | null }
+  ): Promise<ResultadoAtribuicao> =>
+    request<ResultadoAtribuicao>(`/api/processos/${processoId}/atribuir/`, {
+      method: 'POST',
       body: JSON.stringify(dados),
+    }),
+
+  listarConvites: (processoId: string | number): Promise<ConviteAtribuicao[]> =>
+    request<ConviteAtribuicao[]>(`/api/processos/${processoId}/convites/`),
+
+  responderConvite: (conviteId: number, acao: 'aceitar' | 'recusar'): Promise<ConviteAtribuicao> =>
+    request<ConviteAtribuicao>(`/api/processos/convites/${conviteId}/responder/`, {
+      method: 'POST',
+      body: JSON.stringify({ acao }),
     }),
 
   listarEventos: (processoId: string | number): Promise<EventoAPI[]> =>

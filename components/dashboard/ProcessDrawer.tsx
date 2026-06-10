@@ -27,13 +27,21 @@ import {
   AlertTriangle,
   XCircle,
   Circle,
+  Send,
+  Check,
 } from 'lucide-react';
 import { REURBProcess } from '../../types/index';
 import { documentoService, DocLista } from '../../services/documentoService';
 import { etapasService, EtapaAPI } from '../../services/etapasService';
 import { equipeService, MembroEquipe } from '../../services/equipeService';
 import { anexosService, AnexoAPI } from '../../services/anexosService';
-import { processosService, EventoAPI } from '../../services/processosService';
+import {
+  processosService,
+  EventoAPI,
+  ConviteAtribuicao,
+  PapelEquipe,
+} from '../../services/processosService';
+import { usePermissoes } from '../../hooks/usePermissoes';
 import { Link, useNavigate } from 'react-router-dom';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -421,15 +429,24 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
   const [aprovacaoSucesso, setAprovacaoSucesso] = useState(false);
   const [tecnicoId, setTecnicoId] = useState<number | null>(null);
   const [juridicoId, setJuridicoId] = useState<number | null>(null);
-  const [salvandoEquipe, setSalvandoEquipe] = useState(false);
+  const [selTecnico, setSelTecnico] = useState<string>('');
+  const [selJuridico, setSelJuridico] = useState<string>('');
+  const [convites, setConvites] = useState<ConviteAtribuicao[]>([]);
+  const [salvandoPapel, setSalvandoPapel] = useState<PapelEquipe | null>(null);
   const [protocolando, setProtocolando] = useState(false);
   const inputGeralRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { isAdmin, isSuperAdmin } = usePermissoes();
+  const podeAtribuirDireto = isAdmin || isSuperAdmin;
 
   useEffect(() => {
     if (!process) return;
-    setTecnicoId((process as any).technician_id ?? null);
-    setJuridicoId((process as any).legal_id ?? null);
+    const tid = (process as any).technician_id ?? null;
+    const jid = (process as any).legal_id ?? null;
+    setTecnicoId(tid);
+    setJuridicoId(jid);
+    setSelTecnico(tid ? String(tid) : '');
+    setSelJuridico(jid ? String(jid) : '');
     carregarDados();
   }, [process?.id]);
 
@@ -437,18 +454,20 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
     if (!process) return;
     setErroCarregamento(false);
     try {
-      const [etapasR, membrosR, anexosR, docsR, eventosR] = await Promise.allSettled([
+      const [etapasR, membrosR, anexosR, docsR, eventosR, convitesR] = await Promise.allSettled([
         etapasService.listar(process.id),
         equipeService.listar(),
         anexosService.listar(process.id),
         documentoService.listarPorProcesso(process.id),
         processosService.listarEventos(process.id),
+        processosService.listarConvites(process.id),
       ]);
       if (etapasR.status === 'fulfilled') setEtapas(etapasR.value);
       if (membrosR.status === 'fulfilled') setMembros(membrosR.value);
       if (anexosR.status === 'fulfilled') setAnexos(anexosR.value);
       if (docsR.status === 'fulfilled') setDocumentos(docsR.value);
       if (eventosR.status === 'fulfilled') setEventos(eventosR.value);
+      if (convitesR.status === 'fulfilled') setConvites(convitesR.value);
 
       if ([etapasR, membrosR, anexosR].every((r) => r.status === 'rejected'))
         setErroCarregamento(true);
@@ -588,18 +607,25 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
     }
   };
 
-  const handleSalvarEquipe = async () => {
+  const handleAtribuir = async (papel: PapelEquipe, usuarioId: number | null) => {
     if (!process) return;
-    setSalvandoEquipe(true);
+    setSalvandoPapel(papel);
     try {
-      await processosService.atribuirEquipe(process.id, {
-        technician_id: tecnicoId,
-        legal_id: juridicoId,
-      });
-      if (onUpdate) onUpdate(process.id, { technician_id: tecnicoId, legal_id: juridicoId });
+      const r = await processosService.atribuir(process.id, { papel, usuario_id: usuarioId });
+      if (r.resultado === 'atribuido' || r.resultado === 'removido') {
+        const campo = papel === 'tecnico' ? 'technician_id' : 'legal_id';
+        if (papel === 'tecnico') {
+          setTecnicoId(usuarioId);
+          setSelTecnico(usuarioId ? String(usuarioId) : '');
+        } else {
+          setJuridicoId(usuarioId);
+          setSelJuridico(usuarioId ? String(usuarioId) : '');
+        }
+        if (onUpdate) onUpdate(process.id, { [campo]: usuarioId } as any);
+      }
       await carregarDados();
     } finally {
-      setSalvandoEquipe(false);
+      setSalvandoPapel(null);
     }
   };
 
@@ -1003,100 +1029,147 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
 
                 {/* Atribuição de equipe */}
                 <div className="border border-slate-200 rounded-2xl overflow-hidden">
-                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100">
-                    <h4 className="text-xs font-black text-slate-700">Atribuição de Equipe</h4>
-                    <p className="text-[10px] text-slate-400 mt-0.5">
-                      O técnico e o jurídico terão acesso a este processo.
-                    </p>
+                  <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex items-start gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-blue-600 flex items-center justify-center shrink-0">
+                      <Shield size={14} className="text-white" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black text-slate-700">Atribuição de Equipe</h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-snug">
+                        {podeAtribuirDireto
+                          ? 'Como administrador, sua atribuição é aplicada imediatamente.'
+                          : 'O convidado recebe uma solicitação e precisa aceitar para ter acesso.'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="p-4 space-y-4">
-                    <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                        <Hammer size={10} /> Responsável Técnico
-                      </label>
-                      <select
-                        value={tecnicoId ?? ''}
-                        onChange={(e) =>
-                          setTecnicoId(e.target.value ? Number(e.target.value) : null)
-                        }
-                        className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                      >
-                        <option value="">Não atribuído</option>
-                        {membros.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} — {m.role}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-1.5">
-                        <Scale size={10} /> Responsável Jurídico
-                      </label>
-                      <select
-                        value={juridicoId ?? ''}
-                        onChange={(e) =>
-                          setJuridicoId(e.target.value ? Number(e.target.value) : null)
-                        }
-                        className="w-full text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-400 focus:outline-none"
-                      >
-                        <option value="">Não atribuído</option>
-                        {membros.map((m) => (
-                          <option key={m.id} value={m.id}>
-                            {m.name} — {m.role}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    <button
-                      onClick={handleSalvarEquipe}
-                      disabled={salvandoEquipe}
-                      className="w-full py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
-                    >
-                      {salvandoEquipe ? (
-                        <Loader2 size={13} className="animate-spin" />
-                      ) : (
-                        <Users size={13} />
-                      )}
-                      {salvandoEquipe ? 'Salvando...' : 'Salvar atribuições'}
-                    </button>
+
+                  <div className="p-4 space-y-3">
+                    {(
+                      [
+                        {
+                          papel: 'tecnico',
+                          label: 'Responsável Técnico',
+                          Icon: Hammer,
+                          sel: selTecnico,
+                          setSel: setSelTecnico,
+                          atualId: tecnicoId,
+                          chip: 'bg-indigo-50 text-indigo-600',
+                        },
+                        {
+                          papel: 'juridico',
+                          label: 'Responsável Jurídico',
+                          Icon: Scale,
+                          sel: selJuridico,
+                          setSel: setSelJuridico,
+                          atualId: juridicoId,
+                          chip: 'bg-purple-50 text-purple-600',
+                        },
+                      ] as const
+                    ).map(({ papel, label, Icon, sel, setSel, atualId, chip }) => {
+                      const convitePendente = convites.find(
+                        (c) => c.papel === papel && c.status === 'pendente'
+                      );
+                      const nomeAtual = atualId
+                        ? (membros.find((m) => m.id === atualId)?.name ?? 'Atribuído')
+                        : null;
+                      const idSel = sel ? Number(sel) : null;
+                      const mudou = idSel !== (atualId ?? null);
+                      const salvando = salvandoPapel === papel;
+
+                      return (
+                        <div
+                          key={papel}
+                          className="rounded-xl border border-slate-200 bg-white p-3.5"
+                        >
+                          <label className="text-[9px] font-black text-slate-500 uppercase tracking-wider flex items-center gap-1 mb-2">
+                            <Icon size={11} /> {label}
+                          </label>
+
+                          {/* Estado atual */}
+                          <div className="flex items-center gap-2.5 mb-2.5">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0 ${
+                                nomeAtual ? chip : 'bg-slate-100 text-slate-300'
+                              }`}
+                            >
+                              {nomeAtual ? nomeAtual.charAt(0) : '—'}
+                            </div>
+                            <div className="min-w-0">
+                              {nomeAtual ? (
+                                <>
+                                  <p className="text-xs font-bold text-slate-800 truncate flex items-center gap-1">
+                                    {nomeAtual}
+                                    <CheckCircle2 size={12} className="text-emerald-500 shrink-0" />
+                                  </p>
+                                  <p className="text-[10px] text-slate-400">Responsável atual</p>
+                                </>
+                              ) : (
+                                <p className="text-xs font-semibold text-slate-400">
+                                  Não atribuído
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Convite pendente */}
+                          {convitePendente && (
+                            <div className="flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 mb-2.5">
+                              <Clock size={13} className="text-amber-500 shrink-0" />
+                              <p className="text-[11px] font-medium text-amber-700 flex-1 min-w-0">
+                                Convite enviado a{' '}
+                                <span className="font-bold">{convitePendente.convidado_nome}</span>{' '}
+                                — aguardando aceite
+                              </p>
+                              <button
+                                onClick={() => handleAtribuir(papel, null)}
+                                disabled={salvando}
+                                className="text-[10px] font-black text-amber-600 hover:text-amber-800 disabled:opacity-50 shrink-0"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Picker */}
+                          <div className="flex gap-2">
+                            <select
+                              value={sel}
+                              onChange={(e) => setSel(e.target.value)}
+                              className="flex-1 min-w-0 text-xs border border-slate-200 rounded-xl p-2.5 focus:ring-2 focus:ring-blue-400 focus:outline-none"
+                            >
+                              <option value="">Não atribuído</option>
+                              {membros.map((m) => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} — {m.role}
+                                </option>
+                              ))}
+                            </select>
+                            <button
+                              onClick={() => handleAtribuir(papel, idSel)}
+                              disabled={salvando || !mudou}
+                              className="px-3.5 py-2.5 bg-blue-600 text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+                            >
+                              {salvando ? (
+                                <Loader2 size={13} className="animate-spin" />
+                              ) : podeAtribuirDireto || !idSel ? (
+                                <Check size={13} />
+                              ) : (
+                                <Send size={13} />
+                              )}
+                              {salvando
+                                ? '...'
+                                : !idSel
+                                  ? 'Remover'
+                                  : podeAtribuirDireto
+                                    ? 'Atribuir'
+                                    : 'Convidar'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
-
-                {/* Membros da plataforma */}
-                {membros.length > 0 && (
-                  <div>
-                    <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">
-                      Membros da plataforma ({membros.length})
-                    </h4>
-                    <div className="space-y-1.5">
-                      {membros.map((m) => (
-                        <div
-                          key={m.id}
-                          className="flex items-center gap-3 p-2.5 bg-slate-50 border border-slate-100 rounded-xl"
-                        >
-                          <div className="w-7 h-7 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 text-xs font-black shrink-0">
-                            {m.name.charAt(0)}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-slate-800 truncate">{m.name}</p>
-                            <p className="text-[10px] text-slate-400">{m.role}</p>
-                          </div>
-                          {m.id === tecnicoId && (
-                            <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full shrink-0">
-                              Técnico
-                            </span>
-                          )}
-                          {m.id === juridicoId && (
-                            <span className="text-[9px] font-bold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full shrink-0">
-                              Jurídico
-                            </span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </section>
             )}
 

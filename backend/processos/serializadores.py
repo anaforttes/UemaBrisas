@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Processo
+from .models import Processo, ConviteAtribuicao
 
 
 class ProcessoSerializer(serializers.ModelSerializer):
@@ -53,3 +53,25 @@ class ProcessoSerializer(serializers.ModelSerializer):
         if not (0 <= value <= 100):
             raise serializers.ValidationError("O progresso deve estar entre 0 e 100.")
         return value
+
+
+class ConviteAtribuicaoSerializer(serializers.ModelSerializer):
+    papel_display     = serializers.CharField(source='get_papel_display', read_only=True)
+    convidado_nome    = serializers.SerializerMethodField()
+    solicitante_nome  = serializers.SerializerMethodField()
+    processo_titulo   = serializers.CharField(source='processo.title', read_only=True)
+    processo_protocol = serializers.CharField(source='processo.protocol', read_only=True)
+
+    class Meta:
+        model = ConviteAtribuicao
+        fields = [
+            'id', 'processo', 'processo_titulo', 'processo_protocol',
+            'papel', 'papel_display', 'convidado', 'convidado_nome',
+            'solicitante_nome', 'status', 'criado_em', 'respondido_em',
+        ]
+
+    def get_convidado_nome(self, obj):
+        return obj.convidado.name if obj.convidado else None
+
+    def get_solicitante_nome(self, obj):
+        return obj.solicitado_por.name if obj.solicitado_por else None

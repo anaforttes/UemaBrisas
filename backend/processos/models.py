@@ -122,3 +122,39 @@ class EventoProcesso(models.Model):
 
     def __str__(self):
         return f'{self.tipo} — {self.processo.protocol}'
+
+
+class ConviteAtribuicao(models.Model):
+    PAPEIS = [
+        ('tecnico',  'Técnico'),
+        ('juridico', 'Jurídico'),
+    ]
+    STATUS = [
+        ('pendente',  'Pendente'),
+        ('aceito',    'Aceito'),
+        ('recusado',  'Recusado'),
+        ('cancelado', 'Cancelado'),
+    ]
+
+    processo       = models.ForeignKey(Processo, on_delete=models.CASCADE, related_name='convites')
+    papel          = models.CharField(max_length=10, choices=PAPEIS)
+    convidado      = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='convites_recebidos',
+    )
+    solicitado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        related_name='convites_enviados',
+    )
+    status         = models.CharField(max_length=10, choices=STATUS, default='pendente')
+    criado_em      = models.DateTimeField(auto_now_add=True)
+    respondido_em  = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+
+    def __str__(self):
+        return f'Convite {self.papel} → {self.convidado_id} ({self.status})'

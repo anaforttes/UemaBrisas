@@ -7,6 +7,7 @@ class Notificacao(models.Model):
         ('comentario', 'Comentário'),
         ('colaborador', 'Colaborador'),
         ('conflito', 'Conflito de versão'),
+        ('atribuicao', 'Atribuição'),
         ('sistema', 'Sistema'),
     ]
 
@@ -20,6 +21,12 @@ class Notificacao(models.Model):
     descricao = models.TextField(blank=True, default='')
     lida = models.BooleanField(default=False)
     link = models.CharField(max_length=500, blank=True, default='')
+    convite = models.ForeignKey(
+        'processos.ConviteAtribuicao',
+        on_delete=models.CASCADE,
+        null=True, blank=True,
+        related_name='notificacoes',
+    )
     criado_em = models.DateTimeField(auto_now_add=True)
 
     class Meta:

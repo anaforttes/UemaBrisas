@@ -1,13 +1,14 @@
 from .models import Notificacao
 
 
-def criar_notificacao(usuario, tipo: str, titulo: str, descricao: str = '', link: str = '') -> Notificacao:
+def criar_notificacao(usuario, tipo: str, titulo: str, descricao: str = '', link: str = '', convite=None) -> Notificacao:
     return Notificacao.objects.create(
         usuario=usuario,
         tipo=tipo,
         titulo=titulo,
         descricao=descricao,
         link=link,
+        convite=convite,
     )
 
 

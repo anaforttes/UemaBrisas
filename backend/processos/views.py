@@ -5,11 +5,12 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 
-from .models import Processo, EventoProcesso
-from .serializadores import ProcessoSerializer
+from .models import Processo, EventoProcesso, ConviteAtribuicao
+from .serializadores import ProcessoSerializer, ConviteAtribuicaoSerializer
 from .servicos import (
     listar_processos, criar_processo, processos_do_usuario,
     papeis_no_processo, calcular_stats,
+    atribuir_ou_convidar, responder_convite,
 )
 from .permissoes import pode_editar_processo, pode_deletar_processo
 from .eventos import registrar
@@ -120,6 +121,60 @@ def processos_meus(request):
         for proc, obj in zip(serializer.data, qs)
     ]
     return Response(dados)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def atribuir_view(request, pk):
+    from autenticacao.models import CustomUser
+    processo = get_object_or_404(Processo, pk=pk)
+    if not pode_editar_processo(request.user, processo):
+        return Response({'erro': 'Sem permissão para atribuir equipe.'},
+                        status=status.HTTP_403_FORBIDDEN)
+
+    papel = request.data.get('papel')
+    usuario_id = request.data.get('usuario_id')
+    if papel not in ('tecnico', 'juridico'):
+        return Response({'erro': 'Papel inválido.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        resultado, convite = atribuir_ou_convidar(processo, papel, usuario_id, request.user)
+    except CustomUser.DoesNotExist:
+        return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as e:
+        return Response({'erro': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    data = {'resultado': resultado, 'processo': ProcessoSerializer(processo).data}
+    if convite:
+        data['convite'] = ConviteAtribuicaoSerializer(convite).data
+    return Response(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def convites_processo(request, pk):
+    processo = get_object_or_404(Processo, pk=pk)
+    if not pode_editar_processo(request.user, processo):
+        return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
+    convites = (
+        processo.convites.filter(status='pendente')
+        .select_related('convidado', 'solicitado_por', 'processo')
+    )
+    return Response(ConviteAtribuicaoSerializer(convites, many=True).data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def responder_convite_view(request, pk):
+    convite = get_object_or_404(ConviteAtribuicao, pk=pk)
+    acao = request.data.get('acao')
+    try:
+        responder_convite(convite, request.user, acao)
+    except PermissionError as e:
+        return Response({'erro': str(e)}, status=status.HTTP_403_FORBIDDEN)
+    except ValueError as e:
+        return Response({'erro': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(ConviteAtribuicaoSerializer(convite).data)
 
 
 @api_view(["GET"])

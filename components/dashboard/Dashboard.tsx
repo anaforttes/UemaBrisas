@@ -12,6 +12,9 @@ import {
   AlertCircle,
   CalendarClock,
   Timer,
+  Check,
+  X,
+  Loader2,
 } from 'lucide-react';
 import { buscarDashboard, DashboardData } from '../../services/painelService';
 import {
@@ -20,6 +23,7 @@ import {
   marcarTodasLidas,
   type Notificacao,
 } from '../../services/notificacoesService';
+import { processosService } from '../../services/processosService';
 import { User } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
@@ -76,6 +80,28 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
       console.error('Erro ao carregar notificações:', error);
     }
   }, []);
+
+  const [respondendoConvite, setRespondendoConvite] = useState<number | null>(null);
+
+  const handleResponderConvite = useCallback(
+    async (n: Notificacao, acao: 'aceitar' | 'recusar') => {
+      if (!n.convite || respondendoConvite) return;
+      setRespondendoConvite(n.convite.id);
+      try {
+        await processosService.responderConvite(n.convite.id, acao);
+        if (!n.lida) {
+          await marcarLida(n.id);
+          setNaoLidas((c) => Math.max(0, c - 1));
+        }
+        await carregarNotifs();
+      } catch (error) {
+        console.error('Erro ao responder convite:', error);
+      } finally {
+        setRespondendoConvite(null);
+      }
+    },
+    [respondendoConvite, carregarNotifs]
+  );
 
   const carregar = useCallback(
     async (silencioso = false) => {
@@ -286,6 +312,8 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                         key={n.id}
                         className={`flex items-start gap-3 px-5 py-3.5 cursor-pointer hover:bg-slate-50 transition-colors ${!n.lida ? 'bg-blue-50/40' : ''}`}
                         onClick={async () => {
+                          const conviteAberto =
+                            n.tipo === 'atribuicao' && n.convite?.status === 'pendente';
                           if (!n.lida) {
                             await marcarLida(n.id);
                             setNotifs((p) =>
@@ -293,7 +321,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                             );
                             setNaoLidas((c) => Math.max(0, c - 1));
                           }
-                          if (n.link) {
+                          if (n.link && !conviteAberto) {
                             navigate(n.link);
                             setShowNotif(false);
                           }
@@ -321,6 +349,50 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                               minute: '2-digit',
                             })}
                           </p>
+
+                          {n.tipo === 'atribuicao' &&
+                            n.convite &&
+                            n.convite.status === 'pendente' && (
+                              <div className="flex items-center gap-2 mt-2.5">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleResponderConvite(n, 'aceitar');
+                                  }}
+                                  disabled={respondendoConvite === n.convite.id}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-emerald-600 text-white rounded-lg text-[11px] font-black hover:bg-emerald-700 transition-colors disabled:opacity-50"
+                                >
+                                  {respondendoConvite === n.convite.id ? (
+                                    <Loader2 size={12} className="animate-spin" />
+                                  ) : (
+                                    <Check size={12} />
+                                  )}
+                                  Aceitar
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleResponderConvite(n, 'recusar');
+                                  }}
+                                  disabled={respondendoConvite === n.convite.id}
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-white border border-slate-200 text-slate-600 rounded-lg text-[11px] font-black hover:bg-slate-50 transition-colors disabled:opacity-50"
+                                >
+                                  <X size={12} />
+                                  Recusar
+                                </button>
+                              </div>
+                            )}
+
+                          {n.tipo === 'atribuicao' && n.convite?.status === 'aceito' && (
+                            <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-emerald-600">
+                              <Check size={11} /> Convite aceito
+                            </span>
+                          )}
+                          {n.tipo === 'atribuicao' && n.convite?.status === 'recusado' && (
+                            <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-slate-400">
+                              <X size={11} /> Convite recusado
+                            </span>
+                          )}
                         </div>
                       </div>
                     ))
@@ -375,7 +447,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                 <div
                   key={p.id}
                   className="flex items-center gap-4 px-7 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/processos/${p.id}`)}
+                  onClick={() => navigate('/processes', { state: { abrirProcessoId: p.id } })}
                 >
                   <span className="text-lg font-black text-slate-200 w-5 text-center shrink-0">
                     {i + 1}
@@ -420,7 +492,7 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                 <div
                   key={p.id}
                   className="flex items-center gap-4 px-7 py-3.5 hover:bg-slate-50 cursor-pointer transition-colors"
-                  onClick={() => navigate(`/processos/${p.id}`)}
+                  onClick={() => navigate('/processes', { state: { abrirProcessoId: p.id } })}
                 >
                   <span className="text-lg font-black text-slate-200 w-5 text-center shrink-0">
                     {i + 1}

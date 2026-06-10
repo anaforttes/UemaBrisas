@@ -17,8 +17,8 @@ import {
   Download,
   Trash2,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { ProcessoMeu } from '../../services/painelService';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { ProcessoMeu, obterProcesso } from '../../services/painelService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
@@ -53,11 +53,22 @@ export const ProcessManagement: React.FC = () => {
   const [deletando, setDeletando] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const location = useLocation();
   const { pode } = usePermissoes();
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Abre o drawer de um processo vindo de outra tela (ex.: cards do Painel)
+  useEffect(() => {
+    const id = (location.state as { abrirProcessoId?: string | number } | null)?.abrirProcessoId;
+    if (!id) return;
+    obterProcesso(id)
+      .then(setProcessoSelecionado)
+      .catch(() => {});
+    navigate('.', { replace: true, state: {} });
+  }, [location.state, navigate]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
