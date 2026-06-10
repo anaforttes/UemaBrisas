@@ -3,12 +3,16 @@ import {
   BarChart3,
   TrendingUp,
   FileText,
-  Users,
-  Calendar,
   Send,
   MessageSquare,
   X,
   Minus,
+  Activity,
+  CheckCircle2,
+  Clock,
+  Layers,
+  Award,
+  PieChart,
 } from 'lucide-react';
 import { buscarAgregacoes, type AgregacoesAPI } from '../../services/painelService';
 import { chatService, MensagemChat } from '../../services/chatService';
@@ -508,6 +512,13 @@ export const Reports: React.FC = () => {
     [dados]
   );
 
+  // ── Derivados de apresentação ──
+  const chartTicks = Array.from({ length: 5 }, (_, i) => Math.round((maxMes * (4 - i)) / 4));
+  const totalModalidade = porModalidade.s + porModalidade.e;
+  const DONUT_C = 2 * Math.PI * 52;
+  const dashS = (porModalidade.pctS / 100) * DONUT_C;
+  const dashE = (porModalidade.pctE / 100) * DONUT_C;
+
   if (carregando) {
     return (
       <div className="p-10 max-w-7xl mx-auto">
@@ -521,19 +532,19 @@ export const Reports: React.FC = () => {
             <div className="w-36 h-11 bg-slate-100 rounded-2xl animate-pulse" />
           </div>
         </div>
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-[24px] border border-slate-100 p-6">
-              <div className="w-10 h-10 bg-slate-100 rounded-xl animate-pulse mb-4" />
+            <div key={i} className="bg-white rounded-3xl border border-slate-100 p-6">
+              <div className="w-11 h-11 bg-slate-100 rounded-2xl animate-pulse mb-4" />
               <div className="h-8 w-14 bg-slate-200 rounded-lg animate-pulse mb-2" />
               <div className="h-3 w-20 bg-slate-100 rounded animate-pulse" />
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-          <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 p-8">
-            <div className="h-6 w-40 bg-slate-200 rounded-lg animate-pulse mb-6" />
-            <div className="flex items-end gap-2 h-40">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 p-8">
+            <div className="h-6 w-40 bg-slate-200 rounded-lg animate-pulse mb-8" />
+            <div className="flex items-end gap-2 h-48">
               {SKELETON_BARS.map((h, i) => (
                 <div
                   key={i}
@@ -543,39 +554,39 @@ export const Reports: React.FC = () => {
               ))}
             </div>
           </div>
-          <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+          <div className="bg-white rounded-3xl border border-slate-100 p-8">
             <div className="h-6 w-32 bg-slate-200 rounded-lg animate-pulse mb-6" />
-            <div className="space-y-5">
-              {[80, 55, 40, 70].map((w, i) => (
-                <div key={i}>
-                  <div
-                    className="h-3 bg-slate-100 rounded-full animate-pulse mb-2"
-                    style={{ width: `${w}%` }}
-                  />
-                  <div
-                    className="h-3 bg-slate-100 rounded-full animate-pulse"
-                    style={{ width: `${w - 15}%` }}
-                  />
-                </div>
+            <div className="w-36 h-36 rounded-full bg-slate-100 animate-pulse mx-auto mb-6" />
+            <div className="space-y-3">
+              {[80, 55, 40].map((w, i) => (
+                <div
+                  key={i}
+                  className="h-3 bg-slate-100 rounded-full animate-pulse"
+                  style={{ width: `${w}%` }}
+                />
               ))}
             </div>
           </div>
         </div>
-        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
-          <div className="h-6 w-56 bg-slate-200 rounded-lg animate-pulse mb-6" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex items-center gap-4 py-4 border-b border-slate-50 last:border-0"
-            >
-              <div className="w-8 h-8 bg-slate-100 rounded-xl animate-pulse shrink-0" />
-              <div className="flex-1">
-                <div className="h-4 w-36 bg-slate-100 rounded animate-pulse mb-2" />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {Array.from({ length: 2 }).map((_, c) => (
+            <div key={c} className="bg-white rounded-3xl border border-slate-100 p-8">
+              <div className="h-6 w-56 bg-slate-200 rounded-lg animate-pulse mb-6" />
+              {Array.from({ length: 4 }).map((_, i) => (
                 <div
-                  className="h-2 bg-slate-100 rounded-full animate-pulse"
-                  style={{ width: `${65 - i * 15}%` }}
-                />
-              </div>
+                  key={i}
+                  className="flex items-center gap-4 py-3 border-b border-slate-50 last:border-0"
+                >
+                  <div className="w-8 h-8 bg-slate-100 rounded-xl animate-pulse shrink-0" />
+                  <div className="flex-1">
+                    <div className="h-4 w-36 bg-slate-100 rounded animate-pulse mb-2" />
+                    <div
+                      className="h-2 bg-slate-100 rounded-full animate-pulse"
+                      style={{ width: `${65 - i * 12}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
             </div>
           ))}
         </div>
@@ -586,39 +597,41 @@ export const Reports: React.FC = () => {
   return (
     <div className="p-10 max-w-7xl mx-auto animate-in fade-in duration-700">
       {/* Header */}
-      <header className="mb-10 flex items-end justify-between">
+      <header className="mb-8 flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
         <div>
+          <div className="flex items-center gap-2.5 mb-2">
+            <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200">
+              <BarChart3 size={18} className="text-white" />
+            </div>
+            <span className="text-[11px] font-black uppercase tracking-widest text-blue-600">
+              Painel de Análises
+            </span>
+          </div>
           <h2 className="text-4xl font-black text-slate-800 tracking-tight">
             Relatórios e Análises
           </h2>
-          <p className="text-slate-500 mt-2 font-medium">
+          <p className="text-slate-500 mt-1.5 font-medium">
             Visualize sua evolução e tome decisões baseadas em dados.
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
             {(['7d', '30d', '90d', 'all'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => setPeriodo(p)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${periodo === p ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${periodo === p ? 'bg-blue-600 text-white shadow-md shadow-blue-200' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
               >
-                {p === '7d'
-                  ? 'Últimos 7 dias'
-                  : p === '30d'
-                    ? 'Últimos 30 dias'
-                    : p === '90d'
-                      ? 'Últimos 90 dias'
-                      : 'Tudo'}
+                {p === '7d' ? '7 dias' : p === '30d' ? '30 dias' : p === '90d' ? '90 dias' : 'Tudo'}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1">
+          <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-2xl p-1 shadow-sm">
             {(['todos', 'REURB-S', 'REURB-E'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTipoFiltro(t)}
-                className={`px-4 py-2 rounded-xl text-xs font-black transition-all ${tipoFiltro === t ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`px-3.5 py-2 rounded-xl text-xs font-black transition-all ${tipoFiltro === t ? 'bg-slate-900 text-white shadow-md' : 'text-slate-500 hover:text-slate-800 hover:bg-slate-50'}`}
               >
                 {t === 'todos' ? 'Todos' : t}
               </button>
@@ -628,13 +641,14 @@ export const Reports: React.FC = () => {
       </header>
 
       {/* Cards de stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-6 mb-10">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-5 mb-6">
         {[
           {
             label: 'Total de Processos',
             value: stats.total,
             cor: 'text-blue-600',
             bg: 'bg-blue-50',
+            accent: 'bg-blue-500',
             icon: FileText,
           },
           {
@@ -642,203 +656,306 @@ export const Reports: React.FC = () => {
             value: stats.emAndamento,
             cor: 'text-amber-600',
             bg: 'bg-amber-50',
-            icon: TrendingUp,
+            accent: 'bg-amber-500',
+            icon: Activity,
           },
           {
             label: 'Concluídos',
             value: stats.concluidos,
-            cor: 'text-green-600',
-            bg: 'bg-green-50',
-            icon: BarChart3,
+            cor: 'text-emerald-600',
+            bg: 'bg-emerald-50',
+            accent: 'bg-emerald-500',
+            icon: CheckCircle2,
           },
           {
             label: 'Pendentes',
             value: stats.pendentes,
             cor: 'text-slate-600',
-            bg: 'bg-slate-50',
-            icon: Calendar,
+            bg: 'bg-slate-100',
+            accent: 'bg-slate-400',
+            icon: Clock,
           },
           {
             label: 'Progresso Médio',
             value: `${stats.progressoMedio}%`,
             cor: 'text-indigo-600',
             bg: 'bg-indigo-50',
-            icon: Users,
+            accent: 'bg-indigo-500',
+            icon: TrendingUp,
           },
         ].map((s, i) => (
           <div
             key={i}
-            className="bg-white rounded-[24px] border border-slate-100 p-6 hover:shadow-lg transition-all"
+            className="group relative bg-white rounded-3xl border border-slate-100 p-6 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all overflow-hidden"
           >
+            <div className={`absolute inset-x-0 top-0 h-1 ${s.accent}`} />
             <div
-              className={`${s.bg} ${s.cor} w-10 h-10 rounded-xl flex items-center justify-center mb-4`}
+              className={`${s.bg} ${s.cor} w-11 h-11 rounded-2xl flex items-center justify-center mb-4 group-hover:scale-105 transition-transform`}
             >
               <s.icon size={20} />
             </div>
-            <p className="text-3xl font-black text-slate-800">{s.value}</p>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mt-1">
+            <p className="text-3xl font-black text-slate-800 tabular-nums">{s.value}</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1">
               {s.label}
             </p>
           </div>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         {/* Gráfico por mês */}
-        <div className="lg:col-span-2 bg-white rounded-[32px] border border-slate-100 p-8">
-          <h3 className="font-black text-slate-800 text-lg mb-6">Processos por Mês</h3>
-          <div className="flex items-end gap-2 h-40">
-            {porMes.map((m, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-[9px] font-bold text-slate-400">
-                  {m.valor > 0 ? m.valor : ''}
+        <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 p-8 shadow-sm">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h3 className="font-black text-slate-800 text-lg">Processos por Mês</h3>
+              <p className="text-xs text-slate-400 font-medium mt-0.5">
+                Aberturas registradas ao longo do ano
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-400">
+              <span className="w-3 h-3 rounded-md bg-gradient-to-t from-blue-600 to-blue-400 inline-block" />
+              Processos
+            </div>
+          </div>
+          <div className="flex gap-3">
+            {/* Eixo Y */}
+            <div className="flex flex-col justify-between h-48 text-[10px] font-bold text-slate-300 text-right pr-1 shrink-0">
+              {chartTicks.map((t, i) => (
+                <span key={i} className="tabular-nums leading-none">
+                  {t}
                 </span>
-                <div
-                  className="w-full bg-blue-600 rounded-t-lg transition-all hover:bg-blue-700"
-                  style={{
-                    height: `${Math.max((m.valor / maxMes) * 100, m.valor > 0 ? 8 : 2)}%`,
-                    minHeight: m.valor > 0 ? 8 : 2,
-                  }}
-                />
-                <span className="text-[9px] font-bold text-slate-400">{m.nome}</span>
+              ))}
+            </div>
+            {/* Área do gráfico */}
+            <div className="flex-1 min-w-0">
+              <div className="relative">
+                <div className="absolute inset-0 flex flex-col justify-between">
+                  {chartTicks.map((_, i) => (
+                    <div key={i} className="border-t border-dashed border-slate-100" />
+                  ))}
+                </div>
+                <div className="relative flex items-end gap-1.5 h-48">
+                  {porMes.map((m, i) => {
+                    const h = maxMes > 0 ? (m.valor / maxMes) * 100 : 0;
+                    return (
+                      <div
+                        key={i}
+                        className="group/bar relative flex-1 flex flex-col items-center justify-end h-full"
+                      >
+                        {m.valor > 0 && (
+                          <span className="text-[10px] font-black text-slate-500 mb-1 tabular-nums">
+                            {m.valor}
+                          </span>
+                        )}
+                        <div
+                          className="w-full max-w-[26px] rounded-t-lg bg-gradient-to-t from-blue-600 to-blue-400 group-hover/bar:from-blue-700 group-hover/bar:to-blue-500 transition-all"
+                          style={{ height: `${h}%`, minHeight: m.valor > 0 ? 6 : 0 }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            ))}
+              <div className="flex gap-1.5 mt-2.5">
+                {porMes.map((m, i) => (
+                  <span key={i} className="flex-1 text-center text-[10px] font-bold text-slate-400">
+                    {m.nome}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Distribuição */}
-        <div className="bg-white rounded-[32px] border border-slate-100 p-8">
-          <h3 className="font-black text-slate-800 text-lg mb-6">Por Modalidade</h3>
-          <div className="space-y-4">
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-xs font-bold text-slate-600">REURB-S</span>
-                <span className="text-xs font-black text-blue-600">{porModalidade.pctS}%</span>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-600 rounded-full transition-all"
-                  style={{ width: `${porModalidade.pctS}%` }}
+        {/* Modalidade (donut) + Status */}
+        <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm">
+          <h3 className="font-black text-slate-800 text-lg mb-2 flex items-center gap-2">
+            <PieChart size={18} className="text-blue-600" /> Por Modalidade
+          </h3>
+
+          <div className="relative w-40 h-40 mx-auto my-4">
+            <svg viewBox="0 0 140 140" className="w-40 h-40 -rotate-90">
+              <circle cx="70" cy="70" r="52" fill="none" stroke="#f1f5f9" strokeWidth="16" />
+              {porModalidade.pctS > 0 && (
+                <circle
+                  cx="70"
+                  cy="70"
+                  r="52"
+                  fill="none"
+                  stroke="#2563eb"
+                  strokeWidth="16"
+                  strokeLinecap="round"
+                  strokeDasharray={`${dashS} ${DONUT_C}`}
                 />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">{porModalidade.s} processos</p>
-            </div>
-            <div>
-              <div className="flex justify-between mb-1">
-                <span className="text-xs font-bold text-slate-600">REURB-E</span>
-                <span className="text-xs font-black text-purple-600">{porModalidade.pctE}%</span>
-              </div>
-              <div className="h-3 bg-slate-100 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-purple-600 rounded-full transition-all"
-                  style={{ width: `${porModalidade.pctE}%` }}
+              )}
+              {porModalidade.pctE > 0 && (
+                <circle
+                  cx="70"
+                  cy="70"
+                  r="52"
+                  fill="none"
+                  stroke="#7c3aed"
+                  strokeWidth="16"
+                  strokeLinecap="round"
+                  strokeDasharray={`${dashE} ${DONUT_C}`}
+                  strokeDashoffset={-dashS}
                 />
-              </div>
-              <p className="text-[10px] text-slate-400 mt-1">{porModalidade.e} processos</p>
+              )}
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-3xl font-black text-slate-800 tabular-nums leading-none">
+                {totalModalidade}
+              </span>
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
+                Processos
+              </span>
             </div>
           </div>
 
-          <h3 className="font-black text-slate-800 text-base mt-8 mb-4">Por Status</h3>
-          <div className="space-y-2">
-            {porStatus.map(([status, count], i) => (
-              <div key={i} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-2.5 h-2.5 rounded-full ${STATUS_COR[status] || 'bg-slate-400'}`}
-                  />
-                  <span className="text-xs text-slate-600 font-medium truncate max-w-[140px]">
-                    {status}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between rounded-2xl bg-blue-50/60 px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />
+                <span className="text-xs font-bold text-slate-700">REURB-S</span>
+              </div>
+              <div className="text-xs font-black text-slate-800 tabular-nums">
+                {porModalidade.s}
+                <span className="text-blue-600 ml-1.5">{porModalidade.pctS}%</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between rounded-2xl bg-purple-50/60 px-3.5 py-2.5">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-purple-600" />
+                <span className="text-xs font-bold text-slate-700">REURB-E</span>
+              </div>
+              <div className="text-xs font-black text-slate-800 tabular-nums">
+                {porModalidade.e}
+                <span className="text-purple-600 ml-1.5">{porModalidade.pctE}%</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="h-px bg-slate-100 my-5" />
+
+          <h4 className="font-black text-slate-800 text-sm mb-3">Por Status</h4>
+          {porStatus.length === 0 ? (
+            <p className="text-xs text-slate-400 text-center py-3">Sem dados no período.</p>
+          ) : (
+            <div className="space-y-2">
+              {porStatus.map(([status, count], i) => (
+                <div key={i} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className={`w-2.5 h-2.5 rounded-full shrink-0 ${STATUS_COR[status] || 'bg-slate-400'}`}
+                    />
+                    <span className="text-xs text-slate-600 font-medium truncate">{status}</span>
+                  </div>
+                  <span className="text-xs font-black text-slate-800 tabular-nums ml-2">
+                    {count}
                   </span>
                 </div>
-                <span className="text-xs font-black text-slate-800">{count}</span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Produtividade por responsável */}
-      <div className="bg-white rounded-[32px] border border-slate-100 p-8">
-        <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
-          <Users size={20} className="text-blue-600" /> Produtividade por Responsável
-        </h3>
-        {porResponsavel.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-8">
-            Nenhum dado disponível para o período.
-          </p>
-        ) : (
-          <div className="space-y-4">
-            {porResponsavel.map(([nome, count], i) => {
-              const max = porResponsavel[0][1];
-              const pct = Math.round((count / max) * 100);
-              return (
-                <div key={i} className="flex items-center gap-4">
-                  <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center text-blue-700 text-xs font-black shrink-0">
-                    {nome.charAt(0)}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-sm font-bold text-slate-700 truncate">{nome}</span>
-                      <span className="text-sm font-black text-slate-800">
-                        {count} processo{count > 1 ? 's' : ''}
-                      </span>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Produtividade por responsável */}
+        <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm">
+          <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+            <Award size={20} className="text-blue-600" /> Produtividade por Responsável
+          </h3>
+          {porResponsavel.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">
+              Nenhum dado disponível para o período.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {porResponsavel.map(([nome, count], i) => {
+                const max = porResponsavel[0][1];
+                const pct = Math.round((count / max) * 100);
+                const rankCor =
+                  i === 0
+                    ? 'bg-gradient-to-br from-amber-400 to-amber-600 text-white'
+                    : i === 1
+                      ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white'
+                      : i === 2
+                        ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'
+                        : 'bg-slate-100 text-slate-500';
+                return (
+                  <div key={i} className="flex items-center gap-4">
+                    <div
+                      className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shrink-0 ${rankCor}`}
+                    >
+                      {i + 1}
                     </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-600 rounded-full transition-all"
-                        style={{ width: `${pct}%` }}
-                      />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between mb-1.5">
+                        <span className="text-sm font-bold text-slate-700 truncate">{nome}</span>
+                        <span className="text-sm font-black text-slate-800 ml-2 shrink-0 tabular-nums">
+                          {count} processo{count > 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${i === 0 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-blue-500'}`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
-      {/* Processos por Etapa */}
-      <div className="bg-white rounded-[32px] border border-slate-100 p-8">
-        <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
-          <BarChart3 size={20} className="text-blue-600" /> Processos por Etapa
-        </h3>
-        <p className="text-xs text-slate-400 font-medium mb-6">
-          Distribuição nas 14 etapas do fluxo REURB
-        </p>
-        {porEtapa.length === 0 ? (
-          <p className="text-sm text-slate-400 text-center py-8">
-            Nenhum dado disponível para o período.
+        {/* Processos por Etapa */}
+        <div className="bg-white rounded-3xl border border-slate-100 p-8 shadow-sm">
+          <h3 className="font-black text-slate-800 text-lg mb-1 flex items-center gap-2">
+            <Layers size={20} className="text-blue-600" /> Processos por Etapa
+          </h3>
+          <p className="text-xs text-slate-400 font-medium mb-6">
+            Distribuição nas 14 etapas do fluxo REURB
           </p>
-        ) : (
-          <div className="space-y-3">
-            {porEtapa.map((e) => {
-              const pct = maxEtapa > 0 ? Math.round((e.total / maxEtapa) * 100) : 0;
-              return (
-                <div key={e.numero} className="flex items-center gap-4">
-                  <span className="w-6 text-xs font-black text-slate-400 text-right shrink-0">
-                    {e.numero}
-                  </span>
-                  <div className="flex-1">
-                    <div className="flex justify-between mb-1">
-                      <span className="text-xs font-bold text-slate-600 truncate">{e.etapa}</span>
-                      <span className="text-xs font-black text-slate-800 ml-2 shrink-0">
-                        {e.total}
-                      </span>
-                    </div>
-                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          e.total === 0 ? 'bg-slate-200' : 'bg-blue-500'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
+          {porEtapa.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-10">
+              Nenhum dado disponível para o período.
+            </p>
+          ) : (
+            <div className="space-y-2.5 max-h-80 overflow-y-auto pr-1 scrollbar-thin">
+              {porEtapa.map((e) => {
+                const pct = maxEtapa > 0 ? Math.round((e.total / maxEtapa) * 100) : 0;
+                return (
+                  <div key={e.numero} className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-lg bg-slate-50 text-[11px] font-black text-slate-400 flex items-center justify-center shrink-0 tabular-nums">
+                      {e.numero}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between mb-1">
+                        <span className="text-xs font-bold text-slate-600 truncate">{e.etapa}</span>
+                        <span className="text-xs font-black text-slate-800 ml-2 shrink-0 tabular-nums">
+                          {e.total}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            e.total === 0
+                              ? 'bg-slate-200'
+                              : 'bg-gradient-to-r from-blue-500 to-blue-400'
+                          }`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Chat flutuante */}
