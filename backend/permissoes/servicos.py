@@ -1,49 +1,52 @@
-# Regras de negocio do app permissoes.
+"""
+App permissoes/servicos.py
+
+Este módulo agora é um proxy simples para o controleadmin.
+Toda a lógica de permissão foi unificada em controleadmin/servicos.py.
+Mantido por compatibilidade com imports existentes.
+"""
 from autenticacao.models import CustomUser
+from controleadmin.servicos import (
+    usuario_possui_permissao_codigo,
+    usuario_tem_acesso_controleadmin,
+    garantir_perfil_usuario,
+)
 
 
 def obter_permissoes_usuario(user: CustomUser) -> dict:
     """
-    Retorna roles, flags e acoes do usuario a partir dos campos
-    CustomUser.role, CustomUser.access_flags e CustomUser.permissions_data.
+    Retorna as permissões efetivas do usuário via controleadmin.
+    Substitui a leitura direta de access_flags e permissions_data.
     """
-    flags_raw = user.access_flags or {}
-    perms_raw = user.permissions_data or {}
+    if not user or not user.is_authenticated:
+        return {'roles': [], 'flags': [], 'acoes': []}
 
-    superusuario       = flags_raw.get('superusuario', False)
-    admin_municipio    = flags_raw.get('adminMunicipio', False)
-    prof_interno       = flags_raw.get('profissionalInterno', True)
-    usuario_externo    = flags_raw.get('usuarioExterno', False)
+    # Superusuário/staff: acesso total
+    if user.is_superuser or user.is_staff:
+        return {
+            'roles': [user.role or 'Admin'],
+            'flags': ['superusuario'],
+            'acoes': ['visualizar', 'editor', 'comentar', 'aprovar', 'assinar', 'exportar', 'gerenciar_usuarios'],
+        }
 
-    visualizar = perms_raw.get('visualizar', True)
-    editor     = perms_raw.get('editor', False)
-    comentar   = perms_raw.get('comentar', True)
-    assinar    = perms_raw.get('assinar', False)
-    exportar   = perms_raw.get('exportar', False)
+    codigos_acoes = ['visualizar', 'editor', 'comentar', 'aprovar', 'assinar', 'exportar', 'gerenciar_usuarios']
+    acoes = [c for c in codigos_acoes if usuario_possui_permissao_codigo(user, c)]
 
-    acoes = []
-    if visualizar:
-        acoes.append('visualizar')
-    if editor:
-        acoes.append('editor')
-    if comentar:
-        acoes.append('comentar')
-    if user.role == 'Admin' or superusuario:
-        acoes.append('aprovar')
-    if assinar:
-        acoes.append('assinar')
-    if exportar:
-        acoes.append('exportar')
+    # Nível de acesso via controleadmin
+    nivel = None
+    try:
+        perfil = user.perfil_acesso
+        nivel = perfil.nivel_acesso.codigo if perfil.nivel_acesso else None
+    except Exception:
+        pass
+
+    flags = []
+    if usuario_tem_acesso_controleadmin(user):
+        flags.append('admin_municipio')
 
     return {
-        'roles': [user.role],
-        'flags': [
-            flag for flag, ativo in {
-                'superusuario':       superusuario,
-                'admin_municipio':    admin_municipio,
-                'profissional_interno': prof_interno,
-                'usuario_externo':    usuario_externo,
-            }.items() if ativo
-        ],
-        'acoes': acoes,
+        'roles':  [user.role] if user.role else [],
+        'flags':  flags,
+        'nivel':  nivel,
+        'acoes':  acoes,
     }

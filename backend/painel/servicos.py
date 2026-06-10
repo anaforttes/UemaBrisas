@@ -1,11 +1,29 @@
-from django.db.models import Count
+from django.db.models import Count, Avg, F, ExpressionWrapper, fields
 from django.db.models.functions import TruncMonth
 from django.utils import timezone
 from datetime import timedelta
 
 from processos.models import Processo
 from processos.constantes import STATUS_CONCLUIDOS, STATUS_EM_REVISAO, STATUS_FECHADOS
-from processos.serializadores import ProcessoSerializer
+from etapas.models import Etapa
+
+# As 14 etapas padrão do fluxo REURB (nome canônico + número)
+ETAPAS_PADRAO = [
+    (1,  'Abertura / Protocolo'),
+    (2,  'Diagnóstico Prévio'),
+    (3,  'Levantamento Topográfico'),
+    (4,  'Classificação da Modalidade'),
+    (5,  'Buscas Dominiais'),
+    (6,  'Notificação dos Confrontantes'),
+    (7,  'Estudos Técnicos'),
+    (8,  'Vetorização + Cadastro Social'),
+    (9,  'Saneamento'),
+    (10, 'Elaboração do PRF'),
+    (11, 'Aprovação do PRF'),
+    (12, 'Emissão da CRF'),
+    (13, 'Registro em Cartório'),
+    (14, 'Monitoramento Pós-REURB'),
+]
 
 
 def obter_agregacoes(periodo: str = 'all', modalidade: str = 'todos') -> dict:
@@ -30,36 +48,38 @@ def obter_agregacoes(periodo: str = 'all', modalidade: str = 'todos') -> dict:
     )
     por_mes_lista = [
         {'mes': item['mes'].strftime('%Y-%m') if item['mes'] else '', 'total': item['total']}
-        for item in por_mes
-        if item['mes']
+        for item in por_mes if item['mes']
     ]
-
-    por_modalidade = list(
-        qs.values('modality').annotate(total=Count('id')).order_by('-total')
-    )
-
-    por_status = list(
-        qs.values('status').annotate(total=Count('id')).order_by('-total')
-    )
-
-    por_responsavel = list(
-        qs.exclude(responsible_name='')
-        .values('responsible_name')
-        .annotate(total=Count('id'))
-        .order_by('-total')[:10]
-    )
 
     total = qs.count()
     progress_vals = list(qs.values_list('progress', flat=True))
     progresso_medio = round(sum(progress_vals) / len(progress_vals)) if progress_vals else 0
 
+    # ── Processos por etapa (reutiliza mesma lógica do dashboard) ─────────────
+    etapas_em_andamento = (
+        Etapa.objects.filter(status='em_andamento')
+        .values('numero')
+        .annotate(total=Count('id'))
+    )
+    etapas_dict = {e['numero']: e['total'] for e in etapas_em_andamento}
+    por_etapa_lista = [
+        {'numero': num, 'etapa': nome, 'total': etapas_dict.get(num, 0)}
+        for num, nome in ETAPAS_PADRAO
+    ]
+
     return {
         'total': total,
         'progresso_medio': progresso_medio,
         'por_mes': por_mes_lista,
-        'por_modalidade': por_modalidade,
-        'por_status': por_status,
-        'por_responsavel': por_responsavel,
+        'por_modalidade': list(qs.values('modality').annotate(total=Count('id')).order_by('-total')),
+        'por_status': list(qs.values('status').annotate(total=Count('id')).order_by('-total')),
+        'por_responsavel': list(
+            qs.exclude(responsible_name='')
+            .values('responsible_name')
+            .annotate(total=Count('id'))
+            .order_by('-total')[:10]
+        ),
+        'por_etapa': por_etapa_lista,
     }
 
 
@@ -81,16 +101,17 @@ def obter_dashboard(status_filtro=None) -> dict:
         if status_validos:
             processos = processos.filter(status__in=status_validos)
 
+    # ── Cards principais ──────────────────────────────────────────────────────
     cards = {
         'ativos':     processos_base.filter(status='Em Andamento').count(),
         'em_revisao': processos_base.filter(
             status__in=['Em Revisão', 'Em Análise', 'Análise Jurídica', 'Diligência']
         ).count(),
-        'concluidos': processos_base.filter(status__in=['Concluído', 'Finalizado']).count(),
+        'concluidos': processos_base.filter(status__in=STATUS_CONCLUIDOS).count(),
     }
 
     status_resumo = {
-        'em_edicao': processos_base.filter(status='Em Edição').count(),
+        'em_edicao':  processos_base.filter(status='Em Edição').count(),
         'em_revisao': processos_base.filter(
             status__in=['Em Revisão', 'Em Análise', 'Análise Jurídica', 'Diligência']
         ).count(),
@@ -99,21 +120,92 @@ def obter_dashboard(status_filtro=None) -> dict:
         'arquivado': processos_base.filter(status='Arquivado').count(),
     }
 
-    recentes = []
-    for processo in processos[:5]:
-        recentes.append({
-            'id':            processo.id,
-            'nome':          processo.title,
-            'title':         processo.title,
-            'applicant':     processo.applicant,
-            'requerente':    processo.applicant,
-            'modalidade':    processo.modality,
-            'modality':      processo.modality,
-            'status':        processo.status,
-            'progresso':     processo.progress,
-            'progress':      processo.progress,
-            'responsavel':   processo.responsible_name,
-            'responsibleName': processo.responsible_name,
-        })
+    # ── Recentes ──────────────────────────────────────────────────────────────
+    recentes = [
+        {
+            'id':              p.id,
+            'nome':            p.title,
+            'title':           p.title,
+            'applicant':       p.applicant,
+            'requerente':      p.applicant,
+            'modalidade':      p.modality,
+            'modality':        p.modality,
+            'status':          p.status,
+            'progresso':       p.progress,
+            'progress':        p.progress,
+            'responsavel':     p.responsible_name,
+            'responsibleName': p.responsible_name,
+        }
+        for p in processos[:5]
+    ]
 
-    return {'cards': cards, 'status': status_resumo, 'recentes': recentes}
+    # ── Top 5 mais antigos não finalizados ────────────────────────────────────
+    nao_finalizados = processos_base.exclude(status__in=STATUS_FECHADOS).order_by('created_at')
+    mais_antigos = [
+        {
+            'id':         p.id,
+            'protocol':   p.protocol or '',
+            'title':      p.title,
+            'applicant':  p.applicant,
+            'status':     p.status,
+            'created_at': p.created_at.isoformat() if p.created_at else '',
+        }
+        for p in nao_finalizados[:5]
+    ]
+
+    # ── Top 5 sem movimentação (não finalizados) ──────────────────────────────
+    sem_movimentacao = [
+        {
+            'id':         p.id,
+            'protocol':   p.protocol or '',
+            'title':      p.title,
+            'applicant':  p.applicant,
+            'status':     p.status,
+            'updated_at': p.updated_at.isoformat() if p.updated_at else '',
+        }
+        for p in nao_finalizados.order_by('updated_at')[:5]
+    ]
+
+    # ── Processos por responsável (todos os processos ativos) ─────────────────
+    processos_por_responsavel = list(
+        processos_base
+        .exclude(status__in=STATUS_FECHADOS)
+        .exclude(responsible_name='')
+        .values('responsible_name')
+        .annotate(total=Count('id'))
+        .order_by('-total')[:10]
+    )
+
+    # ── Processos por etapa ───────────────────────────────────────────────────
+    # Para cada etapa (1-14), conta quantos processos não finalizados estão
+    # com aquela etapa em status 'em_andamento'. Um processo está "naquela etapa"
+    # quando a etapa correspondente é a que está em andamento no momento.
+    processos_nao_finalizados = processos_base.exclude(status__in=STATUS_FECHADOS)
+
+    etapas_em_andamento = (
+        Etapa.objects
+        .filter(status='em_andamento')
+        .filter(processo__in=processos_nao_finalizados)
+        .values('numero')
+        .annotate(total=Count('processo', distinct=True))
+    )
+    etapas_dict = {e['numero']: e['total'] for e in etapas_em_andamento}
+
+    por_etapa = [
+        {
+            'numero': num,
+            'etapa':  nome,
+            'total':  etapas_dict.get(num, 0),
+        }
+        for num, nome in ETAPAS_PADRAO
+    ]
+
+    return {
+        'cards':                     cards,
+        'status':                    status_resumo,
+        'recentes':                  recentes,
+        'mais_antigos':              mais_antigos,
+        'sem_movimentacao':          sem_movimentacao,
+        'processos_por_responsavel': processos_por_responsavel,
+        'por_etapa':                 por_etapa,
+    }

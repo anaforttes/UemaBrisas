@@ -20,6 +20,12 @@ class CustomUserManager(BaseUserManager):
 
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
+    """
+    Usuário do sistema.
+    Permissões controladas EXCLUSIVAMENTE pelo controleadmin
+    (PerfilAcessoUsuario -> NivelAcesso -> PermissaoSistema).
+    """
+
     ROLE_CHOICES = [
         ('Admin',     'Admin'),
         ('Gestor',    'Gestor'),
@@ -29,21 +35,16 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         ('Atendente', 'Atendente'),
     ]
 
-    email        = models.EmailField(unique=True)
-    name         = models.CharField(max_length=255)
-    role         = models.CharField(max_length=100, choices=ROLE_CHOICES, default='Atendente')
-    access_flags = models.JSONField(default=dict)   # flags: superusuario, adminMunicipio, etc.
-    permissions_data = models.JSONField(            # permissões: visualizar, editor, etc.
-        default=dict,
-        db_column='permissions_data',
-    )
+    email           = models.EmailField(unique=True)
+    name            = models.CharField(max_length=255)
+    role            = models.CharField(max_length=100, choices=ROLE_CHOICES, default='Atendente', blank=True)
     avatar          = models.TextField(blank=True, default='')
     name_changed_at = models.DateTimeField(null=True, blank=True)
     last_access     = models.DateTimeField(null=True, blank=True)
-    is_active    = models.BooleanField(default=True)
-    is_staff     = models.BooleanField(default=False)
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
+    is_active       = models.BooleanField(default=True)
+    is_staff        = models.BooleanField(default=False)
+    created_at      = models.DateTimeField(auto_now_add=True)
+    updated_at      = models.DateTimeField(auto_now=True)
 
     objects = CustomUserManager()
 
@@ -55,25 +56,25 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     @property
     def is_online(self) -> bool:
-        """
-        Fallback para o snapshot inicial do SSE.
-        Considera online se o último heartbeat foi há menos de 35 segundos
-        (intervalo do heartbeat é 25 s + margem de 10 s).
-        last_access NÃO é apagado no logout — é registro histórico.
-        O status em tempo real é controlado pelo SSE (logout_status / heartbeat).
-        """
         if self.last_access:
-            delta = timezone.now() - self.last_access
-            return delta.total_seconds() < 35
+            return (timezone.now() - self.last_access).total_seconds() < 35
         return False
+
+    def tem_permissao(self, codigo: str) -> bool:
+        from controleadmin.servicos import usuario_possui_permissao_codigo
+        return usuario_possui_permissao_codigo(self, codigo)
+
+    def pode_acessar_admin(self) -> bool:
+        from controleadmin.servicos import usuario_tem_acesso_controleadmin
+        return usuario_tem_acesso_controleadmin(self)
 
 
 class PerfilTemplate(models.Model):
-    usuario     = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='perfis_template')
-    nome_perfil = models.CharField(max_length=200)
-    dados       = models.JSONField(default=dict)
+    usuario       = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='perfis_template')
+    nome_perfil   = models.CharField(max_length=200)
+    dados         = models.JSONField(default=dict)
     atualizado_em = models.DateTimeField(auto_now=True)
-    criado_em   = models.DateTimeField(auto_now_add=True)
+    criado_em     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ['-atualizado_em']
@@ -85,9 +86,8 @@ class PerfilTemplate(models.Model):
 class ConviteEquipe(models.Model):
     PERMISSAO_CHOICES = [
         ('visualizar', 'Visualizar'),
-        ('editar', 'Editar'),
+        ('editar',     'Editar'),
     ]
-
     token      = models.CharField(max_length=64, unique=True)
     permissao  = models.CharField(max_length=20, choices=PERMISSAO_CHOICES, default='visualizar')
     criado_por = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name='convites_equipe')
@@ -99,4 +99,4 @@ class ConviteEquipe(models.Model):
         ordering = ['-criado_em']
 
     def __str__(self):
-        return f'Convite {self.token[:8]}… ({self.permissao})'
+        return f'Convite {self.token[:8]}... ({self.permissao})'

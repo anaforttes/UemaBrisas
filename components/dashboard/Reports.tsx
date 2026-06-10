@@ -492,6 +492,9 @@ export const Reports: React.FC = () => {
       );
   }, [dados]);
 
+  const porEtapa = useMemo(() => dados?.por_etapa ?? [], [dados]);
+  const maxEtapa = useMemo(() => Math.max(...porEtapa.map((e) => e.total), 1), [porEtapa]);
+
   const stats = useMemo(
     () => ({
       total: dados?.total ?? 0,
@@ -783,6 +786,50 @@ export const Reports: React.FC = () => {
                     <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-blue-600 rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Processos por Etapa */}
+      <div className="bg-white rounded-[32px] border border-slate-100 p-8">
+        <h3 className="font-black text-slate-800 text-lg mb-6 flex items-center gap-2">
+          <BarChart3 size={20} className="text-blue-600" /> Processos por Etapa
+        </h3>
+        <p className="text-xs text-slate-400 font-medium mb-6">
+          Distribuição nas 14 etapas do fluxo REURB
+        </p>
+        {porEtapa.length === 0 ? (
+          <p className="text-sm text-slate-400 text-center py-8">
+            Nenhum dado disponível para o período.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {porEtapa.map((e) => {
+              const pct = maxEtapa > 0 ? Math.round((e.total / maxEtapa) * 100) : 0;
+              return (
+                <div key={e.numero} className="flex items-center gap-4">
+                  <span className="w-6 text-xs font-black text-slate-400 text-right shrink-0">
+                    {e.numero}
+                  </span>
+                  <div className="flex-1">
+                    <div className="flex justify-between mb-1">
+                      <span className="text-xs font-bold text-slate-600 truncate">{e.etapa}</span>
+                      <span className="text-xs font-black text-slate-800 ml-2 shrink-0">
+                        {e.total}
+                      </span>
+                    </div>
+                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          e.total === 0 ? 'bg-slate-200' : 'bg-blue-500'
+                        }`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>

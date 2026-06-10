@@ -12,7 +12,6 @@ import {
   Plus,
   QrCode,
   Search,
-  Settings,
   Trash2,
   UserPlus,
   X,
@@ -558,206 +557,6 @@ const InlineEdit: React.FC<InlineEditProps> = ({ value, onSave, onCancel }) => {
   );
 };
 
-// ─── Permissões Modal ─────────────────────────────────────────────────────────
-
-interface PermissoesModalProps {
-  member: User;
-  onSave: (updated: User) => void;
-  onCancel: () => void;
-}
-
-const CARGOS: UserRole[] = ['Admin', 'Gestor', 'Jurídico', 'Técnico', 'Auditor', 'Atendente'];
-
-const PERMISSOES = [
-  { key: 'visualizar', label: 'Visualizar' },
-  { key: 'editor', label: 'Editor' },
-  { key: 'comentar', label: 'Comentar' },
-  { key: 'aprovar', label: 'Aprovar' },
-  { key: 'assinar', label: 'Assinar' },
-  { key: 'exportar', label: 'Exportar' },
-] as const;
-
-const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCancel }) => {
-  const [cargo, setCargo] = useState<UserRole>(member.role);
-  const [flags, setFlags] = useState<UserFlags>({
-    superusuario: member.flags?.superusuario ?? false,
-    adminMunicipio: member.flags?.adminMunicipio ?? false,
-    profissionalInterno: member.flags?.profissionalInterno ?? true,
-    usuarioExterno: member.flags?.usuarioExterno ?? false,
-  });
-  const [permissoes, setPermissoes] = useState<Record<string, boolean>>({
-    visualizar: member.permissions?.visualizar ?? true,
-    editor: member.permissions?.editor ?? member.flags?.profissionalInterno ?? true,
-    comentar: member.permissions?.comentar ?? member.flags?.profissionalInterno ?? true,
-    aprovar: member.permissions?.aprovar ?? member.flags?.adminMunicipio ?? false,
-    assinar: member.permissions?.assinar ?? member.flags?.adminMunicipio ?? false,
-    exportar: member.permissions?.exportar ?? member.flags?.profissionalInterno ?? true,
-  });
-
-  const toggleFlag = (key: keyof UserFlags) => setFlags((prev) => ({ ...prev, [key]: !prev[key] }));
-  const togglePermissao = (key: string) =>
-    setPermissoes((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const handleSave = () =>
-    onSave({
-      ...member,
-      role: cargo,
-      flags: {
-        superusuario: flags.superusuario ?? false,
-        adminMunicipio: flags.adminMunicipio ?? false,
-        profissionalInterno: flags.profissionalInterno ?? false,
-        usuarioExterno: flags.usuarioExterno ?? false,
-      },
-      permissions: permissoes,
-    });
-
-  const flagItems: Array<{ key: keyof UserFlags; label: string; desc: string }> = [
-    { key: 'superusuario', label: 'Superusuário', desc: 'Gerencia todos os municípios' },
-    { key: 'adminMunicipio', label: 'Admin do Município', desc: 'Gerencia configurações locais' },
-    {
-      key: 'profissionalInterno',
-      label: 'Profissional Interno',
-      desc: 'Acessa processos e gera documentos',
-    },
-    { key: 'usuarioExterno', label: 'Usuário Externo', desc: 'Visualiza apenas seus processos' },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center gap-4 border-b border-slate-100 p-6 pb-4">
-          <img
-            src={member.avatar || avatarFallback}
-            alt={member.name}
-            className="h-12 w-12 shrink-0 rounded-2xl border-2 border-white object-cover shadow-sm"
-          />
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-black text-slate-800">{member.name}</p>
-            <p className="truncate text-xs font-medium text-slate-400">{member.email}</p>
-          </div>
-          <button
-            onClick={onCancel}
-            className="shrink-0 rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-6 p-6">
-          <div>
-            <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Cargo / Perfil
-            </p>
-            <div className="grid grid-cols-3 gap-2">
-              {CARGOS.map((c) => (
-                <button
-                  key={c}
-                  onClick={() => setCargo(c)}
-                  className={`rounded-xl px-3 py-2 text-xs font-bold transition-all ${
-                    cargo === c
-                      ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
-                      : 'border border-slate-200 bg-slate-50 text-slate-600 hover:border-blue-200 hover:text-blue-600'
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Flags de acesso ao sistema
-            </p>
-            <div className="space-y-2">
-              {flagItems.map(({ key, label, desc }) => (
-                <div
-                  key={key}
-                  className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-50 p-3"
-                >
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">{label}</p>
-                    <p className="mt-0.5 text-[10px] text-slate-400">{desc}</p>
-                  </div>
-                  <button
-                    onClick={() => toggleFlag(key)}
-                    className={`relative ml-4 h-6 w-11 shrink-0 rounded-full transition-all duration-300 ${flags[key] ? 'bg-blue-600' : 'bg-slate-200'}`}
-                  >
-                    <div
-                      className={`absolute top-1 h-4 w-4 rounded-full bg-white shadow transition-all duration-300 ${flags[key] ? 'left-6' : 'left-1'}`}
-                    />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <p className="mb-3 text-[10px] font-black uppercase tracking-widest text-slate-400">
-              Permissões por ação
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {PERMISSOES.map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => togglePermissao(key)}
-                  className={`flex items-center justify-between rounded-xl border p-3 transition-all ${
-                    permissoes[key]
-                      ? 'border-green-200 bg-green-50 text-green-800'
-                      : 'border-slate-200 bg-slate-50 text-slate-400'
-                  }`}
-                >
-                  <span className="text-xs font-bold">{label}</span>
-                  {permissoes[key] ? (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <rect x="3" y="11" width="18" height="11" rx="2" />
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                    </svg>
-                  ) : (
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <rect x="3" y="11" width="18" height="11" rx="2" />
-                      <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                    </svg>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-3 p-6 pt-0">
-          <button
-            onClick={onCancel}
-            className="flex-1 rounded-2xl border border-slate-200 py-3 text-sm font-bold text-slate-600 transition-colors hover:bg-slate-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            className="flex-1 rounded-2xl bg-blue-600 py-3 text-sm font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-          >
-            Salvar permissões
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export const Team: React.FC = () => {
@@ -766,7 +565,6 @@ export const Team: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
-  const [permissoesTarget, setPermissoesTarget] = useState<User | null>(null);
   const [mostrarConvite, setMostrarConvite] = useState(false);
 
   const apiPatch = async (pk: string, body: object) => {
@@ -895,20 +693,6 @@ export const Team: React.FC = () => {
     }
   };
 
-  const handleSavePermissoes = async (updated: User) => {
-    setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
-    setPermissoesTarget(null);
-    try {
-      await apiPatch(updated.id, {
-        role: updated.role,
-        access_flags: updated.flags ?? {},
-        permissions: updated.permissions ?? {},
-      });
-    } catch {
-      await fetchMembers();
-    }
-  };
-
   return (
     <div className="mx-auto max-w-[1600px] animate-in fade-in p-6 duration-500 lg:p-10">
       {deleteTarget && (
@@ -916,13 +700,6 @@ export const Team: React.FC = () => {
           name={deleteTarget.name}
           onConfirm={handleConfirmDelete}
           onCancel={() => setDeleteTarget(null)}
-        />
-      )}
-      {permissoesTarget && (
-        <PermissoesModal
-          member={permissoesTarget}
-          onSave={handleSavePermissoes}
-          onCancel={() => setPermissoesTarget(null)}
         />
       )}
       {mostrarConvite && <ModalConviteEquipe onFechar={() => setMostrarConvite(false)} />}
@@ -1055,13 +832,6 @@ export const Team: React.FC = () => {
 
                       <td className="px-8 py-5 text-right">
                         <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button
-                            title="Gerenciar permissões"
-                            onClick={() => setPermissoesTarget(member)}
-                            className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Settings size={16} />
-                          </button>
                           <button
                             title="Editar nome"
                             onClick={() => setEditingId(member.id)}
