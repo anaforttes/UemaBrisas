@@ -1,6 +1,7 @@
 from django.utils import timezone
+from django.core.exceptions import ValidationError
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -9,7 +10,7 @@ from autenticacao.sse import sse_broadcast
 from .models import (
     Documento, ColaboradorDocumento, ComentarioDocumento,
     VersaoDocumento, ConviteDocumento, AuditoriaDocumento,
-    PresencaDocumento, ModeloDocumento,
+    PresencaDocumento, ModeloDocumento, AssinaturaDocumento,
 )
 from .serializadores import (
     DocumentoListSerializer, DocumentoDetalheSerializer,
@@ -355,7 +356,12 @@ class AssinaturaListView(APIView):
         if not _pode_ver(request, doc):
             return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
 
-        ass = registrar_assinatura(doc, request.user, request.data)
+        try:
+            ass = registrar_assinatura(doc, request.user, request.data)
+        except ValidationError as exc:
+            mensagem = exc.messages[0] if hasattr(exc, 'messages') else str(exc)
+            return Response({'erro': mensagem}, status=status.HTTP_400_BAD_REQUEST)
+
         _sse_doc(doc.id, doc.doc_ref, 'assinatura', request.user.name)
         return Response(AssinaturaSerializer(ass).data, status=status.HTTP_201_CREATED)
 
@@ -379,6 +385,46 @@ class IniciarAssinaturasView(APIView):
 
 
 # ─── Convites (link/código) ───────────────────────────────────────────────────
+
+
+class VerificarAssinaturaPublicaView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, protocolo):
+        assinatura = (
+            AssinaturaDocumento.objects
+            .select_related('documento', 'usuario')
+            .filter(protocolo=protocolo)
+            .first()
+        )
+        if not assinatura:
+            return Response({'erro': 'Protocolo nao encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        documento = assinatura.documento
+        assinaturas = documento.assinaturas.select_related('usuario').order_by('ordem')
+        return Response({
+            'protocolo': assinatura.protocolo,
+            'documento': {
+                'id': str(documento.id),
+                'titulo': documento.titulo,
+                'status': documento.status,
+                'hash': assinatura.hash_assinatura,
+                'criado_em': documento.criado_em.isoformat(),
+                'atualizado_em': documento.atualizado_em.isoformat(),
+            },
+            'assinaturas': [{
+                'ordem': item.ordem,
+                'status': item.status,
+                'nome': item.usuario.name if item.usuario else item.nome_certificado,
+                'email': item.usuario.email if item.usuario else '',
+                'nome_certificado': item.nome_certificado,
+                'cpf_certificado': item.cpf_certificado,
+                'ac_emissora': item.ac_emissora,
+                'hash_assinatura': item.hash_assinatura,
+                'assinado_em': item.assinado_em.isoformat() if item.assinado_em else None,
+            } for item in assinaturas],
+        })
 
 class GerarConviteView(APIView):
     """Gera (ou retorna ativo) um código de convite para o documento."""

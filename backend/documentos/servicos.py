@@ -1,4 +1,5 @@
 from datetime import timedelta
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from autenticacao.models import CustomUser
@@ -115,23 +116,47 @@ def iniciar_assinaturas(doc: Documento, user, signatarios: list) -> list:
 
 
 def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumento:
-    ass, _ = AssinaturaDocumento.objects.get_or_create(
-        documento=doc, usuario=user,
-        defaults={'ordem': doc.assinaturas.count() + 1},
-    )
-    ass.status           = 'assinado'
-    ass.protocolo        = dados.get('protocolo', '')
-    ass.hash_assinatura  = dados.get('hash_assinatura', '')
-    ass.nome_certificado = dados.get('nome_certificado', '')
-    ass.cpf_certificado  = dados.get('cpf_certificado', '')
-    ass.ac_emissora      = dados.get('ac_emissora', '')
-    ass.assinado_em      = timezone.now()
+    protocolo = (dados.get('protocolo') or '').strip()
+    hash_assinatura = (dados.get('hash_assinatura') or '').strip()
+    if not protocolo:
+        raise ValidationError('Protocolo da assinatura e obrigatorio.')
+    if not hash_assinatura:
+        raise ValidationError('Hash da assinatura e obrigatorio.')
+
+    assinaturas = doc.assinaturas.select_related('usuario').order_by('ordem', 'id')
+    ass = assinaturas.filter(usuario=user).first()
+
+    if assinaturas.exists() and not ass:
+        raise ValidationError('Usuario nao esta na lista de signatarios do documento.')
+
+    if not ass:
+        ass = AssinaturaDocumento.objects.create(
+            documento=doc,
+            usuario=user,
+            ordem=assinaturas.count() + 1,
+            status='pendente',
+        )
+
+    anterior_pendente = assinaturas.filter(ordem__lt=ass.ordem).exclude(status='assinado').first()
+    if anterior_pendente:
+        raise ValidationError('Assinatura fora da ordem definida.')
+
+    if ass.status == 'assinado':
+        raise ValidationError('Documento ja assinado por este usuario.')
+
+    ass.status = 'assinado'
+    ass.protocolo = protocolo
+    ass.hash_assinatura = hash_assinatura
+    ass.nome_certificado = dados.get('nome_certificado', '') or user.name
+    ass.cpf_certificado = dados.get('cpf_certificado', '')
+    ass.ac_emissora = dados.get('ac_emissora', '') or 'Sistema REURB'
+    ass.assinado_em = timezone.now()
     ass.save()
 
     registrar_auditoria(doc, user, 'assinatura',
                        f'Assinado por {user.name} - Protocolo: {ass.protocolo}')
 
-    total  = doc.assinaturas.count()
+    total = doc.assinaturas.count()
     signed = doc.assinaturas.filter(status='assinado').count()
     if total > 0 and signed == total:
         doc.status = 'Signed'
@@ -139,7 +164,6 @@ def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumen
         registrar_auditoria(doc, user, 'status_alterado', 'Documento completamente assinado')
 
     return ass
-
 
 def gerar_convite(doc: Documento, user, papel: str = 'editor',
                   dias: int = 7) -> ConviteDocumento:

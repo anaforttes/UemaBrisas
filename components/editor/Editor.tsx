@@ -1,5 +1,6 @@
 import { REURBProcess } from '../../types/index';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
+import QRCode from 'qrcode';
 
 // ─── TipTap ───────────────────────────────────────────────────────────────────
 import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
@@ -42,6 +43,7 @@ import { documentoService, DocDetalhe, ConflictError } from '../../services/docu
 import { exportarPDF, exportarDOCX } from '../../services/exportService';
 import { SignatureModal } from './SignatureModal';
 import type { SignatureRecord } from '../../services/assinaturaService';
+import { buildSignatureVerificationUrl } from '../../services/signatureVerificationService';
 import PainelComentarios from './PainelComentarios';
 import PainelColaboradores from './PainelColaboradores';
 import HistoricoVersoes, { Versao, EventoAuditoria } from './components/HistoricoVersoes';
@@ -64,6 +66,46 @@ type AbaAtiva = 'comentarios' | 'historico' | 'participantes';
 const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const PAGE_CONTENT_H = 832; // A4 content area in px: 1056 - 64(hdr) - 64(ftr) - 96(pad)
+
+const montarRegistroAssinatura = (doc: DocDetalhe): SignatureRecord | null => {
+  const assinaturas = doc.assinaturas ?? [];
+  const assinadas = assinaturas.filter((item) => item.status === 'assinado' && item.protocolo);
+  const protocolo = assinadas[0]?.protocolo;
+  if (!protocolo) return null;
+
+  const ordenadas = assinaturas.slice().sort((a, b) => a.ordem - b.ordem);
+  const todasAssinadas =
+    ordenadas.length > 0 && ordenadas.every((item) => item.status === 'assinado');
+  const primeiraAssinada = assinadas[0];
+
+  return {
+    protocol: protocolo,
+    documentTitle: doc.titulo,
+    createdAt: primeiraAssinada.assinado_em ?? doc.atualizado_em,
+    status: todasAssinadas ? 'completed' : 'partial',
+    documentHash: primeiraAssinada.hash_assinatura,
+    qrCodeData: buildSignatureVerificationUrl(protocolo),
+    events: [],
+    signers: ordenadas.map((item) => ({
+      id: item.usuario ? String(item.usuario.id) : `assinante-${item.ordem}`,
+      name: item.usuario?.name ?? item.nome_certificado ?? 'Assinante',
+      email: item.usuario?.email ?? '',
+      role: item.usuario?.role ?? 'Signatario',
+      order: item.ordem,
+      status:
+        item.status === 'assinado'
+          ? 'signed'
+          : item.status === 'rejeitado'
+            ? 'rejected'
+            : 'pending',
+      signedAt: item.assinado_em ?? undefined,
+      signatureHash: item.hash_assinatura,
+      certificateCN: item.nome_certificado || item.usuario?.name,
+      certificateCPF: item.cpf_certificado,
+      certificateIssuer: item.ac_emissora || 'Sistema REURB',
+    })),
+  };
+};
 
 // ─── Componente React da Imagem ───────────────────────────────────────────────
 
@@ -315,6 +357,45 @@ const ImagemCustomizada = Node.create({
 
 // ─── Bloco de assinatura ──────────────────────────────────────────────────────
 
+const QRCodeAssinatura: React.FC<{ value: string }> = ({ value }) => {
+  const [src, setSrc] = useState('');
+
+  useEffect(() => {
+    let ativo = true;
+    QRCode.toDataURL(value, {
+      errorCorrectionLevel: 'M',
+      margin: 1,
+      width: 132,
+      color: { dark: '#1e293b', light: '#ffffff' },
+    })
+      .then((dataUrl) => {
+        if (ativo) setSrc(dataUrl);
+      })
+      .catch(() => {
+        if (ativo) setSrc('');
+      });
+
+    return () => {
+      ativo = false;
+    };
+  }, [value]);
+
+  if (!src) return null;
+
+  return (
+    <div className="shrink-0 text-center">
+      <img
+        src={src}
+        width={92}
+        height={92}
+        alt="QR Code de verificacao da assinatura"
+        className="rounded-lg border border-blue-200 bg-white p-1"
+      />
+      <p className="mt-1 text-[9px] font-bold uppercase text-blue-500">Verificacao</p>
+    </div>
+  );
+};
+
 const BlocoAssinatura: React.FC<{ record: SignatureRecord }> = ({ record }) => (
   <div className="mt-10 border-t-2 border-blue-800 pt-6">
     <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
@@ -324,7 +405,7 @@ const BlocoAssinatura: React.FC<{ record: SignatureRecord }> = ({ record }) => (
         </div>
         <div>
           <p className="font-black text-blue-900 text-sm uppercase tracking-wide">
-            Registro de Assinaturas Digitais
+            Registro de Assinaturas Internas
           </p>
           <p className="text-[11px] text-blue-500 font-mono">Protocolo: {record.protocol}</p>
         </div>
@@ -332,24 +413,27 @@ const BlocoAssinatura: React.FC<{ record: SignatureRecord }> = ({ record }) => (
           ✓ Válido
         </span>
       </div>
-      <div className="space-y-3">
-        {record.signers.map((signer, idx) => (
-          <div
-            key={signer.id}
-            className="flex items-start gap-3 bg-white rounded-lg p-3 border border-green-100"
-          >
-            <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
-            <div>
-              <p className="text-xs font-black text-slate-800">
-                {idx + 1}. {signer.name} — {signer.role}
-              </p>
-              <p className="text-[11px] text-slate-500">
-                Assinado em:{' '}
-                {signer.signedAt ? new Date(signer.signedAt).toLocaleString('pt-BR') : '-'}
-              </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+        <div className="min-w-0 flex-1 space-y-3">
+          {record.signers.map((signer, idx) => (
+            <div
+              key={signer.id}
+              className="flex items-start gap-3 bg-white rounded-lg p-3 border border-green-100"
+            >
+              <CheckCircle2 size={16} className="text-green-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-black text-slate-800">
+                  {idx + 1}. {signer.name} — {signer.role}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  Assinado em:{' '}
+                  {signer.signedAt ? new Date(signer.signedAt).toLocaleString('pt-BR') : '-'}
+                </p>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
+        <QRCodeAssinatura value={record.qrCodeData} />
       </div>
     </div>
   </div>
@@ -601,7 +685,6 @@ const Editor: React.FC<EditorProps> = ({
 
   const editor = useEditor({
     extensions: [
-      // @ts-expect-error StarterKit options mismatch with TipTap 3 types
       StarterKit.configure({
         link: false,
         underline: false,
@@ -711,6 +794,7 @@ const Editor: React.FC<EditorProps> = ({
         if (!cancelado) {
           setDocBackend(doc);
           docBackendRef.current = doc;
+          setRegistroAssinatura(montarRegistroAssinatura(doc));
 
           // Carrega histórico de versões do backend
           try {
@@ -754,6 +838,7 @@ const Editor: React.FC<EditorProps> = ({
           setAlertaNovaVersao(`Nova versão salva por ${autorNome}. Clique para carregar.`);
           docBackendRef.current = atualizado;
           setDocBackend(atualizado);
+          setRegistroAssinatura(montarRegistroAssinatura(atualizado));
         }
       } catch {
         /* ignora */
@@ -1184,12 +1269,18 @@ const Editor: React.FC<EditorProps> = ({
         }
         .editor-cabecalho {
           padding: 12px 96px;
-          border-bottom: 1px solid #e5e7eb;
+          border-bottom: 1px solid transparent;
           font-size: 11px;
           color: #9ca3af;
           min-height: 40px;
           box-sizing: border-box;
-          background: #fafafa;
+          background: #fff;
+          transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .editor-cabecalho:hover,
+        .editor-cabecalho:focus {
+          border-bottom-color: #e5e7eb;
+          background: #f8fafc;
         }
         .editor-conteudo {
           padding: 48px 96px;
@@ -1199,12 +1290,33 @@ const Editor: React.FC<EditorProps> = ({
         }
         .editor-rodape {
           padding: 12px 96px;
-          border-top: 1px solid #e5e7eb;
+          border-top: 1px solid transparent;
           font-size: 11px;
           color: #9ca3af;
           min-height: 40px;
           box-sizing: border-box;
-          background: #fafafa;
+          background: #fff;
+          transition: background-color 0.15s ease, border-color 0.15s ease;
+        }
+        .editor-rodape:hover,
+        .editor-rodape:focus {
+          border-top-color: #e5e7eb;
+          background: #f8fafc;
+        }
+        .editor-cabecalho:empty::before,
+        .editor-rodape:empty::before {
+          content: attr(data-placeholder);
+          color: #9ca3af;
+          font-style: italic;
+          opacity: 0;
+          pointer-events: none;
+          user-select: none;
+        }
+        .editor-cabecalho:hover:empty::before,
+        .editor-cabecalho:focus:empty::before,
+        .editor-rodape:hover:empty::before,
+        .editor-rodape:focus:empty::before {
+          opacity: 1;
         }
         .page-break-indicator {
           width: 100%;
@@ -1257,25 +1369,46 @@ const Editor: React.FC<EditorProps> = ({
         documentContent={editor.getHTML()}
         currentUser={currentUser || null}
         onSignatureComplete={async (record) => {
-          setRegistroAssinatura(record);
-          onSave(editor.getHTML(), tituloLocal, 'Signed');
-          registrarEvento('assinatura', `Assinado — Protocolo: ${record.protocol}`);
           const mySigner = record.signers.find(
             (s) => s.status === 'signed' && String(s.id) === String(currentUser?.id || 'current')
           );
-          if (docBackendRef.current && mySigner) {
-            try {
-              await documentoService.registrarAssinatura(docBackendRef.current.id, {
-                protocolo: record.protocol,
-                hash_assinatura: mySigner.signatureHash ?? '',
-                nome_certificado: mySigner.certificateCN ?? '',
-                cpf_certificado: mySigner.certificateCPF ?? '',
-                ac_emissora: mySigner.certificateIssuer ?? '',
-              });
-            } catch {
-              /* ignora */
+          if (!docBackendRef.current) {
+            throw new Error(
+              'Documento ainda nao esta sincronizado com o backend. Salve o documento antes de assinar.'
+            );
+          }
+          if (!mySigner) {
+            throw new Error('Nao foi possivel identificar o assinante atual.');
+          }
+
+          const assinaturasExistentes = docBackendRef.current.assinaturas ?? [];
+          const jaTemAssinaturaConcluida = assinaturasExistentes.some(
+            (assinatura) => assinatura.status === 'assinado'
+          );
+          if (!jaTemAssinaturaConcluida) {
+            const signatarios = record.signers
+              .map((signer) => ({
+                usuario_id: Number(signer.id),
+                ordem: signer.order,
+              }))
+              .filter((signer) => Number.isFinite(signer.usuario_id));
+
+            if (signatarios.length > 0) {
+              await documentoService.iniciarAssinaturas(docBackendRef.current.id, signatarios);
             }
           }
+
+          await documentoService.registrarAssinatura(docBackendRef.current.id, {
+            protocolo: record.protocol,
+            hash_assinatura: mySigner.signatureHash ?? '',
+            nome_certificado: mySigner.certificateCN ?? currentUser?.name ?? '',
+            cpf_certificado: mySigner.certificateCPF ?? '',
+            ac_emissora: mySigner.certificateIssuer ?? 'Sistema REURB',
+          });
+
+          setRegistroAssinatura(record);
+          onSave(editor.getHTML(), tituloLocal, 'Signed');
+          registrarEvento('assinatura', `Assinado - Protocolo: ${record.protocol}`);
         }}
       />
 
@@ -1497,14 +1630,9 @@ const Editor: React.FC<EditorProps> = ({
                 contentEditable={!somenteLeitura}
                 suppressContentEditableWarning
                 className="editor-cabecalho focus:outline-none focus:bg-blue-50 transition-colors"
+                data-placeholder={somenteLeitura ? '' : 'Cabeçalho - clique para editar'}
                 style={{ fontFamily: fonteFamilia }}
-              >
-                {!somenteLeitura && (
-                  <span className="pointer-events-none select-none italic text-gray-400">
-                    Cabeçalho — clique para editar
-                  </span>
-                )}
-              </div>
+              />
 
               {/* Conteúdo editável */}
               <div className="editor-conteudo">
@@ -1549,7 +1677,13 @@ const Editor: React.FC<EditorProps> = ({
                     </div>
                   </React.Fragment>
                 ))}
-                <div ref={prosemirrorWrapRef}>
+                <div
+                  ref={prosemirrorWrapRef}
+                  translate="no"
+                  data-gramm="false"
+                  data-gramm_editor="false"
+                  data-enable-grammarly="false"
+                >
                   <EditorContent editor={editor} />
                 </div>
               </div>
@@ -1560,14 +1694,9 @@ const Editor: React.FC<EditorProps> = ({
                 contentEditable={!somenteLeitura}
                 suppressContentEditableWarning
                 className="editor-rodape focus:outline-none focus:bg-blue-50 transition-colors"
+                data-placeholder={somenteLeitura ? '' : 'Rodapé - clique para editar'}
                 style={{ fontFamily: fonteFamilia }}
-              >
-                {!somenteLeitura && (
-                  <span className="pointer-events-none select-none italic text-gray-400">
-                    Rodapé — clique para editar
-                  </span>
-                )}
-              </div>
+              />
             </div>
 
             {registroAssinatura && (
