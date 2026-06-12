@@ -9,10 +9,15 @@ import {
   MessageSquare,
   X,
   Minus,
+  Activity,
+  LogIn,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { buscarAgregacoes, type AgregacoesAPI } from '../../services/painelService';
 import { chatService, MensagemChat } from '../../services/chatService';
 import { equipeService, MembroEquipe } from '../../services/equipeService';
+import { authMonitoramentoService } from '../../services/authMonitoramentoService';
 
 // ─── Cache de módulo (TTL 60s) ────────────────────────────────────────────────
 
@@ -431,6 +436,150 @@ const STATUS_COR: Record<string, string> = {
   Arquivado: 'bg-slate-300',
 };
 
+const DADOS_AUTH_INICIAIS = {
+  tentativas: 0,
+  sucessos: 0,
+  falhas: 0,
+};
+
+const MonitoramentoAutenticacao: React.FC = () => {
+  const [dadosAuth, setDadosAuth] = useState(DADOS_AUTH_INICIAIS);
+  const [ultimaAtualizacao, setUltimaAtualizacao] = useState(new Date());
+  const [carregandoAuth, setCarregandoAuth] = useState(true);
+  const [erroAuth, setErroAuth] = useState(false);
+
+  useEffect(() => {
+    let cancelado = false;
+
+    const carregar = async () => {
+      try {
+        const dados = await authMonitoramentoService.obter();
+        if (cancelado) return;
+        setDadosAuth({
+          tentativas: dados.tentativas,
+          sucessos: dados.sucessos,
+          falhas: dados.falhas,
+        });
+        setUltimaAtualizacao(new Date(dados.atualizado_em));
+        setErroAuth(false);
+      } catch {
+        if (!cancelado) setErroAuth(true);
+      } finally {
+        if (!cancelado) setCarregandoAuth(false);
+      }
+    };
+
+    carregar();
+    const timer = window.setInterval(carregar, 5000);
+
+    return () => {
+      cancelado = true;
+      window.clearInterval(timer);
+    };
+  }, []);
+
+  const taxaSucesso = Math.round((dadosAuth.sucessos / Math.max(dadosAuth.tentativas, 1)) * 100);
+  const taxaFalha = Math.round((dadosAuth.falhas / Math.max(dadosAuth.tentativas, 1)) * 100);
+
+  const indicadores = [
+    {
+      label: 'Tentativas de login',
+      value: dadosAuth.tentativas,
+      icon: LogIn,
+      cor: 'text-blue-600',
+      bg: 'bg-blue-50',
+      detalhe: 'Eventos capturados',
+    },
+    {
+      label: 'Autenticações bem-sucedidas',
+      value: dadosAuth.sucessos,
+      icon: CheckCircle2,
+      cor: 'text-green-600',
+      bg: 'bg-green-50',
+      detalhe: `${taxaSucesso}% de sucesso`,
+    },
+    {
+      label: 'Autenticações malsucedidas',
+      value: dadosAuth.falhas,
+      icon: XCircle,
+      cor: 'text-red-500',
+      bg: 'bg-red-50',
+      detalhe: `${taxaFalha}% de falha`,
+    },
+  ];
+
+  return (
+    <section className="bg-white rounded-[32px] border border-slate-100 p-6 lg:p-8 mb-10">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between mb-6">
+        <div>
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center">
+              <Activity size={19} />
+            </div>
+            <div>
+              <h3 className="text-lg font-black text-slate-800">Monitoramento de Autenticação</h3>
+              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mt-0.5">
+                Indicadores em tempo real
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 self-start rounded-2xl border border-green-100 bg-green-50 px-3 py-2">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-green-500" />
+          </span>
+          <span className="text-[11px] font-black text-green-700 uppercase tracking-wider">
+            {erroAuth
+              ? 'Sem conexão'
+              : carregandoAuth
+                ? 'Carregando'
+                : `Atualizado ${ultimaAtualizacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`}
+          </span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {indicadores.map((item) => (
+          <div key={item.label} className="rounded-2xl border border-slate-100 bg-slate-50/60 p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                  {item.label}
+                </p>
+                <p className="text-3xl font-black text-slate-800 mt-2">{item.value}</p>
+                <p className={`text-xs font-bold mt-1 ${item.cor}`}>{item.detalhe}</p>
+              </div>
+              <div
+                className={`w-10 h-10 rounded-xl ${item.bg} ${item.cor} flex items-center justify-center shrink-0`}
+              >
+                <item.icon size={19} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-4">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-black text-slate-700">Distribuição das autenticações</p>
+          <p className="text-[11px] font-bold text-slate-400">
+            {dadosAuth.sucessos} sucesso{dadosAuth.sucessos === 1 ? '' : 's'} / {dadosAuth.falhas}{' '}
+            falha{dadosAuth.falhas === 1 ? '' : 's'}
+          </p>
+        </div>
+        <div className="h-3 rounded-full bg-slate-100 overflow-hidden flex">
+          <div
+            className="h-full bg-green-500 transition-all"
+            style={{ width: `${taxaSucesso}%` }}
+          />
+          <div className="h-full bg-red-400 transition-all" style={{ width: `${taxaFalha}%` }} />
+        </div>
+      </div>
+    </section>
+  );
+};
+
 export const Reports: React.FC = () => {
   const [periodo, setPeriodo] = useState<'7d' | '30d' | '90d' | 'all'>('30d');
   const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'REURB-S' | 'REURB-E'>('todos');
@@ -679,6 +828,8 @@ export const Reports: React.FC = () => {
           </div>
         ))}
       </div>
+
+      <MonitoramentoAutenticacao />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
         {/* Gráfico por mês */}

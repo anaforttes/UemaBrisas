@@ -16,7 +16,15 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-(#dj^-ed*0&5dxr4jcs2!#c&$^
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+if DEBUG:
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin-allow-popups'
+
+ALLOWED_HOSTS_PADRAO = ['localhost', '127.0.0.1', '192.168.129.199']
+ALLOWED_HOSTS = list(dict.fromkeys([
+    host.strip()
+    for host in os.getenv('ALLOWED_HOSTS', ','.join(ALLOWED_HOSTS_PADRAO)).split(',')
+    if host.strip()
+] + ALLOWED_HOSTS_PADRAO))
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -62,6 +70,8 @@ MIDDLEWARE = [
 # ── CORS ──────────────────────────────────────────────────────────────────────
 CORS_ALLOWED_ORIGINS = [
     'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'http://192.168.129.199:5173',
     'http://localhost:5174',
     'http://localhost:5175',
     'http://localhost:5176',
@@ -70,6 +80,14 @@ CORS_ALLOWED_ORIGINS = [
     'http://localhost:5179',
     'http://localhost:5180',
 ]
+origens_cors_env = os.getenv('CORS_ALLOWED_ORIGINS', '')
+if origens_cors_env:
+    CORS_ALLOWED_ORIGINS += [
+        origem.strip()
+        for origem in origens_cors_env.split(',')
+        if origem.strip()
+    ]
+CORS_ALLOWED_ORIGINS = list(dict.fromkeys(CORS_ALLOWED_ORIGINS))
 CORS_ALLOW_CREDENTIALS = True
 
 # ── REST Framework + JWT ──────────────────────────────────────────────────────
@@ -119,13 +137,20 @@ TEMPLATES = [
 WSGI_APPLICATION = 'configuracao.wsgi.application'
 
 # ── Banco de dados ────────────────────────────────────────────────────────────
+DATABASE_CONN_MAX_AGE = int(os.getenv('DATABASE_CONN_MAX_AGE', '0' if DEBUG else '600'))
+
 DATABASES = {
     'default': dj_database_url.config(
         default=os.getenv('DATABASE_URL', f"sqlite:///{BASE_DIR / 'db.sqlite3'}"),
-        conn_max_age=600,
+        conn_max_age=DATABASE_CONN_MAX_AGE,
         conn_health_checks=True,
     )
 }
+
+if DATABASES['default']['ENGINE'] == 'django.db.backends.postgresql':
+    DATABASES['default'].setdefault('OPTIONS', {})
+    DATABASES['default']['OPTIONS'].setdefault('connect_timeout', 10)
+    DATABASES['default']['OPTIONS'].setdefault('sslmode', 'require')
 
 # Testes sempre usam SQLite em memória (evita conflito com banco remoto Neon)
 import sys

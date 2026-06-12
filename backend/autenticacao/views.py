@@ -11,7 +11,10 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.authentication import JWTAuthentication
+from django.db import OperationalError, InterfaceError
+from django.conf import settings
 from .models import CustomUser, ConviteEquipe, PerfilTemplate
 from .sse import sse_register, sse_unregister, sse_broadcast
 import logging
@@ -31,6 +34,7 @@ from .serializadores import (
 from .servicos import (
     autenticar_usuario,
     autenticar_com_google,
+    obter_monitoramento_login,
     redefinir_senha as redefinir_senha_service,
     solicitar_recuperacao_senha as solicitar_recuperacao_senha_service,
     criar_usuario,
@@ -48,6 +52,7 @@ def login(request):
     resposta = autenticar_usuario(
         serializador.validated_data['email'],
         serializador.validated_data['password'],
+        request=request,
     )
     return Response(resposta)
 
@@ -58,8 +63,30 @@ def login(request):
 def google_login(request):
     serializador = LoginGoogleSerializador(data=request.data)
     serializador.is_valid(raise_exception=True)
-    resposta = autenticar_com_google(serializador.validated_data['credential'])
-    return Response(resposta)
+    try:
+        resposta = autenticar_com_google(serializador.validated_data['credential'], request=request)
+        return Response(resposta)
+    except AuthenticationFailed as exc:
+        return Response({'erro': str(exc.detail)}, status=status.HTTP_401_UNAUTHORIZED)
+    except (OperationalError, InterfaceError) as exc:
+        logger.exception('Erro de conexao com banco no login Google')
+        return Response(
+            {'erro': 'Erro ao conectar ao banco de dados. Reinicie o backend ou verifique a conexao com o Neon.'},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    except Exception as exc:
+        logger.exception('Erro interno no login Google')
+        erro = 'Erro interno ao autenticar com Google.'
+        resposta = {'erro': erro}
+        if settings.DEBUG:
+            resposta['detalhe'] = str(exc)
+        return Response(resposta, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def monitoramento_login(request):
+    return Response(obter_monitoramento_login())
 
 
 # ── CADASTRO ──────────────────────────────────────────────────────────────────

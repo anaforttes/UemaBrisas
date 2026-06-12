@@ -2,7 +2,22 @@
 // Todos os services e hooks devem importar daqui — nunca hardcodar URL ou ler
 // localStorage diretamente.
 
-export const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+function resolverApiBase(): string {
+  const configurada = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  if (typeof window === 'undefined') return configurada;
+
+  const hostAtual = window.location.hostname;
+  const appAbertoPorIp = hostAtual !== 'localhost' && hostAtual !== '127.0.0.1';
+  const apiLocalhost = configurada.includes('localhost') || configurada.includes('127.0.0.1');
+
+  if (appAbertoPorIp && apiLocalhost) {
+    return `${window.location.protocol}//${hostAtual}:8000`;
+  }
+
+  return configurada;
+}
+
+export const API_BASE = resolverApiBase();
 
 // ─── Token helpers ─────────────────────────────────────────────────────────────
 
@@ -76,8 +91,9 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const erro = await res.json().catch(() => ({}));
     throw new Error(
       (erro as Record<string, string>).detail ??
-      (erro as Record<string, string>).message ??
-      `Erro ${res.status}`
+        (erro as Record<string, string>).erro ??
+        (erro as Record<string, string>).message ??
+        `Erro ${res.status}`
     );
   }
 

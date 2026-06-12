@@ -13,7 +13,8 @@ from google.oauth2 import id_token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
-from .models import CustomUser
+from django.db.models import Count, Q
+from .models import CustomUser, TentativaLogin
 
 
 def _montar_email_recuperacao_texto(nome_exibicao: str, link_recuperacao: str) -> str:
@@ -106,28 +107,110 @@ def _buscar_usuario_por_email(email: str):
     return CustomUser.objects.filter(email__iexact=email).first()
 
 
-def autenticar_usuario(email: str, senha: str) -> dict:
+def registrar_tentativa_login(
+    *,
+    email: str = '',
+    provedor: str,
+    sucesso: bool,
+    usuario: CustomUser | None = None,
+    motivo: str = '',
+    request=None,
+) -> None:
+    try:
+        ip = None
+        user_agent = ''
+        if request is not None:
+            forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR', '')
+            ip = forwarded_for.split(',')[0].strip() if forwarded_for else request.META.get('REMOTE_ADDR')
+            user_agent = request.META.get('HTTP_USER_AGENT', '')[:1000]
+
+        TentativaLogin.objects.create(
+            usuario=usuario,
+            email=email or getattr(usuario, 'email', ''),
+            provedor=provedor,
+            sucesso=sucesso,
+            motivo=motivo[:255],
+            ip=ip or None,
+            user_agent=user_agent,
+        )
+    except Exception:
+        logger.exception('Falha ao registrar tentativa de login')
+
+
+def obter_monitoramento_login() -> dict:
+    agregados = TentativaLogin.objects.aggregate(
+        tentativas=Count('id'),
+        sucessos=Count('id', filter=Q(sucesso=True)),
+        falhas=Count('id', filter=Q(sucesso=False)),
+    )
+    tentativas = agregados['tentativas'] or 0
+    sucessos = agregados['sucessos'] or 0
+    falhas = agregados['falhas'] or 0
+    return {
+        'tentativas': tentativas,
+        'sucessos': sucessos,
+        'falhas': falhas,
+        'taxa_sucesso': round((sucessos / tentativas) * 100) if tentativas else 0,
+        'atualizado_em': timezone.now().isoformat(),
+    }
+
+
+def autenticar_usuario(email: str, senha: str, request=None) -> dict:
     usuario_existente = _buscar_usuario_por_email(email)
 
     if not usuario_existente:
+        registrar_tentativa_login(
+            email=email,
+            provedor='senha',
+            sucesso=False,
+            motivo='Usuario nao encontrado.',
+            request=request,
+        )
         raise AuthenticationFailed("Usuario nao encontrado.")
 
     # Verificar a senha usando check_password (já que CustomUser herda de AbstractBaseUser)
     if not usuario_existente.check_password(senha):
+        registrar_tentativa_login(
+            email=email,
+            provedor='senha',
+            sucesso=False,
+            usuario=usuario_existente,
+            motivo='E-mail ou senha invalidos.',
+            request=request,
+        )
         raise AuthenticationFailed("E-mail ou senha invalidos.")
 
     if not usuario_existente.is_active:
+        registrar_tentativa_login(
+            email=email,
+            provedor='senha',
+            sucesso=False,
+            usuario=usuario_existente,
+            motivo='Usuario inativo.',
+            request=request,
+        )
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
 
     # Marca online imediatamente e notifica via SSE
     usuario_existente.last_access = timezone.now()
     usuario_existente.save(update_fields=['last_access'])
 
-    from autenticacao.sse import sse_broadcast
-    sse_broadcast('status_update', {
-        'id':     usuario_existente.id,
-        'status': 'Online',
-    })
+    try:
+        from autenticacao.sse import sse_broadcast
+        sse_broadcast('status_update', {
+            'id':     usuario_existente.id,
+            'status': 'Online',
+        })
+    except Exception:
+        pass
+
+    registrar_tentativa_login(
+        email=email,
+        provedor='senha',
+        sucesso=True,
+        usuario=usuario_existente,
+        request=request,
+    )
 
     refresh = RefreshToken.for_user(usuario_existente)
 
@@ -140,7 +223,7 @@ def autenticar_usuario(email: str, senha: str) -> dict:
     }
 
 
-def autenticar_com_google(credential: str) -> dict:
+def autenticar_com_google(credential: str, request=None) -> dict:
     try:
         dados_google = id_token.verify_oauth2_token(
             credential,
@@ -148,16 +231,34 @@ def autenticar_com_google(credential: str) -> dict:
             settings.GOOGLE_OAUTH2_CLIENT_ID,
         )
     except ValueError as exc:
+        registrar_tentativa_login(
+            provedor='google',
+            sucesso=False,
+            motivo=f'Token do Google invalido: {exc}',
+            request=request,
+        )
         raise AuthenticationFailed(f"Token do Google invalido: {exc}")
 
     if dados_google.get("iss") not in [
         "accounts.google.com",
         "https://accounts.google.com",
     ]:
+        registrar_tentativa_login(
+            provedor='google',
+            sucesso=False,
+            motivo='Provedor de autenticacao invalido.',
+            request=request,
+        )
         raise AuthenticationFailed("Provedor de autenticacao invalido.")
 
     email = dados_google.get("email")
     if not email:
+        registrar_tentativa_login(
+            provedor='google',
+            sucesso=False,
+            motivo='Google nao retornou e-mail.',
+            request=request,
+        )
         raise AuthenticationFailed("O Google nao retornou um e-mail valido.")
 
     usuario = _buscar_usuario_por_email(email)
@@ -179,16 +280,35 @@ def autenticar_com_google(credential: str) -> dict:
             usuario.save(update_fields=['name'])
 
     if not usuario.is_active:
+        registrar_tentativa_login(
+            email=email,
+            provedor='google',
+            sucesso=False,
+            usuario=usuario,
+            motivo='Usuario inativo.',
+            request=request,
+        )
         raise AuthenticationFailed("Usuario inativo. Procure o administrador da plataforma.")
 
     usuario.last_access = timezone.now()
     usuario.save(update_fields=['last_access'])
 
-    from autenticacao.sse import sse_broadcast
-    sse_broadcast('status_update', {
-        'id':     usuario.id,
-        'status': 'Online',
-    })
+    try:
+        from autenticacao.sse import sse_broadcast
+        sse_broadcast('status_update', {
+            'id':     usuario.id,
+            'status': 'Online',
+        })
+    except Exception:
+        pass
+
+    registrar_tentativa_login(
+        email=email,
+        provedor='google',
+        sucesso=True,
+        usuario=usuario,
+        request=request,
+    )
 
     refresh = RefreshToken.for_user(usuario)
 

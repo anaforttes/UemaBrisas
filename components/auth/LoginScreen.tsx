@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Logo } from '../common/Logo';
@@ -25,48 +25,123 @@ const parseJwt = (token: string) => {
 
 type LoginSuccessCallback = (user: User, tokens?: { access: string; refresh: string }) => void;
 
+let googleGsiInitialized = false;
+
 export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCallback }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const googleButtonRef = useRef<HTMLDivElement | null>(null);
+  const googleButtonRenderedRef = useRef(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    // @ts-expect-error google GSI not typed
-    if (window.google) {
+    let cancelado = false;
+    let tentativas = 0;
+
+    const renderizarBotaoGoogle = () => {
+      if (cancelado || googleButtonRenderedRef.current || !googleButtonRef.current) return true;
+      // @ts-expect-error google GSI not typed
+      if (!window.google?.accounts?.id) return false;
+
       try {
+        if (!googleGsiInitialized) {
+          const googleClientId = (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ?? '';
+          if (!googleClientId) {
+            setError('Client ID do Google não configurado no frontend.');
+            return true;
+          }
+
+          googleGsiInitialized = true;
+          // @ts-expect-error google GSI not typed
+          google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleGoogleResponse,
+          });
+        }
+
+        const buttonWidth = Math.min(googleButtonRef.current.offsetWidth || 320, 400);
+        googleButtonRef.current.replaceChildren();
         // @ts-expect-error google GSI not typed
-        google.accounts.id.initialize({
-          client_id: (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ?? '',
-          callback: handleGoogleResponse,
-        });
-        // @ts-expect-error google GSI not typed
-        google.accounts.id.renderButton(document.getElementById('googleBtn'), {
+        google.accounts.id.renderButton(googleButtonRef.current, {
           theme: 'outline',
           size: 'large',
-          width: '100%',
+          width: buttonWidth,
           text: 'signin_with',
           shape: 'pill',
         });
+        googleButtonRenderedRef.current = true;
+        return true;
       } catch (e) {
         console.error('Erro Google GSI:', e);
+        return true;
       }
-    }
+    };
+
+    if (renderizarBotaoGoogle()) return;
+
+    const intervalo = window.setInterval(() => {
+      tentativas += 1;
+      if (renderizarBotaoGoogle() || tentativas >= 50) {
+        window.clearInterval(intervalo);
+      }
+    }, 100);
+
+    return () => {
+      cancelado = true;
+      window.clearInterval(intervalo);
+      googleButtonRef.current?.replaceChildren();
+      googleButtonRenderedRef.current = false;
+    };
   }, []);
 
-  const handleGoogleResponse = (response: any) => {
-    const userData = parseJwt(response.credential);
-    if (userData) {
+  const handleGoogleResponse = async (response: any) => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/autenticacao/login-google/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ credential: response.credential }),
+      });
+
+      const textoResposta = await res.text();
+      let data: any = {};
+      try {
+        data = textoResposta ? JSON.parse(textoResposta) : {};
+      } catch {
+        data = { erro: textoResposta };
+      }
+
+      if (!res.ok) {
+        setError(
+          data.detail ??
+            data.detalhe ??
+            data.erro ??
+            data.message ??
+            `Erro ${res.status} ao entrar com Google.`
+        );
+        return;
+      }
+
+      const userPayload = parseJwt(data.access);
+      const googlePayload = parseJwt(response.credential);
       const googleUser: User = {
-        id: userData.sub ?? '',
-        name: userData.name,
-        email: userData.email,
-        role: 'Técnico',
-        avatar: userData.picture,
+        id: String(userPayload?.user_id ?? userPayload?.sub ?? googlePayload?.sub ?? ''),
+        name: data.name ?? googlePayload?.name ?? data.email,
+        email: data.email ?? googlePayload?.email ?? '',
+        role: data.papel ?? data.role ?? 'Técnico',
+        avatar: data.avatar ?? googlePayload?.picture ?? '',
       };
-      onLoginSuccess(googleUser);
+
+      onLoginSuccess(googleUser, { access: data.access, refresh: data.refresh });
       navigate('/');
+    } catch {
+      setError('Não foi possível conectar ao servidor. Verifique se o backend está rodando.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -187,7 +262,7 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCa
           </div>
         </div>
 
-        <div id="googleBtn" className="w-full flex justify-center"></div>
+        <div ref={googleButtonRef} id="googleBtn" className="w-full flex justify-center"></div>
 
         <p className="mt-10 text-center text-sm text-slate-500 font-medium">
           Ainda não tem acesso?{' '}

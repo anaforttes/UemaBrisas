@@ -82,6 +82,39 @@ class PerfilTemplate(models.Model):
         return f'{self.nome_perfil} ({self.usuario.email})'
 
 
+class TentativaLogin(models.Model):
+    PROVEDOR_CHOICES = [
+        ('senha', 'Senha'),
+        ('google', 'Google'),
+    ]
+
+    usuario = models.ForeignKey(
+        CustomUser,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='tentativas_login',
+    )
+    email = models.EmailField(blank=True, default='')
+    provedor = models.CharField(max_length=20, choices=PROVEDOR_CHOICES)
+    sucesso = models.BooleanField(default=False, db_index=True)
+    motivo = models.CharField(max_length=255, blank=True, default='')
+    ip = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    criado_em = models.DateTimeField(auto_now_add=True, db_index=True)
+
+    class Meta:
+        ordering = ['-criado_em']
+        indexes = [
+            models.Index(fields=['criado_em', 'sucesso']),
+            models.Index(fields=['provedor', 'criado_em']),
+        ]
+
+    def __str__(self):
+        status = 'sucesso' if self.sucesso else 'falha'
+        return f'{self.provedor} {status} {self.email or "sem-email"}'
+
+
 class ConviteEquipe(models.Model):
     PERMISSAO_CHOICES = [
         ('visualizar', 'Visualizar'),

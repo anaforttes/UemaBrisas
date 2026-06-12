@@ -3,6 +3,7 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from .views import (
     login,
     google_login,
+    monitoramento_login,
     solicitar_recuperacao_senha,
     redefinir_senha,
     cadastro,
@@ -21,6 +22,7 @@ urlpatterns = [
     path('token/refresh/',        TokenRefreshView.as_view(),  name='token_refresh'),
     path('login/',               login,                       name='login'),
     path('login-google/',        google_login,                name='login_google'),
+    path('monitoramento-login/', monitoramento_login,         name='monitoramento_login'),
     path('cadastro/',            cadastro,                    name='cadastro'),
     path('heartbeat/',           heartbeat,                   name='heartbeat'),
     path('logout-status/',       logout_status,               name='logout_status'),
