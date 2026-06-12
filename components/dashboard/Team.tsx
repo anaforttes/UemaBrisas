@@ -1,13 +1,13 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useStatusStream } from '../../hooks/useStatusStream';
 import { API_BASE, getToken } from '../../shared/services/apiClient';
+import { useAuth } from '../../shared/contexts/AuthContext';
 import {
   AlertTriangle,
   Check,
   CheckCircle2,
   Clock,
   Copy,
-  Edit2,
   MoreVertical,
   Plus,
   QrCode,
@@ -509,55 +509,6 @@ const DeleteModal: React.FC<DeleteModalProps> = ({ name, onConfirm, onCancel }) 
   </div>
 );
 
-// ─── Inline Edit ──────────────────────────────────────────────────────────────
-
-interface InlineEditProps {
-  value: string;
-  onSave: (newName: string) => void;
-  onCancel: () => void;
-}
-
-const InlineEdit: React.FC<InlineEditProps> = ({ value, onSave, onCancel }) => {
-  const [text, setText] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    inputRef.current?.focus();
-    inputRef.current?.select();
-  }, []);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') onSave(text.trim() || value);
-    if (e.key === 'Escape') onCancel();
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <input
-        ref={inputRef}
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={handleKeyDown}
-        className="w-44 rounded-lg border border-blue-400 px-2 py-0.5 text-sm font-black text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-300"
-      />
-      <button
-        onClick={() => onSave(text.trim() || value)}
-        className="p-1 text-green-600 transition-colors hover:text-green-700"
-        title="Salvar"
-      >
-        <Check size={15} />
-      </button>
-      <button
-        onClick={onCancel}
-        className="p-1 text-slate-400 transition-colors hover:text-slate-600"
-        title="Cancelar"
-      >
-        <X size={15} />
-      </button>
-    </div>
-  );
-};
-
 // ─── Permissões Modal ─────────────────────────────────────────────────────────
 
 interface PermissoesModalProps {
@@ -761,13 +712,18 @@ const PermissoesModal: React.FC<PermissoesModalProps> = ({ member, onSave, onCan
 // ─── Componente Principal ─────────────────────────────────────────────────────
 
 export const Team: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const [members, setMembers] = useState<User[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [permissoesTarget, setPermissoesTarget] = useState<User | null>(null);
   const [mostrarConvite, setMostrarConvite] = useState(false);
+  const canManageTeam = Boolean(
+    currentUser?.role === 'Admin' ||
+    currentUser?.flags?.superusuario ||
+    currentUser?.flags?.adminMunicipio
+  );
 
   const apiPatch = async (pk: string, body: object) => {
     const res = await fetch(`${API_BASE}/api/autenticacao/usuarios/${pk}/`, {
@@ -874,16 +830,6 @@ export const Team: React.FC = () => {
     return m.name.toLowerCase().includes(term) || m.email.toLowerCase().includes(term);
   });
 
-  const handleSaveName = async (id: string, newName: string) => {
-    setMembers((prev) => prev.map((m) => (m.id === id ? { ...m, name: newName } : m)));
-    setEditingId(null);
-    try {
-      await apiPatch(id, { name: newName });
-    } catch {
-      await fetchMembers();
-    }
-  };
-
   const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
     setMembers((prev) => prev.filter((m) => m.id !== deleteTarget.id));
@@ -945,12 +891,14 @@ export const Team: React.FC = () => {
               className="w-full rounded-2xl border border-slate-200 bg-white py-3 pl-12 pr-4 text-sm shadow-sm outline-none transition-all focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <button
-            onClick={() => setMostrarConvite(true)}
-            className="flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
-          >
-            <Plus size={18} /> <span className="hidden sm:inline">Convidar</span>
-          </button>
+          {canManageTeam && (
+            <button
+              onClick={() => setMostrarConvite(true)}
+              className="flex shrink-0 items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-bold text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
+            >
+              <Plus size={18} /> <span className="hidden sm:inline">Convidar</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -990,17 +938,9 @@ export const Team: React.FC = () => {
                             </div>
                           </div>
                           <div>
-                            {editingId === member.id ? (
-                              <InlineEdit
-                                value={member.name}
-                                onSave={(name) => handleSaveName(member.id, name)}
-                                onCancel={() => setEditingId(null)}
-                              />
-                            ) : (
-                              <p className="mb-1 text-sm font-black leading-none text-slate-800">
-                                {member.name}
-                              </p>
-                            )}
+                            <p className="mb-1 text-sm font-black leading-none text-slate-800">
+                              {member.name}
+                            </p>
                             <p className="text-xs font-medium text-slate-400">{member.email}</p>
                           </div>
                         </div>
@@ -1054,32 +994,31 @@ export const Team: React.FC = () => {
                       </td>
 
                       <td className="px-8 py-5 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-                          <button
-                            title="Gerenciar permissões"
-                            onClick={() => setPermissoesTarget(member)}
-                            className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Settings size={16} />
-                          </button>
-                          <button
-                            title="Editar nome"
-                            onClick={() => setEditingId(member.id)}
-                            className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
-                          >
-                            <Edit2 size={16} />
-                          </button>
-                          <button
-                            title="Remover colaborador"
-                            onClick={() => setDeleteTarget({ id: member.id, name: member.name })}
-                            className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                        <div className="group-hover:hidden">
-                          <MoreVertical size={18} className="ml-auto text-slate-300" />
-                        </div>
+                        {canManageTeam && String(currentUser?.id) !== member.id && (
+                          <>
+                            <div className="flex items-center justify-end gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+                              <button
+                                title="Gerenciar permissões"
+                                onClick={() => setPermissoesTarget(member)}
+                                className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-blue-50 hover:text-blue-600"
+                              >
+                                <Settings size={16} />
+                              </button>
+                              <button
+                                title="Remover colaborador"
+                                onClick={() =>
+                                  setDeleteTarget({ id: member.id, name: member.name })
+                                }
+                                className="rounded-xl p-2.5 text-slate-400 transition-all hover:bg-red-50 hover:text-red-600"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                            <div className="group-hover:hidden">
+                              <MoreVertical size={18} className="ml-auto text-slate-300" />
+                            </div>
+                          </>
+                        )}
                       </td>
                     </tr>
                   );

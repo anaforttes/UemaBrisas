@@ -16,6 +16,7 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from django.db import OperationalError, InterfaceError
 from django.conf import settings
 from .models import CustomUser, ConviteEquipe, PerfilTemplate
+from .permissoes import pode_gerenciar_equipe
 from .sse import sse_register, sse_unregister, sse_broadcast
 import logging
 import queue
@@ -257,6 +258,26 @@ class CustomUserDetail(APIView):
         except CustomUser.DoesNotExist:
             return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
+        campos_solicitados = set(request.data.keys())
+        if request.user.pk == user.pk:
+            campos_nao_permitidos = campos_solicitados - {'name', 'avatar'}
+            if campos_nao_permitidos:
+                return Response(
+                    {'erro': 'Você só pode alterar seu próprio nome e avatar.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            if not pode_gerenciar_equipe(request.user):
+                return Response(
+                    {'erro': 'Você não tem permissão para alterar outros usuários.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            if 'name' in campos_solicitados or 'avatar' in campos_solicitados:
+                return Response(
+                    {'erro': 'O nome e o avatar devem ser alterados pelo próprio usuário.'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = AtualizarUsuarioSerializer(user, data=request.data, partial=True)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -270,6 +291,17 @@ class CustomUserDetail(APIView):
             user = CustomUser.objects.get(pk=pk)
         except CustomUser.DoesNotExist:
             return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not pode_gerenciar_equipe(request.user):
+            return Response(
+                {'erro': 'Você não tem permissão para remover usuários.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        if request.user.pk == user.pk:
+            return Response(
+                {'erro': 'Você não pode remover sua própria conta por este endpoint.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         user_data = CustomUserSerializer(user).data
         user.delete()

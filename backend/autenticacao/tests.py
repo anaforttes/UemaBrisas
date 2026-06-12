@@ -55,3 +55,61 @@ class CadastroTests(TestCase):
             'password': 'SenhaForte1!',
         }, format='json')
         self.assertIn(resp.status_code, [400, 409])
+
+
+class GerenciamentoEquipeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.usuario = make_user(email='usuario@test.com', name='Usuario')
+        self.outro = make_user(email='outro@test.com', name='Outro')
+        self.admin = make_user(email='admin@test.com', name='Admin', role='Admin')
+
+    def test_usuario_pode_alterar_proprio_nome(self):
+        self.client.force_authenticate(self.usuario)
+        resp = self.client.patch(
+            f'/api/autenticacao/usuarios/{self.usuario.id}/',
+            {'name': 'Nome Atualizado'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.usuario.refresh_from_db()
+        self.assertEqual(self.usuario.name, 'Nome Atualizado')
+
+    def test_usuario_nao_pode_alterar_nome_de_outro(self):
+        self.client.force_authenticate(self.usuario)
+        resp = self.client.patch(
+            f'/api/autenticacao/usuarios/{self.outro.id}/',
+            {'name': 'Nome Indevido'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.outro.refresh_from_db()
+        self.assertEqual(self.outro.name, 'Outro')
+
+    def test_admin_nao_pode_alterar_nome_de_outro(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(
+            f'/api/autenticacao/usuarios/{self.outro.id}/',
+            {'name': 'Nome Indevido'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.outro.refresh_from_db()
+        self.assertEqual(self.outro.name, 'Outro')
+
+    def test_admin_pode_alterar_cargo_de_outro(self):
+        self.client.force_authenticate(self.admin)
+        resp = self.client.patch(
+            f'/api/autenticacao/usuarios/{self.outro.id}/',
+            {'role': 'Gestor'},
+            format='json',
+        )
+        self.assertEqual(resp.status_code, 200)
+        self.outro.refresh_from_db()
+        self.assertEqual(self.outro.role, 'Gestor')
+
+    def test_usuario_nao_pode_remover_outro(self):
+        self.client.force_authenticate(self.usuario)
+        resp = self.client.delete(f'/api/autenticacao/usuarios/{self.outro.id}/')
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(CustomUser.objects.filter(pk=self.outro.id).exists())
