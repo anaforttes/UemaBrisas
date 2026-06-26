@@ -1238,25 +1238,42 @@ window.print();
         documentContent={editor.getHTML()}
         currentUser={currentUser || null}
         onSignatureComplete={async (record) => {
-          setRegistroAssinatura(record);
-          onSave(editor.getHTML(), tituloLocal, 'Signed');
-          registrarEvento('assinatura', `Assinado — Protocolo: ${record.protocol}`);
           const mySigner = record.signers.find(
             (s) => s.status === 'signed' && String(s.id) === String(currentUser?.id || 'current')
           );
-          if (docBackendRef.current && mySigner) {
-            try {
-              await documentoService.registrarAssinatura(docBackendRef.current.id, {
-                protocolo: record.protocol,
-                hash_assinatura: mySigner.signatureHash ?? '',
-                nome_certificado: mySigner.certificateCN ?? '',
-                cpf_certificado: mySigner.certificateCPF ?? '',
-                ac_emissora: mySigner.certificateIssuer ?? '',
-              });
-            } catch {
-              /* ignora */
+          if (!docBackendRef.current) {
+            throw new Error(
+              'Documento ainda não está sincronizado com o backend. Salve o documento antes de assinar.'
+            );
+          }
+          if (!mySigner) {
+            throw new Error('Não foi possível identificar o assinante atual.');
+          }
+
+          const assinaturasExistentes = docBackendRef.current.assinaturas ?? [];
+          const jaTemAssinaturaConcluida = assinaturasExistentes.some(
+            (assinatura) => assinatura.status === 'assinado'
+          );
+          if (!jaTemAssinaturaConcluida) {
+            const signatarios = record.signers
+              .map((signer) => ({ usuario_id: Number(signer.id), ordem: signer.order }))
+              .filter((signer) => Number.isFinite(signer.usuario_id));
+            if (signatarios.length > 0) {
+              await documentoService.iniciarAssinaturas(docBackendRef.current.id, signatarios);
             }
           }
+
+          await documentoService.registrarAssinatura(docBackendRef.current.id, {
+            protocolo: record.protocol,
+            hash_assinatura: mySigner.signatureHash ?? '',
+            nome_certificado: mySigner.certificateCN ?? currentUser?.name ?? '',
+            cpf_certificado: mySigner.certificateCPF ?? '',
+            ac_emissora: mySigner.certificateIssuer ?? 'Sistema REURB',
+          });
+
+          setRegistroAssinatura(record);
+          onSave(editor.getHTML(), tituloLocal, 'Signed');
+          registrarEvento('assinatura', `Assinado — Protocolo: ${record.protocol}`);
         }}
       />
 
