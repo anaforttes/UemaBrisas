@@ -9,6 +9,7 @@ import {
   CheckCheck,
   TrendingUp,
   PenSquare,
+  PenLine,
   AlertCircle,
   CalendarClock,
   Timer,
@@ -392,6 +393,19 @@ export const Dashboard: React.FC<{ user: User }> = ({ user }) => {
                             <span className="inline-flex items-center gap-1 mt-2 text-[10px] font-black text-slate-400">
                               <X size={11} /> Convite recusado
                             </span>
+                          )}
+
+                          {n.tipo === 'assinatura' && n.link && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(n.link);
+                                setShowNotif(false);
+                              }}
+                              className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 bg-blue-600 text-white rounded-lg text-[11px] font-black hover:bg-blue-700 transition-colors"
+                            >
+                              <PenLine size={12} /> Assinar documento
+                            </button>
                           )}
                         </div>
                       </div>

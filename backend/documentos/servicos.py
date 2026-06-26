@@ -37,6 +37,9 @@ def _pode_ver(request, doc):
     # Qualquer colaborador pode ver
     if doc.colaboradores.filter(usuario=user).exists():
         return True
+    # Signatário designado pode ver (necessário para assinar)
+    if doc.assinaturas.filter(usuario=user).exists():
+        return True
     # Permissão global de visualizar no controleadmin
     return usuario_possui_permissao_codigo(user, 'visualizar')
 
@@ -192,8 +195,88 @@ def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumen
         doc.status = 'Signed'
         doc.save()
         registrar_auditoria(doc, user, 'status_alterado', 'Documento completamente assinado')
+        _notificar_documento_assinado(doc, user)
+    else:
+        _notificar_proximo_assinante(doc, solicitante=user)
 
     return ass
+
+
+def _link_documento(doc: Documento) -> str:
+    return f'/edit/{doc.doc_ref or doc.id}'
+
+
+def _notificar_proximo_assinante(doc: Documento, solicitante) -> None:
+    """Avisa o proximo signatario pendente (menor ordem) que e a vez dele assinar."""
+    from notificacoes.servicos import criar_notificacao
+
+    proximo = (
+        doc.assinaturas.select_related('usuario')
+        .filter(status='pendente', usuario__isnull=False)
+        .order_by('ordem', 'id')
+        .first()
+    )
+    if not proximo or not proximo.usuario:
+        return
+
+    link = _link_documento(doc)
+    ja_notificado = proximo.usuario.notificacoes.filter(
+        tipo='assinatura', link=link, lida=False
+    ).exists()
+    if ja_notificado:
+        return
+
+    quem = getattr(solicitante, 'name', None) or 'Um responsavel'
+    criar_notificacao(
+        usuario=proximo.usuario,
+        tipo='assinatura',
+        titulo='Assinatura pendente',
+        descricao=f'{quem} solicitou sua assinatura no documento "{doc.titulo}".',
+        link=link,
+    )
+
+
+def _notificar_documento_assinado(doc: Documento, ultimo_assinante) -> None:
+    """Avisa o criador do documento quando todas as assinaturas forem coletadas."""
+    from notificacoes.servicos import criar_notificacao
+
+    criador = doc.criado_por
+    if not criador or criador == ultimo_assinante:
+        return
+    criar_notificacao(
+        usuario=criador,
+        tipo='assinatura',
+        titulo='Documento totalmente assinado',
+        descricao=f'Todas as assinaturas do documento "{doc.titulo}" foram coletadas.',
+        link=_link_documento(doc),
+    )
+
+
+def listar_assinaturas_pendentes(user):
+    """Documentos aguardando a assinatura do usuario, com indicacao de quando e a vez dele."""
+    pendentes = (
+        AssinaturaDocumento.objects
+        .select_related('documento', 'documento__criado_por')
+        .filter(usuario=user, status='pendente')
+        .order_by('ordem', 'id')
+    )
+    resultado = []
+    for ass in pendentes:
+        doc = ass.documento
+        anterior_pendente = doc.assinaturas.filter(
+            ordem__lt=ass.ordem
+        ).exclude(status='assinado').exists()
+        resultado.append({
+            'documento_id': str(doc.id),
+            'doc_ref': doc.doc_ref,
+            'titulo': doc.titulo,
+            'ordem': ass.ordem,
+            'minha_vez': not anterior_pendente,
+            'solicitante': doc.criado_por.name if doc.criado_por else '',
+            'link': _link_documento(doc),
+            'criado_em': doc.criado_em.isoformat(),
+        })
+    return resultado
 
 def gerar_convite(doc: Documento, user, papel: str = 'editor',
                   dias: int = 7) -> ConviteDocumento:

@@ -8,6 +8,7 @@ class Notificacao(models.Model):
         ('colaborador', 'Colaborador'),
         ('conflito', 'Conflito de versão'),
         ('atribuicao', 'Atribuição'),
+        ('assinatura', 'Assinatura'),
         ('sistema', 'Sistema'),
     ]
 

@@ -20,7 +20,7 @@ from .serializadores import (
 )
 from .servicos import (
     criar_documento, salvar_versao, adicionar_colaborador,
-    iniciar_assinaturas, registrar_assinatura,
+    iniciar_assinaturas, registrar_assinatura, listar_assinaturas_pendentes,
     gerar_convite, aceitar_convite, registrar_auditoria, atualizar_presenca,
     _pode_editar, _pode_ver,
 )
@@ -413,6 +413,16 @@ class VerificarAssinaturaPublicaView(APIView):
                 'assinado_em': item.assinado_em.isoformat() if item.assinado_em else None,
             } for item in assinaturas],
         })
+
+
+class AssinaturasPendentesView(APIView):
+    """Lista os documentos que aguardam a assinatura do usuário autenticado."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        pendentes = listar_assinaturas_pendentes(request.user)
+        return Response({'resultados': pendentes, 'total': len(pendentes)})
+
 
 class GerarConviteView(APIView):
     """Gera (ou retorna ativo) um código de convite para o documento."""

@@ -11,7 +11,7 @@ export interface ConviteNotificacao {
 
 export interface Notificacao {
   id: number;
-  tipo: 'comentario' | 'colaborador' | 'conflito' | 'atribuicao' | 'sistema';
+  tipo: 'comentario' | 'colaborador' | 'conflito' | 'atribuicao' | 'assinatura' | 'sistema';
   titulo: string;
   descricao: string;
   lida: boolean;
@@ -36,4 +36,22 @@ export async function marcarLida(id: number): Promise<void> {
 
 export async function marcarTodasLidas(): Promise<void> {
   await request<{ marcadas: number }>('/api/notificacoes/marcar-todas/', { method: 'POST' });
+}
+
+export interface AssinaturaPendente {
+  documento_id: string;
+  doc_ref: string;
+  titulo: string;
+  ordem: number;
+  minha_vez: boolean;
+  solicitante: string;
+  link: string;
+  criado_em: string;
+}
+
+export async function listarAssinaturasPendentes(): Promise<{
+  resultados: AssinaturaPendente[];
+  total: number;
+}> {
+  return request('/api/documentos/assinaturas/pendentes/');
 }
