@@ -1,13 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  PenLine,
-  FileSignature,
-  Clock,
-  Loader2,
-  RefreshCw,
-  CheckCircle2,
-} from 'lucide-react';
+import { PenLine, FileSignature, Loader2, RefreshCw, CheckCircle2 } from 'lucide-react';
 import {
   listarAssinaturasPendentes,
   AssinaturaPendente,
@@ -97,27 +90,12 @@ export const PendingSignatures: React.FC = () => {
                 <p className="mt-0.5 text-xs text-slate-500">
                   Solicitado por <strong>{p.solicitante || '—'}</strong> • {formatarData(p.criado_em)}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-slate-500">
-                    {p.ordem}º na ordem
-                  </span>
-                  {p.minha_vez ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue-600">
-                      <PenLine size={11} /> Sua vez
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-600">
-                      <Clock size={11} /> Aguardando signatário anterior
-                    </span>
-                  )}
-                </div>
               </div>
 
               <button
                 onClick={() => navigate(p.link)}
-                disabled={!p.minha_vez}
-                title={p.minha_vez ? 'Abrir documento para assinar' : 'Aguarde a assinatura anterior'}
-                className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
+                title="Abrir documento para assinar"
+                className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white shadow-lg shadow-blue-100 transition-all hover:bg-blue-700"
               >
                 <PenLine size={16} /> Assinar
               </button>

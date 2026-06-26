@@ -42,8 +42,6 @@ export interface AssinaturaPendente {
   documento_id: string;
   doc_ref: string;
   titulo: string;
-  ordem: number;
-  minha_vez: boolean;
   solicitante: string;
   link: string;
   criado_em: string;

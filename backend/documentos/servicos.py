@@ -145,6 +145,7 @@ def iniciar_assinaturas(doc: Documento, user, signatarios: list) -> list:
     doc.status = 'Review'
     doc.save()
     registrar_auditoria(doc, user, 'status_alterado', 'Documento enviado para revisão')
+    _notificar_assinantes_pendentes(doc, solicitante=user)
     return criados
 
 
@@ -170,10 +171,6 @@ def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumen
             status='pendente',
         )
 
-    anterior_pendente = assinaturas.filter(ordem__lt=ass.ordem).exclude(status='assinado').first()
-    if anterior_pendente:
-        raise ValidationError('Assinatura fora da ordem definida.')
-
     if ass.status == 'assinado':
         raise ValidationError('Documento ja assinado por este usuario.')
 
@@ -196,8 +193,6 @@ def registrar_assinatura(doc: Documento, user, dados: dict) -> AssinaturaDocumen
         doc.save()
         registrar_auditoria(doc, user, 'status_alterado', 'Documento completamente assinado')
         _notificar_documento_assinado(doc, user)
-    else:
-        _notificar_proximo_assinante(doc, solicitante=user)
 
     return ass
 
@@ -206,34 +201,33 @@ def _link_documento(doc: Documento) -> str:
     return f'/edit/{doc.doc_ref or doc.id}'
 
 
-def _notificar_proximo_assinante(doc: Documento, solicitante) -> None:
-    """Avisa o proximo signatario pendente (menor ordem) que e a vez dele assinar."""
+def _notificar_assinantes_pendentes(doc: Documento, solicitante) -> None:
+    """Avisa todos os signatarios pendentes que o documento aguarda a assinatura deles."""
     from notificacoes.servicos import criar_notificacao
 
-    proximo = (
+    link = _link_documento(doc)
+    quem = getattr(solicitante, 'name', None) or 'Um responsavel'
+    solicitante_id = getattr(solicitante, 'id', None)
+
+    pendentes = (
         doc.assinaturas.select_related('usuario')
         .filter(status='pendente', usuario__isnull=False)
-        .order_by('ordem', 'id')
-        .first()
     )
-    if not proximo or not proximo.usuario:
-        return
-
-    link = _link_documento(doc)
-    ja_notificado = proximo.usuario.notificacoes.filter(
-        tipo='assinatura', link=link, lida=False
-    ).exists()
-    if ja_notificado:
-        return
-
-    quem = getattr(solicitante, 'name', None) or 'Um responsavel'
-    criar_notificacao(
-        usuario=proximo.usuario,
-        tipo='assinatura',
-        titulo='Assinatura pendente',
-        descricao=f'{quem} solicitou sua assinatura no documento "{doc.titulo}".',
-        link=link,
-    )
+    for ass in pendentes:
+        if ass.usuario_id == solicitante_id:
+            continue
+        ja_notificado = ass.usuario.notificacoes.filter(
+            tipo='assinatura', link=link, lida=False
+        ).exists()
+        if ja_notificado:
+            continue
+        criar_notificacao(
+            usuario=ass.usuario,
+            tipo='assinatura',
+            titulo='Assinatura pendente',
+            descricao=f'{quem} solicitou sua assinatura no documento "{doc.titulo}".',
+            link=link,
+        )
 
 
 def _notificar_documento_assinado(doc: Documento, ultimo_assinante) -> None:
@@ -253,25 +247,20 @@ def _notificar_documento_assinado(doc: Documento, ultimo_assinante) -> None:
 
 
 def listar_assinaturas_pendentes(user):
-    """Documentos aguardando a assinatura do usuario, com indicacao de quando e a vez dele."""
+    """Documentos aguardando a assinatura do usuario."""
     pendentes = (
         AssinaturaDocumento.objects
         .select_related('documento', 'documento__criado_por')
         .filter(usuario=user, status='pendente')
-        .order_by('ordem', 'id')
+        .order_by('-id')
     )
     resultado = []
     for ass in pendentes:
         doc = ass.documento
-        anterior_pendente = doc.assinaturas.filter(
-            ordem__lt=ass.ordem
-        ).exclude(status='assinado').exists()
         resultado.append({
             'documento_id': str(doc.id),
             'doc_ref': doc.doc_ref,
             'titulo': doc.titulo,
-            'ordem': ass.ordem,
-            'minha_vez': not anterior_pendente,
             'solicitante': doc.criado_por.name if doc.criado_por else '',
             'link': _link_documento(doc),
             'criado_em': doc.criado_em.isoformat(),
