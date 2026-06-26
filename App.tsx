@@ -18,6 +18,7 @@ import { LoginScreen } from './components/auth/LoginScreen';
 import { SignupScreen } from './components/auth/SignupScreen';
 import { ForgotPasswordScreen } from './components/auth/ForgotPasswordScreen';
 import { ConsultaProcesso } from './components/auth/ConsultaProcesso';
+import { SignatureVerifyScreen } from './components/auth/SignatureVerifyScreen';
 import ConviteAcceptPage from './components/editor/ConviteAcceptPage';
 import { useHeartbeat } from './hooks/useHeartbeat';
 
@@ -91,6 +92,7 @@ const AppInner: React.FC = () => {
         element={user ? <Navigate to="/" /> : <ForgotPasswordScreen />}
       />
       <Route path="/consulta" element={<ConsultaProcesso />} />
+      <Route path="/signature-verify/:protocol" element={<SignatureVerifyScreen />} />
       <Route path="/convite/:code" element={<ConviteAcceptPage currentUser={user} />} />
       <Route
         path="/*"

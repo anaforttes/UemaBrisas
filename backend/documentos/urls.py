@@ -5,6 +5,7 @@ from .views import (
     ColaboradorView, ColaboradorDeleteView,
     ComentarioListView, ComentarioUpdateView,
     AssinaturaListView, IniciarAssinaturasView,
+    VerificarAssinaturaPublicaView,
     GerarConviteView, AceitarConviteView,
     AuditoriaListView, PresencaListView,
     ModeloListView, ModeloDetailView,
@@ -13,6 +14,7 @@ from .views import (
 urlpatterns = [
     path('', DocumentoListView.as_view()),
     path('convite/<uuid:codigo>/', AceitarConviteView.as_view()),
+    path('assinaturas/verificar/<str:protocolo>/', VerificarAssinaturaPublicaView.as_view()),
     path('<uuid:pk>/', DocumentoDetailView.as_view()),
     path('<uuid:doc_id>/salvar/', SalvarVersaoView.as_view()),
     path('<uuid:doc_id>/versoes/', VersaoListView.as_view()),

@@ -18,6 +18,7 @@ import {
   LevelFormat,
 } from 'docx';
 import { saveAs } from 'file-saver';
+import QRCode from 'qrcode';
 import type { SignatureRecord } from './assinaturaService';
 
 type Html2Pdf = {
@@ -49,7 +50,53 @@ export const exportarPDF = (
       script.onload = () => resolve();
       document.head.appendChild(script);
     });
-  return carregarScript().then(() => {
+  return carregarScript().then(async () => {
+    const qrCodeSrc = record?.qrCodeData
+      ? await QRCode.toDataURL(record.qrCodeData, {
+          errorCorrectionLevel: 'M',
+          margin: 1,
+          width: 180,
+          color: { dark: '#1e293b', light: '#ffffff' },
+        })
+      : '';
+    const signers = record?.signers?.slice().sort((a, b) => a.order - b.order) ?? [];
+    const assinaturaHtml = record
+      ? `
+      <section style="page-break-before:always;font-family:'Times New Roman';font-size:11pt;color:#0f172a;padding-top:8pt;">
+        <table style="width:100%;border-collapse:collapse;border-bottom:2pt solid #2563eb;padding-bottom:10pt;margin-bottom:18pt;">
+          <tr>
+            <td style="vertical-align:top;padding-bottom:10pt;">
+              <strong style="color:#1d4ed8;font-size:13pt;">REGISTRO DE ASSINATURAS INTERNAS</strong>
+              <p style="margin:6pt 0 0 0;color:#475569;">Protocolo: <strong>${record.protocol}</strong></p>
+            </td>
+            <td style="width:124pt;text-align:right;vertical-align:top;padding-bottom:10pt;">
+              ${qrCodeSrc ? `<img src="${qrCodeSrc}" style="width:112pt;height:112pt;border:1pt solid #bfdbfe;padding:5pt;background:#ffffff;" />` : ''}
+              <p style="margin:4pt 0 0 0;font-size:8pt;color:#475569;text-align:center;">Verificacao por QR Code</p>
+            </td>
+          </tr>
+        </table>
+        <div style="border:1pt solid #bfdbfe;background:#eff6ff;border-radius:6pt;padding:10pt;margin-bottom:16pt;">
+          <p style="margin:0 0 6pt 0;"><strong>Documento:</strong> ${record.documentTitle}</p>
+          <p style="margin:0 0 6pt 0;"><strong>Status:</strong> ${record.status}</p>
+          <p style="margin:0 0 6pt 0;"><strong>Gerado em:</strong> ${new Date(record.createdAt).toLocaleString('pt-BR')}</p>
+          <p style="margin:0;word-break:break-all;"><strong>Hash SHA-256:</strong> ${record.documentHash}</p>
+        </div>
+        ${signers
+          .map(
+            (s) => `
+          <div style="margin-top:8pt;padding:9pt;border:1pt solid #bbf7d0;border-radius:4pt;background:#f8fafc;">
+            <strong>${s.order}. ${s.name} - ${s.role}</strong>
+            <p style="margin:4pt 0 0 0;font-size:9pt;">Status: ${s.status}</p>
+            <p style="margin:3pt 0 0 0;font-size:9pt;">Assinado em: ${s.signedAt ? new Date(s.signedAt).toLocaleString('pt-BR') : '-'}</p>
+            ${s.signatureHash ? `<p style="margin:3pt 0 0 0;font-size:8pt;word-break:break-all;">Hash: ${s.signatureHash}</p>` : ''}
+          </div>
+        `
+          )
+          .join('')}
+        <p style="margin-top:18pt;font-size:9pt;color:#475569;">Verificacao publica: ${record.qrCodeData}</p>
+      </section>
+    `
+      : '';
     const wrapper = document.createElement('div');
     wrapper.innerHTML = `
       <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:10px;margin-bottom:20px;">
@@ -58,7 +105,7 @@ export const exportarPDF = (
         <p style="font-weight:bold;margin-top:6pt;">${titulo || 'DOCUMENTO OFICIAL'}</p>
       </div>
       <div style="font-family:'Times New Roman';font-size:12pt;line-height:1.5;">${conteudoHtml}</div>
-      ${record ? `<div style="margin-top:20pt;border-top:2pt solid #1e3a8a;padding-top:12pt;"><strong style="color:#1e3a8a;">✓ REGISTRO DE ASSINATURAS DIGITAIS</strong><br/><span style="color:#3b82f6;font-size:9pt;">Protocolo: ${record.protocol}</span>${record.signers.map((s, i) => `<div style="margin-top:6pt;padding:6pt;border:1pt solid #dcfce7;border-radius:4pt;"><strong>${i + 1}. ${s.name} — ${s.role}</strong><br/><span style="font-size:8pt;">Assinado em: ${s.signedAt ? new Date(s.signedAt).toLocaleString('pt-BR') : '-'}</span></div>`).join('')}</div>` : ''}
+      ${assinaturaHtml}
     `;
     return window.html2pdf!()
       .set({
@@ -66,6 +113,7 @@ export const exportarPDF = (
         filename: `${titulo || 'documento'}.pdf`,
         html2canvas: { scale: 2, useCORS: true },
         jsPDF: { unit: 'cm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['css', 'legacy'] },
       })
       .from(wrapper)
       .save();
