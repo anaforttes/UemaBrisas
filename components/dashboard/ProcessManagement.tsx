@@ -16,9 +16,11 @@ import {
   Clock,
   Download,
   Trash2,
+  FileSignature,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { obterProcesso } from '../../services/painelService';
+import { listarAssinaturasPendentes } from '../../services/notificacoesService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';
@@ -51,6 +53,7 @@ export const ProcessManagement: React.FC = () => {
   const [menuAberto, setMenuAberto] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<REURBProcess | null>(null);
   const [deletando, setDeletando] = useState(false);
+  const [assinaturasPendentes, setAssinaturasPendentes] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -59,6 +62,16 @@ export const ProcessManagement: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    let ativo = true;
+    listarAssinaturasPendentes()
+      .then((d) => ativo && setAssinaturasPendentes(d.total))
+      .catch(() => {});
+    return () => {
+      ativo = false;
+    };
+  }, []);
 
   // Abre o drawer de um processo vindo de outra tela (ex.: cards do Painel)
   useEffect(() => {
@@ -163,6 +176,19 @@ export const ProcessManagement: React.FC = () => {
               <LayoutGrid size={18} />
             </button>
           </div>
+
+          <button
+            onClick={() => navigate('/pending-signatures')}
+            title="Documentos aguardando sua assinatura"
+            className="relative flex items-center gap-2 px-5 py-3.5 bg-white border border-slate-200 text-slate-600 rounded-2xl font-bold hover:bg-slate-50 hover:text-slate-900 shadow-sm transition-all"
+          >
+            <FileSignature size={18} /> Assinaturas
+            {assinaturasPendentes > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[20px] h-5 px-1 bg-red-500 rounded-full text-[11px] font-black text-white border-2 border-white flex items-center justify-center">
+                {assinaturasPendentes > 9 ? '9+' : assinaturasPendentes}
+              </span>
+            )}
+          </button>
 
           {/* Botão Novo Protocolo — oculto para usuário externo */}
           {pode.criarProcesso && (
