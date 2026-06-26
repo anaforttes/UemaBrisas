@@ -12,6 +12,7 @@ import { Team } from './components/dashboard/Team';
 import { Configuracoes } from './components/dashboard/Configuracoes';
 import { ControleAdmin } from './components/dashboard/ControleAdmin';
 import { ProcessManagement } from './components/dashboard/ProcessManagement';
+import { PendingSignatures } from './components/dashboard/PendingSignatures';
 import Editor from './components/editor/Editor';
 import { ErrorBoundary } from './shared/components/ErrorBoundary';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -106,6 +107,7 @@ const AppInner: React.FC = () => {
                 <Routes>
                   <Route path="/" element={<Dashboard user={user} />} />
                   <Route path="/processes" element={<ProcessManagement />} />
+                  <Route path="/pending-signatures" element={<PendingSignatures />} />
                   <Route path="/templates" element={<Templates />} />
                   <Route path="/reports" element={<Reports />} />
                   <Route path="/team" element={<Team />} />

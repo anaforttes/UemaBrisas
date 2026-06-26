@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -9,9 +9,11 @@ import {
   LogOut,
   BarChart3,
   ShieldCheck,
+  FileSignature,
 } from 'lucide-react';
 import { User } from '../../types/index';
 import { usePermissoes } from '../../hooks/usePermissoes';
+import { listarAssinaturasPendentes } from '../../services/notificacoesService';
 import { Logo } from '../common/Logo';
 
 interface SidebarProps {
@@ -23,10 +25,30 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
   const location = useLocation();
   const { isAdmin, isSuperAdmin } = usePermissoes();
   const podeVerControleAdmin = isAdmin || isSuperAdmin;
+  const [pendentes, setPendentes] = useState(0);
+
+  useEffect(() => {
+    let ativo = true;
+    const carregar = async () => {
+      try {
+        const data = await listarAssinaturasPendentes();
+        if (ativo) setPendentes(data.total);
+      } catch {
+        /* ignora */
+      }
+    };
+    carregar();
+    const iv = window.setInterval(carregar, 60_000);
+    return () => {
+      ativo = false;
+      window.clearInterval(iv);
+    };
+  }, [location.pathname]);
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Painel', path: '/' },
     { icon: FolderKanban, label: 'Processos', path: '/processes' },
+    { icon: FileSignature, label: 'Assinaturas', path: '/pending-signatures', badge: pendentes },
     { icon: FileText, label: 'Modelos', path: '/templates' },
     { icon: BarChart3, label: 'Relatórios', path: '/reports' },
     { icon: Users, label: 'Equipe', path: '/team' },
@@ -61,6 +83,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
                   className={isActive ? 'text-white' : 'text-slate-400 group-hover:text-slate-600'}
                 />
                 <span className="text-sm font-bold">{item.label}</span>
+                {'badge' in item && item.badge > 0 && (
+                  <span
+                    className={`ml-auto flex h-6 min-w-[24px] items-center justify-center rounded-full px-1.5 text-[11px] font-black ${
+                      isActive ? 'bg-white text-blue-600' : 'bg-red-500 text-white'
+                    }`}
+                  >
+                    {item.badge > 9 ? '9+' : item.badge}
+                  </span>
+                )}
               </Link>
             );
           })}
