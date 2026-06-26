@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Users,
   Link2,
@@ -10,11 +10,10 @@ import {
   RefreshCw,
   X,
   Clock,
-  UserCheck,
   Circle,
 } from 'lucide-react';
 import { documentoService, DocColaborador } from '../../services/documentoService';
-import { auditoriaService, UsuarioPresenca } from '../../services/auditoriaService';
+import { auditoriaService } from '../../services/auditoriaService';
 
 interface Props {
   docId: string;
@@ -23,7 +22,7 @@ interface Props {
   ehEditor: boolean;
 }
 
-const FRONTEND_URL = (import.meta as any).env?.VITE_FRONTEND_URL ?? 'http://localhost:5173';
+const FRONTEND_URL = import.meta.env.VITE_FRONTEND_URL ?? 'http://localhost:5173';
 
 const avatarCor = (nome: string) => {
   const cores = [
@@ -42,7 +41,7 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
   const [loading, setLoading] = useState(true);
   const [removendo, setRemovendo] = useState<number | null>(null);
   const [usuariosOnline, setUsuariosOnline] = useState<Set<number>>(new Set());
-  const [carregandoPresenca, setCarregandoPresenca] = useState(false);
+  const [, setCarregandoPresenca] = useState(false);
 
   const [conviteCodigo, setConviteCodigo] = useState<string | null>(null);
   const [conviteExpira, setConviteExpira] = useState<string | null>(null);
@@ -51,20 +50,7 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
 
   const linkConvite = conviteCodigo ? `${FRONTEND_URL}/#/convite/${conviteCodigo}` : '';
 
-  useEffect(() => {
-    Promise.all([
-      documentoService.listarColaboradores(docId).then(setColaboradores),
-      carregarPresenca(),
-    ]).finally(() => setLoading(false));
-  }, [docId]);
-
-  // Atualizar presença a cada 10 segundos
-  useEffect(() => {
-    const intervalo = setInterval(carregarPresenca, 10000);
-    return () => clearInterval(intervalo);
-  }, []);
-
-  const carregarPresenca = async () => {
+  const carregarPresenca = useCallback(async () => {
     try {
       setCarregandoPresenca(true);
       const presencas = await auditoriaService.obterPresenca(docId);
@@ -77,7 +63,20 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
     } finally {
       setCarregandoPresenca(false);
     }
-  };
+  }, [docId]);
+
+  useEffect(() => {
+    Promise.all([
+      documentoService.listarColaboradores(docId).then(setColaboradores),
+      carregarPresenca(),
+    ]).finally(() => setLoading(false));
+  }, [docId, carregarPresenca]);
+
+  // Atualizar presença a cada 10 segundos
+  useEffect(() => {
+    const intervalo = setInterval(carregarPresenca, 10000);
+    return () => clearInterval(intervalo);
+  }, [carregarPresenca]);
 
   const handleGerarConvite = async () => {
     setGerando(true);
@@ -85,8 +84,8 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
       const data = await documentoService.gerarConvite(docId, 'editor', 7);
       setConviteCodigo(data.codigo);
       setConviteExpira(data.expira_em);
-    } catch (e: any) {
-      alert(e?.message ?? 'Erro ao gerar link.');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erro ao gerar link.');
     } finally {
       setGerando(false);
     }
@@ -116,8 +115,8 @@ const PainelColaboradores: React.FC<Props> = ({ docId, currentUserId, donoCriado
     try {
       await documentoService.removerColaborador(docId, colab.usuario.id);
       setColaboradores((prev) => prev.filter((c) => c.id !== colab.id));
-    } catch (e: any) {
-      alert(e?.message ?? 'Erro ao remover.');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erro ao remover.');
     } finally {
       setRemovendo(null);
     }

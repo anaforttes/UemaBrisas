@@ -5,12 +5,15 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 
-from .models import Processo, EventoProcesso, ConviteAtribuicao
+from .models import Processo, ConviteAtribuicao
 from .serializadores import ProcessoSerializer, ConviteAtribuicaoSerializer
 from .servicos import (
-    listar_processos, criar_processo, processos_do_usuario,
+    listar_processos, processos_do_usuario,
     papeis_no_processo, calcular_stats,
     atribuir_ou_convidar, responder_convite,
+    ids_processos_com_documentos, registrar_alteracoes_processo,
+    deletar_processo, listar_convites_pendentes, listar_eventos,
+    consultar_por_protocolo,
 )
 from .permissoes import pode_editar_processo, pode_deletar_processo
 from .eventos import registrar
@@ -35,13 +38,7 @@ def processos_view(request):
         serializer = ProcessoSerializer(page, many=True)
 
         # Inclui meus_papeis em uma única query extra (evita chamada separada /meus/)
-        from documentos.models import Documento, ColaboradorDocumento
-        uid = request.user.pk
-        doc_pids = (
-            set(Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)) |
-            set(ColaboradorDocumento.objects.filter(usuario_id=uid).values_list('documento__processo_id', flat=True))
-        )
-        processo_ids_docs = {str(pid) for pid in doc_pids if pid}
+        processo_ids_docs = ids_processos_com_documentos(request.user)
         dados = [
             {**proc, 'meus_papeis': papeis_no_processo(request.user, obj, processo_ids_docs)}
             for proc, obj in zip(serializer.data, page)
@@ -68,25 +65,7 @@ def processo_detalhe(request, pk):
         if not pode_editar_processo(request.user, processo):
             return Response({'erro': 'Sem permissão para editar.'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Log team changes before saving
-        from autenticacao.models import CustomUser
-        for campo, label in [('technician_id', 'Técnico'), ('legal_id', 'Jurídico')]:
-            novo_id = request.data.get(campo)
-            if novo_id is not None:
-                atual_id = getattr(processo, campo + '_id', None)
-                if str(novo_id) != str(atual_id or ''):
-                    try:
-                        nome = CustomUser.objects.get(pk=novo_id).name if novo_id else 'Nenhum'
-                    except CustomUser.DoesNotExist:
-                        nome = str(novo_id)
-                    registrar(processo, 'equipe_alterada',
-                              f'{label} atribuído: {nome}',
-                              request.user, {'campo': campo, 'novo_id': novo_id, 'nome': nome})
-
-        if 'status' in request.data and request.data['status'] != processo.status:
-            registrar(processo, 'status_alterado',
-                      f'Status alterado: {processo.status} → {request.data["status"]}',
-                      request.user, {'de': processo.status, 'para': request.data['status']})
+        registrar_alteracoes_processo(processo, request.data, request.user)
 
         serializer = ProcessoSerializer(processo, data=request.data, partial=True)
         if serializer.is_valid():
@@ -97,22 +76,14 @@ def processo_detalhe(request, pk):
     if request.method == "DELETE":
         if not pode_deletar_processo(request.user, processo):
             return Response({'erro': 'Sem permissão para excluir.'}, status=status.HTTP_403_FORBIDDEN)
-        processo.delete()
+        deletar_processo(processo)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def processos_meus(request):
-    from documentos.models import Documento, ColaboradorDocumento
-
-    uid = request.user.pk
-    doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
-    doc_ids_colab   = ColaboradorDocumento.objects.filter(
-        usuario_id=uid
-    ).values_list('documento__processo_id', flat=True)
-    processo_ids_docs = {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
-
+    processo_ids_docs = ids_processos_com_documentos(request.user)
     qs = processos_do_usuario(request.user, processo_ids_docs)
     serializer = ProcessoSerializer(qs, many=True)
 
@@ -156,10 +127,7 @@ def convites_processo(request, pk):
     processo = get_object_or_404(Processo, pk=pk)
     if not pode_editar_processo(request.user, processo):
         return Response({'erro': 'Sem permissão.'}, status=status.HTTP_403_FORBIDDEN)
-    convites = (
-        processo.convites.filter(status='pendente')
-        .select_related('convidado', 'solicitado_por', 'processo')
-    )
+    convites = listar_convites_pendentes(processo)
     return Response(ConviteAtribuicaoSerializer(convites, many=True).data)
 
 
@@ -187,7 +155,7 @@ def dashboard_stats(request):
 @permission_classes([IsAuthenticated])
 def eventos_processo(request, pk):
     processo = get_object_or_404(Processo, pk=pk)
-    eventos = processo.eventos.select_related('usuario').all()
+    eventos = listar_eventos(processo)
     data = [
         {
             'id':        e.id,
@@ -205,10 +173,8 @@ def eventos_processo(request, pk):
 @api_view(["GET"])
 @permission_classes([AllowAny])
 def consulta_publica(request, protocolo):
-    protocolo_norm = protocolo.strip().upper()
-    try:
-        processo = Processo.objects.get(protocol__iexact=protocolo_norm)
-    except Processo.DoesNotExist:
+    processo = consultar_por_protocolo(protocolo)
+    if processo is None:
         return Response({'erro': 'Protocolo não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
     etapas = processo.etapas.all().order_by('numero')

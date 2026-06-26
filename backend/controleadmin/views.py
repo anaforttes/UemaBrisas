@@ -13,13 +13,14 @@ from .serializadores import (
     PerfilAcessoUsuarioSerializador,
     PermissaoSistemaSerializador,
 )
-from .models import AuditoriaAdministrativa, PerfilAcessoUsuario
+from .models import PerfilAcessoUsuario
 from .servicos import (
     atualizar_perfil_usuario,
-    garantir_perfil_usuario,
+    listar_auditoria,
     listar_niveis_acesso,
     listar_permissoes,
     listar_usuarios_por_status,
+    obter_perfil_completo,
     usuario_tem_acesso_controleadmin,
 )
 
@@ -41,12 +42,7 @@ def _extrair_ip(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def meu_perfil_view(request):
-    perfil = garantir_perfil_usuario(request.user)
-    perfil = (
-        PerfilAcessoUsuario.objects.select_related('user', 'nivel_acesso', 'aprovado_por')
-        .prefetch_related('permissoes_extras__permissao')
-        .get(pk=perfil.pk)
-    )
+    perfil = obter_perfil_completo(request.user)
     return Response(PerfilAcessoUsuarioSerializador(perfil).data)
 
 
@@ -102,12 +98,7 @@ def usuario_detalhe_view(request, user_id: int):
     usuario = get_object_or_404(User, pk=user_id)
 
     if request.method == 'GET':
-        perfil = garantir_perfil_usuario(usuario)
-        perfil = (
-            PerfilAcessoUsuario.objects.select_related('user', 'nivel_acesso', 'aprovado_por')
-            .prefetch_related('permissoes_extras__permissao')
-            .get(pk=perfil.pk)
-        )
+        perfil = obter_perfil_completo(usuario)
         return Response(PerfilAcessoUsuarioSerializador(perfil).data)
 
     serializador = AtualizarPerfilAcessoSerializador(data=request.data)
@@ -127,7 +118,6 @@ def auditoria_view(request):
     if not usuario_tem_acesso_controleadmin(request.user):
         return _resposta_sem_permissao()
 
-    limite = min(int(request.query_params.get('limit', 50)), 200)
-    logs = AuditoriaAdministrativa.objects.select_related('usuario_alvo', 'administrador')[:limite]
+    logs = listar_auditoria(int(request.query_params.get('limit', 50)))
     serializador = AuditoriaAdministrativaSerializador(logs, many=True)
     return Response(serializador.data)

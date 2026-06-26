@@ -23,7 +23,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const saved = localStorage.getItem('reurb_current_user');
     if (saved) {
-      try { setUser(JSON.parse(saved)); } catch { /* ignore corrupt data */ }
+      try {
+        setUser(JSON.parse(saved));
+      } catch {
+        /* ignore corrupt data */
+      }
     }
     setLoading(false);
 
@@ -45,9 +49,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
   );
 }
 

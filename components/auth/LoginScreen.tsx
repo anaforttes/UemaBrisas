@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock, AlertCircle, Loader2, Search } from 'lucide-react';
 import { Logo } from '../common/Logo';
@@ -18,7 +18,7 @@ const parseJwt = (token: string) => {
         .join('')
     );
     return JSON.parse(jsonPayload);
-  } catch (e) {
+  } catch {
     return null;
   }
 };
@@ -32,13 +32,31 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCa
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  const handleGoogleResponse = useCallback(
+    (response: { credential: string }) => {
+      const userData = parseJwt(response.credential);
+      if (userData) {
+        const googleUser: User = {
+          id: userData.sub ?? '',
+          name: userData.name,
+          email: userData.email,
+          role: 'Técnico',
+          avatar: userData.picture,
+        };
+        onLoginSuccess(googleUser);
+        navigate('/');
+      }
+    },
+    [onLoginSuccess, navigate]
+  );
+
   useEffect(() => {
     // @ts-expect-error google GSI not typed
     if (window.google) {
       try {
         // @ts-expect-error google GSI not typed
         google.accounts.id.initialize({
-          client_id: (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ?? '',
+          client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID ?? '',
           callback: handleGoogleResponse,
         });
         // @ts-expect-error google GSI not typed
@@ -53,22 +71,7 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: LoginSuccessCa
         console.error('Erro Google GSI:', e);
       }
     }
-  }, []);
-
-  const handleGoogleResponse = (response: any) => {
-    const userData = parseJwt(response.credential);
-    if (userData) {
-      const googleUser: User = {
-        id: userData.sub ?? '',
-        name: userData.name,
-        email: userData.email,
-        role: 'Técnico',
-        avatar: userData.picture,
-      };
-      onLoginSuccess(googleUser);
-      navigate('/');
-    }
-  };
+  }, [handleGoogleResponse]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

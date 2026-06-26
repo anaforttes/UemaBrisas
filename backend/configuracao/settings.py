@@ -12,7 +12,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 load_dotenv(os.path.join(BASE_DIR, '.env'), override=True)
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-(#dj^-ed*0&5dxr4jcs2!#c&$^cn4@kp*z(8bdq0q4@orqx*1(')
+_INSECURE_SECRET_KEY = 'django-insecure-(#dj^-ed*0&5dxr4jcs2!#c&$^cn4@kp*z(8bdq0q4@orqx*1('
+SECRET_KEY = os.getenv('SECRET_KEY', _INSECURE_SECRET_KEY)
 
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
@@ -188,3 +189,27 @@ else:
 # Força encoding UTF-8 sem quoted-printable
 DEFAULT_CHARSET = 'utf-8'
 EMAIL_CHARSET = 'utf-8'
+
+# ── Segurança em produção ─────────────────────────────────────────────────────
+# Ativado automaticamente quando DEBUG=False. Em dev nada disso é aplicado.
+if not DEBUG:
+    if SECRET_KEY == _INSECURE_SECRET_KEY:
+        raise RuntimeError(
+            'SECRET_KEY inseguro em produção. Defina a variável SECRET_KEY no .env.'
+        )
+
+    SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000'))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
+    CSRF_TRUSTED_ORIGINS = [
+        o for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o
+    ]

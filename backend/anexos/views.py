@@ -5,8 +5,8 @@ from rest_framework import status
 from django.shortcuts import get_object_or_404
 
 from processos.models import Processo
-from processos.eventos import registrar
 from .models import Anexo
+from .servicos import listar_anexos, criar_anexo, remover_anexo
 
 
 def _serializar(anexo, request):
@@ -28,7 +28,7 @@ def anexos_processo(request, processo_pk):
     processo = get_object_or_404(Processo, pk=processo_pk)
 
     if request.method == 'GET':
-        anexos = processo.anexos.select_related('adicionado_por').all()
+        anexos = listar_anexos(processo)
         return Response([_serializar(a, request) for a in anexos])
 
     arquivo = request.FILES.get('arquivo')
@@ -42,22 +42,7 @@ def anexos_processo(request, processo_pk):
         except (ValueError, TypeError):
             etapa_numero = None
 
-    anexo = Anexo.objects.create(
-        processo=processo,
-        nome=arquivo.name,
-        tipo=arquivo.content_type,
-        tamanho=arquivo.size,
-        arquivo=arquivo,
-        adicionado_por=request.user,
-        etapa_numero=etapa_numero,
-    )
-
-    descricao = f'Arquivo adicionado: {arquivo.name}'
-    if etapa_numero:
-        descricao += f' (etapa {etapa_numero})'
-    registrar(processo, 'arquivo_adicionado', descricao, request.user,
-              {'arquivo': arquivo.name, 'etapa_numero': etapa_numero})
-
+    anexo = criar_anexo(processo, arquivo, etapa_numero, request.user)
     return Response(_serializar(anexo, request), status=status.HTTP_201_CREATED)
 
 
@@ -65,17 +50,5 @@ def anexos_processo(request, processo_pk):
 @permission_classes([IsAuthenticated])
 def anexo_detalhe(request, pk):
     anexo = get_object_or_404(Anexo, pk=pk)
-    processo = anexo.processo
-    nome = anexo.nome
-    etapa_numero = anexo.etapa_numero
-
-    anexo.arquivo.delete(save=False)
-    anexo.delete()
-
-    descricao = f'Arquivo removido: {nome}'
-    if etapa_numero:
-        descricao += f' (etapa {etapa_numero})'
-    registrar(processo, 'arquivo_removido', descricao, request.user,
-              {'arquivo': nome, 'etapa_numero': etapa_numero})
-
+    remover_anexo(anexo, request.user)
     return Response(status=status.HTTP_204_NO_CONTENT)

@@ -126,6 +126,9 @@ const ChatFlutuante: React.FC = () => {
       if (novas > 0) setNaoLidas((n) => n + novas);
     }
     prevLen.current = mensagens.length;
+    // Intencional: reage apenas à chegada de novas mensagens, lendo o estado
+    // atual de aberto/minimizado. Incluí-los nas deps mudaria o gatilho.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mensagens]);
 
   const enviar = async () => {

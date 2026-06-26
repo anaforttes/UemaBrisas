@@ -553,7 +553,7 @@ const ModalSelecionarProcesso: React.FC<ModalSelecionarProcessoProps> = ({
 // ─── Modal: Dados do Documento ────────────────────────────────────────────────
 
 interface ModalDadosDocumentoProps {
-  modelo: any;
+  modelo: TemplateModelCustom;
   onConfirmar: (payload: {
     dados: DadosAdicionaisDocumento;
     templateBase: string;
@@ -1227,7 +1227,7 @@ export const Templates: React.FC = () => {
   const [builderAberto, setBuilderAberto] = useState(false);
   const [modeloEmEdicao, setModeloEmEdicao] = useState<TemplateModelCustom | null>(null);
   const [menuModeloId, setMenuModeloId] = useState<string | null>(null);
-  const [modeloSelecionado, setModeloSelecionado] = useState<any | null>(null);
+  const [modeloSelecionado, setModeloSelecionado] = useState<TemplateModelCustom | null>(null);
   const [dadosDocumento, setDadosDocumento] = useState<DadosAdicionaisDocumento | null>(null);
   const [templateBase, setTemplateBase] = useState('');
   const [textoFinalDocumento, setTextoFinalDocumento] = useState('');
@@ -1239,7 +1239,7 @@ export const Templates: React.FC = () => {
 
   useEffect(() => {
     listarProcessos({ page: 1 })
-      .then((data) => setProcessos(data.results as any))
+      .then((data) => setProcessos(data.results))
       .catch(() => setProcessos([]));
     modelosService
       .listar()
@@ -1310,7 +1310,7 @@ export const Templates: React.FC = () => {
     setModelos((prev) => prev.filter((m) => m.id !== model.id));
   };
 
-  const handleUsarModelo = (model: any) => {
+  const handleUsarModelo = (model: TemplateModelCustom) => {
     setModeloSelecionado(model);
     setProcessoEscolhido(null);
     setDadosDocumento(null);

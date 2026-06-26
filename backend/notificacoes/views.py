@@ -3,17 +3,20 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
-from .models import Notificacao
 from .serializadores import NotificacaoSerializer
-from .servicos import listar_notificacoes, marcar_lida, marcar_todas_lidas
+from .servicos import (
+    listar_notificacoes,
+    contar_nao_lidas,
+    marcar_lida,
+    marcar_todas_lidas,
+)
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def listar_view(request):
     apenas_nao_lidas = request.GET.get('nao_lidas') == '1'
-    qs_base = Notificacao.objects.filter(usuario=request.user)
-    nao_lidas = qs_base.filter(lida=False).count()
+    nao_lidas = contar_nao_lidas(request.user)
     notificacoes = listar_notificacoes(request.user, apenas_nao_lidas=apenas_nao_lidas)
     serializer = NotificacaoSerializer(notificacoes, many=True)
     return Response({'resultados': serializer.data, 'nao_lidas': nao_lidas})

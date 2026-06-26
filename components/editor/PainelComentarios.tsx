@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import type { Editor } from '@tiptap/react';
+import type { Node as ProseMirrorNode } from '@tiptap/pm/model';
 import { MessageSquare, Check, X, Plus, Loader2, MapPin } from 'lucide-react';
 import { documentoService, DocComentario } from '../../services/documentoService';
 
@@ -8,7 +10,7 @@ interface PainelComentariosProps {
   docId?: string;
   nomeUsuario: string;
   cargoUsuario: string;
-  editor?: any;
+  editor?: Editor;
   ehEditor?: boolean;
 }
 
@@ -135,8 +137,8 @@ const PainelComentarios: React.FC<PainelComentariosProps> = ({
       setNovoTexto('');
       setSelecao(null);
       setMostrarFormulario(false);
-    } catch (e: any) {
-      alert(e?.message ?? 'Erro ao enviar comentário.');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Erro ao enviar comentário.');
     } finally {
       setEnviando(false);
     }
@@ -170,7 +172,7 @@ const PainelComentarios: React.FC<PainelComentariosProps> = ({
         const { state } = editor;
         const { doc } = state;
         let found = false;
-        doc.descendants((node: any, pos: number) => {
+        doc.descendants((node: ProseMirrorNode, pos: number) => {
           if (found || node.type.name !== 'text') return;
           const palavra = comentario.texto.match(/"([^"]+)" por "([^"]+)"/);
           if (palavra && node.text?.includes(palavra[1])) {

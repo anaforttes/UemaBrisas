@@ -19,6 +19,10 @@ def listar_notificacoes(usuario, apenas_nao_lidas: bool = False):
     return qs[:50]
 
 
+def contar_nao_lidas(usuario) -> int:
+    return Notificacao.objects.filter(usuario=usuario, lida=False).count()
+
+
 def marcar_lida(notificacao_id: int, usuario) -> bool:
     updated = Notificacao.objects.filter(id=notificacao_id, usuario=usuario).update(lida=True)
     return updated > 0

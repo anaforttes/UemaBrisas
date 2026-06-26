@@ -34,6 +34,18 @@ from .servicos import (
     redefinir_senha as redefinir_senha_service,
     solicitar_recuperacao_senha as solicitar_recuperacao_senha_service,
     criar_usuario,
+    obter_usuario_por_token,
+    marcar_online,
+    snapshot_status_usuarios,
+    listar_usuarios,
+    obter_usuario,
+    remover_usuario,
+    listar_convites_equipe,
+    criar_convite_equipe,
+    cancelar_convite_equipe,
+    listar_perfis_template,
+    salvar_perfil_template,
+    remover_perfil_template,
 )
 
 
@@ -77,7 +89,6 @@ def cadastro(request):
             serializador.validated_data['email'],
             serializador.validated_data['password'],
             serializador.validated_data['name'],
-            serializador.validated_data['role'],
         )
         try:
             from controleadmin.servicos import garantir_perfil_usuario
@@ -117,29 +128,18 @@ def redefinir_senha(request):
 
 # ── HEARTBEAT ─────────────────────────────────────────────────────────────────
 def _autenticar_token_body(request):
-    """Extrai e valida o JWT do header ou do body (para sendBeacon)."""
-    from rest_framework_simplejwt.tokens import AccessToken
-    from rest_framework_simplejwt.exceptions import TokenError
-
+    """Extrai o JWT do header ou do body (para sendBeacon) e resolve o usuário."""
     header = request.META.get('HTTP_AUTHORIZATION', '')
     raw = header.removeprefix('Bearer ').strip() if header.startswith('Bearer ') else ''
 
     if not raw:
         try:
-            import json as _json
-            body = _json.loads(request.body or '{}')
+            body = json.loads(request.body or '{}')
             raw = body.get('token', '')
         except Exception:
             pass
 
-    if not raw:
-        return None
-
-    try:
-        token = AccessToken(raw)
-        return CustomUser.objects.get(pk=token['user_id'])
-    except (TokenError, CustomUser.DoesNotExist, Exception):
-        return None
+    return obter_usuario_por_token(raw)
 
 
 @api_view(['POST'])
@@ -149,8 +149,7 @@ def heartbeat(request):
     if not user:
         return Response({'erro': 'Token inválido.'}, status=401)
 
-    user.last_access = timezone.now()
-    user.save(update_fields=['last_access'])
+    marcar_online(user)
     sse_broadcast('status_update', {'id': user.id, 'status': 'Online'})
     return Response({'ok': True})
 
@@ -188,11 +187,7 @@ def status_stream(request):
     q = sse_register(user_id)
 
     def event_generator():
-        users = CustomUser.objects.all().order_by('name')
-        snapshot = [
-            {'id': u.id, 'status': 'Online' if u.is_online else 'Offline'}
-            for u in users
-        ]
+        snapshot = snapshot_status_usuarios()
         yield f"event: snapshot\ndata: {json.dumps(snapshot)}\n\n"
 
         try:
@@ -217,17 +212,15 @@ class CustomUserList(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        users = CustomUser.objects.all().order_by('name')
-        return Response(CustomUserSerializer(users, many=True).data)
+        return Response(CustomUserSerializer(listar_usuarios(), many=True).data)
 
 
 class CustomUserDetail(APIView):
     permission_classes = [IsAuthenticated]
 
     def patch(self, request, pk):
-        try:
-            user = CustomUser.objects.get(pk=pk)
-        except CustomUser.DoesNotExist:
+        user = obter_usuario(pk)
+        if not user:
             return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
         serializer = AtualizarUsuarioSerializer(user, data=request.data, partial=True)
@@ -239,13 +232,12 @@ class CustomUserDetail(APIView):
         return Response(CustomUserSerializer(updated_user).data)
 
     def delete(self, request, pk):
-        try:
-            user = CustomUser.objects.get(pk=pk)
-        except CustomUser.DoesNotExist:
+        user = obter_usuario(pk)
+        if not user:
             return Response({'erro': 'Usuário não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 
         user_data = CustomUserSerializer(user).data
-        user.delete()
+        remover_usuario(user)
         sse_broadcast('user_removed', {'id': pk})
         return Response(user_data, status=status.HTTP_200_OK)
 
@@ -255,26 +247,20 @@ class CustomUserDetail(APIView):
 class ConviteEquipeView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _serializar(self, convite, nome_criador):
+        return {
+            'id':         convite.id,
+            'token':      convite.token,
+            'permissao':  convite.permissao,
+            'criado_em':  convite.criado_em.isoformat(),
+            'expira_em':  convite.expira_em.isoformat(),
+            'criado_por': nome_criador,
+            'usado':      convite.usado,
+        }
+
     def get(self, request):
-        agora = timezone.now()
-        convites = ConviteEquipe.objects.filter(
-            criado_por=request.user,
-            usado=False,
-            expira_em__gt=agora,
-        )
-        data = [
-            {
-                'id':         c.id,
-                'token':      c.token,
-                'permissao':  c.permissao,
-                'criado_em':  c.criado_em.isoformat(),
-                'expira_em':  c.expira_em.isoformat(),
-                'criado_por': request.user.name,
-                'usado':      c.usado,
-            }
-            for c in convites
-        ]
-        return Response(data)
+        convites = listar_convites_equipe(request.user)
+        return Response([self._serializar(c, request.user.name) for c in convites])
 
     def post(self, request):
         permissao = request.data.get('permissao', 'visualizar')
@@ -285,34 +271,16 @@ class ConviteEquipeView(APIView):
         if dias < 1 or dias > 30:
             return Response({'erro': 'Validade deve ser entre 1 e 30 dias.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        token = secrets.token_urlsafe(32)
-        convite = ConviteEquipe.objects.create(
-            token=token,
-            permissao=permissao,
-            criado_por=request.user,
-            expira_em=timezone.now() + timedelta(days=dias),
-        )
-        return Response({
-            'id':         convite.id,
-            'token':      convite.token,
-            'permissao':  convite.permissao,
-            'criado_em':  convite.criado_em.isoformat(),
-            'expira_em':  convite.expira_em.isoformat(),
-            'criado_por': request.user.name,
-            'usado':      convite.usado,
-        }, status=status.HTTP_201_CREATED)
+        convite = criar_convite_equipe(request.user, permissao, dias)
+        return Response(self._serializar(convite, request.user.name), status=status.HTTP_201_CREATED)
 
 
 class ConviteEquipeDetailView(APIView):
     permission_classes = [IsAuthenticated]
 
     def delete(self, request, token):
-        try:
-            convite = ConviteEquipe.objects.get(token=token, criado_por=request.user)
-        except ConviteEquipe.DoesNotExist:
+        if not cancelar_convite_equipe(token, request.user):
             return Response({'erro': 'Convite não encontrado.'}, status=status.HTTP_404_NOT_FOUND)
-        convite.usado = True
-        convite.save(update_fields=['usado'])
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 

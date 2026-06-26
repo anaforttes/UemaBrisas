@@ -1,8 +1,8 @@
 {
-    "chat.tools.terminal.autoApprove": {
-        "/^python backend/manage\\.py makemigrations autenticacao$/": {
-            "approve": true,
-            "matchCommandLine": true
-        }
+  "chat.tools.terminal.autoApprove": {
+    "/^python backend/manage\\.py makemigrations autenticacao$/": {
+      "approve": true,
+      "matchCommandLine": true
     }
+  }
 }

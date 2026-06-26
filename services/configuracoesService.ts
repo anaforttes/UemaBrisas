@@ -67,7 +67,7 @@ export const configuracoesService = {
     // ── Tema ──────────────────────────────────────────────────────────────────
     root.classList.remove('tema-escuro', 'tema-pb');
     if (config.tema === 'escuro') root.classList.add('tema-escuro');
-    if (config.tema === 'pb')     root.classList.add('tema-pb');
+    if (config.tema === 'pb') root.classList.add('tema-pb');
 
     // ── Cor principal ─────────────────────────────────────────────────────────
     root.style.setProperty('--cor-principal', config.corPrincipal);
@@ -77,10 +77,10 @@ export const configuracoesService = {
     root.style.setProperty('--fonte-global', tamanhos[config.tamanhoFonte]);
 
     // ── Acessibilidade ────────────────────────────────────────────────────────
-    root.classList.toggle('alto-contraste',    config.altoContraste);
+    root.classList.toggle('alto-contraste', config.altoContraste);
     root.classList.toggle('reduzir-animacoes', config.reduzirAnimacoes);
-    root.classList.toggle('aumentar-textos',   config.aumentarTextos);
-    root.classList.toggle('destacar-foco',     config.destacarFoco);
+    root.classList.toggle('aumentar-textos', config.aumentarTextos);
+    root.classList.toggle('destacar-foco', config.destacarFoco);
     root.classList.toggle('melhorar-legibilidade', config.melhorarLegibilidade);
   },
 };

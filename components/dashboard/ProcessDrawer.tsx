@@ -3,7 +3,6 @@ import {
   X,
   FileText,
   CheckCircle2,
-  User as UserIcon,
   Clock,
   Calendar,
   AlertCircle,
@@ -24,8 +23,6 @@ import {
   Users,
   FolderOpen,
   CheckCheck,
-  AlertTriangle,
-  XCircle,
   Circle,
   Send,
   Check,
@@ -252,7 +249,6 @@ const EtapaCard: React.FC<EtapaCardProps> = ({
   onAprovar,
   onUpload,
   onRemoverAnexo,
-  onAtualizar,
   uploadandoEtapa,
 }) => {
   const [expandido, setExpandido] = useState(etapa.status === 'em_andamento');
@@ -439,17 +435,6 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
   const { isAdmin, isSuperAdmin } = usePermissoes();
   const podeAtribuirDireto = isAdmin || isSuperAdmin;
 
-  useEffect(() => {
-    if (!process) return;
-    const tid = (process as any).technician_id ?? null;
-    const jid = (process as any).legal_id ?? null;
-    setTecnicoId(tid);
-    setJuridicoId(jid);
-    setSelTecnico(tid ? String(tid) : '');
-    setSelJuridico(jid ? String(jid) : '');
-    carregarDados();
-  }, [process?.id]);
-
   const carregarDados = useCallback(async () => {
     if (!process) return;
     setErroCarregamento(false);
@@ -474,7 +459,19 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
     } catch {
       setErroCarregamento(true);
     }
-  }, [process?.id]);
+  }, [process]);
+
+  useEffect(() => {
+    if (!process) return;
+    const proc = process as { technician_id?: number | null; legal_id?: number | null };
+    const tid = proc.technician_id ?? null;
+    const jid = proc.legal_id ?? null;
+    setTecnicoId(tid);
+    setJuridicoId(jid);
+    setSelTecnico(tid ? String(tid) : '');
+    setSelJuridico(jid ? String(jid) : '');
+    carregarDados();
+  }, [process, carregarDados]);
 
   const handleProtocolar = async () => {
     if (!process || protocolando) return;
@@ -621,7 +618,7 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
           setJuridicoId(usuarioId);
           setSelJuridico(usuarioId ? String(usuarioId) : '');
         }
-        if (onUpdate) onUpdate(process.id, { [campo]: usuarioId } as any);
+        if (onUpdate) onUpdate(process.id, { [campo]: usuarioId });
       }
       await carregarDados();
     } finally {
@@ -1015,7 +1012,7 @@ export const ProcessDrawer: React.FC<ProcessDrawerProps> = ({ process, onClose, 
                   {[
                     { label: 'Requerente', value: process.applicant },
                     { label: 'Localização', value: process.location || '—' },
-                    { label: 'Área', value: (process as any).area || '—' },
+                    { label: 'Área', value: (process as { area?: string }).area || '—' },
                     { label: 'Abertura', value: fmtData(process.createdAt) },
                   ].map(({ label, value }) => (
                     <div key={label} className="bg-slate-50 rounded-xl p-3 border border-slate-100">

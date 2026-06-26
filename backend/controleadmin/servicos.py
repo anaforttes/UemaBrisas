@@ -134,6 +134,25 @@ def listar_usuarios_por_status(status_acesso: str | None = None):
     return qs.order_by('user__email')
 
 
+def obter_perfil_completo(user: User) -> PerfilAcessoUsuario:
+    """Garante o perfil do usuário e o recarrega com os relacionamentos prontos."""
+    perfil = garantir_perfil_usuario(user)
+    return (
+        PerfilAcessoUsuario.objects
+        .select_related('user', 'nivel_acesso', 'aprovado_por')
+        .prefetch_related('permissoes_extras__permissao')
+        .get(pk=perfil.pk)
+    )
+
+
+def listar_auditoria(limite: int = 50):
+    limite = min(limite, 200)
+    return (
+        AuditoriaAdministrativa.objects
+        .select_related('usuario_alvo', 'administrador')[:limite]
+    )
+
+
 @transaction.atomic
 def atualizar_perfil_usuario(
     *,

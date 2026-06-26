@@ -3,7 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { documentoService } from '../../services/documentoService';
 import { dbService } from '../../services/databaseService';
 import { Users, CheckCircle2, AlertCircle, Loader2, FileText, LogIn } from 'lucide-react';
-import { User } from '../../types/index';
+import { User, REURBDocument } from '../../types/index';
 
 interface Props {
   currentUser: User | null;
@@ -61,15 +61,15 @@ const ConviteAcceptPage: React.FC<Props> = ({ currentUser }) => {
           title: doc.titulo,
           content: doc.conteudo,
           processId: doc.processo_id ?? '',
-          status: doc.status as any,
+          status: doc.status as REURBDocument['status'],
         });
       } catch {
         /* se falhar, o editor vai buscar direto no backend */
       }
 
       setEstado('sucesso');
-    } catch (e: any) {
-      setErro(e?.message ?? 'Erro ao entrar no documento.');
+    } catch (e: unknown) {
+      setErro(e instanceof Error ? e.message : 'Erro ao entrar no documento.');
       setEstado('erro');
     }
   };

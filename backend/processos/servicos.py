@@ -26,16 +26,24 @@ def criar_processo(user, dados: dict) -> Processo:
     return serializer.save(criado_por=user)
 
 
-def processos_do_usuario(user, processo_ids_docs: set = None):
-    """Retorna todos os processos em que o usuário tem algum papel."""
+def ids_processos_com_documentos(user) -> set:
+    """IDs (str) de processos onde o usuário criou ou colabora em documentos."""
     from documentos.models import Documento, ColaboradorDocumento
 
     uid = user.pk
+    doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
+    doc_ids_colab = ColaboradorDocumento.objects.filter(
+        usuario_id=uid
+    ).values_list('documento__processo_id', flat=True)
+    return {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
+
+
+def processos_do_usuario(user, processo_ids_docs: set = None):
+    """Retorna todos os processos em que o usuário tem algum papel."""
+    uid = user.pk
 
     if processo_ids_docs is None:
-        doc_ids_criados = Documento.objects.filter(criado_por_id=uid).values_list('processo_id', flat=True)
-        doc_ids_colab   = ColaboradorDocumento.objects.filter(usuario_id=uid).values_list('documento__processo_id', flat=True)
-        processo_ids_docs = {str(pid) for pid in list(doc_ids_criados) + list(doc_ids_colab) if pid}
+        processo_ids_docs = ids_processos_com_documentos(user)
 
     filtro = Q(technician_id=uid) | Q(legal_id=uid) | Q(criado_por_id=uid)
     if processo_ids_docs:
@@ -72,6 +80,52 @@ def calcular_stats() -> dict:
         'concluidos': Processo.objects.filter(status__in=STATUS_CONCLUIDOS).count(),
         'em_revisao': Processo.objects.filter(status__in=STATUS_EM_REVISAO).count(),
     }
+
+
+def registrar_alteracoes_processo(processo, dados, usuario) -> None:
+    """Registra eventos de mudança de equipe e status antes de salvar o PATCH."""
+    from autenticacao.models import CustomUser
+
+    for campo, label in [('technician_id', 'Técnico'), ('legal_id', 'Jurídico')]:
+        novo_id = dados.get(campo)
+        if novo_id is not None:
+            atual_id = getattr(processo, campo + '_id', None)
+            if str(novo_id) != str(atual_id or ''):
+                try:
+                    nome = CustomUser.objects.get(pk=novo_id).name if novo_id else 'Nenhum'
+                except CustomUser.DoesNotExist:
+                    nome = str(novo_id)
+                registrar(processo, 'equipe_alterada',
+                          f'{label} atribuído: {nome}',
+                          usuario, {'campo': campo, 'novo_id': novo_id, 'nome': nome})
+
+    if 'status' in dados and dados['status'] != processo.status:
+        registrar(processo, 'status_alterado',
+                  f'Status alterado: {processo.status} → {dados["status"]}',
+                  usuario, {'de': processo.status, 'para': dados['status']})
+
+
+def deletar_processo(processo) -> None:
+    processo.delete()
+
+
+def listar_convites_pendentes(processo):
+    return (
+        processo.convites.filter(status='pendente')
+        .select_related('convidado', 'solicitado_por', 'processo')
+    )
+
+
+def listar_eventos(processo):
+    return processo.eventos.select_related('usuario').all()
+
+
+def consultar_por_protocolo(protocolo: str):
+    """Busca um processo pelo protocolo (case-insensitive). Retorna None se não existir."""
+    try:
+        return Processo.objects.get(protocol__iexact=protocolo.strip().upper())
+    except Processo.DoesNotExist:
+        return None
 
 
 # ─── Atribuição de equipe (com convite/aceite) ────────────────────────────────

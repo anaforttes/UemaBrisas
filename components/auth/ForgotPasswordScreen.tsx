@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, RefreshCcw, Check, ArrowLeft, AlertCircle, ArrowRight } from 'lucide-react';
@@ -35,9 +34,16 @@ export const ForgotPasswordScreen = () => {
             <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
               <Check size={40} />
             </div>
-            <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">E-mail Enviado!</h2>
-            <p className="text-slate-500 text-sm mb-8 font-medium">As instruções de redefinição foram enviadas para <strong>{email}</strong>.</p>
-            <Link to="/login" className="flex items-center justify-center gap-2 text-blue-600 font-bold hover:underline">
+            <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">
+              E-mail Enviado!
+            </h2>
+            <p className="text-slate-500 text-sm mb-8 font-medium">
+              As instruções de redefinição foram enviadas para <strong>{email}</strong>.
+            </p>
+            <Link
+              to="/login"
+              className="flex items-center justify-center gap-2 text-blue-600 font-bold hover:underline"
+            >
               <ArrowLeft size={16} /> Voltar para o Login
             </Link>
           </div>
@@ -48,17 +54,29 @@ export const ForgotPasswordScreen = () => {
                 <RefreshCcw size={32} />
               </div>
             </div>
-            <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">Recuperar Senha</h2>
-            <p className="text-slate-400 text-sm mb-8 font-medium">Insira seu e-mail cadastrado para receber o link de redefinição.</p>
+            <h2 className="text-2xl font-black text-slate-800 mb-2 tracking-tight">
+              Recuperar Senha
+            </h2>
+            <p className="text-slate-400 text-sm mb-8 font-medium">
+              Insira seu e-mail cadastrado para receber o link de redefinição.
+            </p>
 
             <form onSubmit={handleRecover} className="space-y-5 text-left">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">E-mail Institucional</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 tracking-widest">
+                  E-mail Institucional
+                </label>
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                  <input 
-                    type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all" 
+                  <Mail
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                    size={18}
+                  />
+                  <input
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all"
                     placeholder="exemplo@prefeitura.gov.br"
                   />
                 </div>
@@ -70,8 +88,9 @@ export const ForgotPasswordScreen = () => {
                 </div>
               )}
 
-              <button 
-                type="submit" disabled={isLoading}
+              <button
+                type="submit"
+                disabled={isLoading}
                 className={`w-full py-4 bg-slate-800 text-white rounded-2xl font-bold transition-all flex items-center justify-center gap-2 shadow-xl shadow-slate-100 hover:bg-slate-900 ${isLoading ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 {isLoading ? 'Verificando...' : 'Enviar Instruções'}
@@ -79,7 +98,10 @@ export const ForgotPasswordScreen = () => {
               </button>
             </form>
             <p className="mt-8 text-center text-sm text-slate-500 font-medium">
-              Lembrou sua senha? <Link to="/login" className="text-blue-600 font-bold hover:underline">Voltar ao Login</Link>
+              Lembrou sua senha?{' '}
+              <Link to="/login" className="text-blue-600 font-bold hover:underline">
+                Voltar ao Login
+              </Link>
             </p>
           </>
         )}

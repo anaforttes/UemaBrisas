@@ -41,7 +41,8 @@ function calcularCooldown(nameChangedAt?: string | null): {
 export const Configuracoes: React.FC = () => {
   const { user, login } = useAuth();
 
-  const nameChangedAt = (user as any)?.name_changed_at ?? null;
+  const nameChangedAt =
+    (user as { name_changed_at?: string | null } | null)?.name_changed_at ?? null;
   const { bloqueado, diasRestantes, proxima } = calcularCooldown(nameChangedAt);
 
   const [config, setConfig] = useState<ConfiguracoesPlatforma>(() =>
@@ -61,10 +62,13 @@ export const Configuracoes: React.FC = () => {
 
     if (user) {
       try {
-        const atualizado = await request<any>(`/api/autenticacao/usuarios/${user.id}/`, {
-          method: 'PATCH',
-          body: JSON.stringify({ name: nome, avatar }),
-        });
+        const atualizado = await request<{ name?: string; name_changed_at?: string | null }>(
+          `/api/autenticacao/usuarios/${user.id}/`,
+          {
+            method: 'PATCH',
+            body: JSON.stringify({ name: nome, avatar }),
+          }
+        );
         const userAtualizado = {
           ...user,
           name: atualizado.name ?? nome,
@@ -73,8 +77,8 @@ export const Configuracoes: React.FC = () => {
         };
         localStorage.setItem('reurb_current_user', JSON.stringify(userAtualizado));
         login(userAtualizado);
-      } catch (e: any) {
-        const msg = e?.message ?? '';
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : '';
         setErro(msg || 'Não foi possível salvar no servidor.');
         setSalvo(true);
         setTimeout(() => setSalvo(false), 4000);
@@ -221,7 +225,12 @@ export const Configuracoes: React.FC = () => {
               ].map((t) => (
                 <button
                   key={t.value}
-                  onClick={() => setConfig((prev) => ({ ...prev, tema: t.value as any }))}
+                  onClick={() =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      tema: t.value as ConfiguracoesPlatforma['tema'],
+                    }))
+                  }
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                     config.tema === t.value
                       ? 'bg-blue-600 text-white shadow'

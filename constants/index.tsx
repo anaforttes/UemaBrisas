@@ -1,13 +1,48 @@
-import { DocumentModel, REURBProcess, ProcessStatus, DadosAdicionaisDocumento } from '../types/index';
+import {
+  DocumentModel,
+  REURBProcess,
+  ProcessStatus,
+  DadosAdicionaisDocumento,
+} from '../types/index';
 
 // ─── Modelos de documentos ────────────────────────────────────────────────────
 
 export const MOCK_MODELS: DocumentModel[] = [
-  { id: 'm1', name: 'Portaria de Instauração',        type: 'Administrativo', version: '2.1', lastUpdated: '2024-01-10' },
-  { id: 'm2', name: 'Notificação de Confrontantes',   type: 'Notificação',    version: '1.5', lastUpdated: '2023-11-22' },
-  { id: 'm3', name: 'Relatório Técnico Social',       type: 'Técnico',        version: '3.0', lastUpdated: '2024-02-15' },
-  { id: 'm4', name: 'Auto de Demarcação Urbanística', type: 'Técnico',        version: '1.2', lastUpdated: '2024-03-01' },
-  { id: 'm5', name: 'Título de Legitimação Fundiária',type: 'Titularidade',   version: '4.2', lastUpdated: '2024-05-05' },
+  {
+    id: 'm1',
+    name: 'Portaria de Instauração',
+    type: 'Administrativo',
+    version: '2.1',
+    lastUpdated: '2024-01-10',
+  },
+  {
+    id: 'm2',
+    name: 'Notificação de Confrontantes',
+    type: 'Notificação',
+    version: '1.5',
+    lastUpdated: '2023-11-22',
+  },
+  {
+    id: 'm3',
+    name: 'Relatório Técnico Social',
+    type: 'Técnico',
+    version: '3.0',
+    lastUpdated: '2024-02-15',
+  },
+  {
+    id: 'm4',
+    name: 'Auto de Demarcação Urbanística',
+    type: 'Técnico',
+    version: '1.2',
+    lastUpdated: '2024-03-01',
+  },
+  {
+    id: 'm5',
+    name: 'Título de Legitimação Fundiária',
+    type: 'Titularidade',
+    version: '4.2',
+    lastUpdated: '2024-05-05',
+  },
 ];
 
 // ─── Processos mock — municípios de todo o Brasil ─────────────────────────────
@@ -265,30 +300,34 @@ export const MOCK_PROCESSES: REURBProcess[] = [
 // Substitui automaticamente placeholders com os dados do usuário.
 
 export function getConteudoModelo(
-  modeloId: string, 
+  modeloId: string,
   processo: REURBProcess,
   dadosAdicionais?: DadosAdicionaisDocumento
 ): string {
-
   // ── Dados extraídos do processo ───────────────────────────────────────────
-  const municipio       = processo.municipio || extrairMunicipio(processo.location || '');
-  const estado          = processo.estado    || extrairEstado(processo.location    || '');
+  const municipio = processo.municipio || extrairMunicipio(processo.location || '');
+  const estado = processo.estado || extrairEstado(processo.location || '');
   const municipioEstado = `${municipio} — ${estado}`;
-  const protocolo       = processo.protocol  || processo.id;
-  const modalidade      = processo.modality  || 'REURB-S';
-  const requerente      = processo.applicant;
-  const nucleo          = processo.title;
-  const responsavel     = processo.responsibleName || '________________________';
-  const area            = processo.area || '________________';
-  const hoje            = new Date().toLocaleDateString('pt-BR', {
-    day: 'numeric', month: 'long', year: 'numeric',
+  const protocolo = processo.protocol || processo.id;
+  const modalidade = processo.modality || 'REURB-S';
+  const requerente = processo.applicant;
+  const nucleo = processo.title;
+  const responsavel = processo.responsibleName || '________________________';
+  const area = processo.area || '________________';
+  const hoje = new Date().toLocaleDateString('pt-BR', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   });
 
   // ── Variáveis institucionais ───────────────────────────────────────────────
-  const secretaria  = import.meta.env?.VITE_SECRETARIA  || 'Secretaria Municipal de Habitação e Regularização Fundiária';
-  const normativa   = import.meta.env?.VITE_NORMATIVA   || 'Lei Federal nº 13.465/2017';
-  const secretario  = import.meta.env?.VITE_SECRETARIO  || '________________________';
-  const cargoSecret = import.meta.env?.VITE_CARGO_SECRETARIO || 'Secretário(a) Municipal de Habitação';
+  const secretaria =
+    import.meta.env?.VITE_SECRETARIA ||
+    'Secretaria Municipal de Habitação e Regularização Fundiária';
+  const normativa = import.meta.env?.VITE_NORMATIVA || 'Lei Federal nº 13.465/2017';
+  const secretario = import.meta.env?.VITE_SECRETARIO || '________________________';
+  const cargoSecret =
+    import.meta.env?.VITE_CARGO_SECRETARIO || 'Secretário(a) Municipal de Habitação';
 
   // ── Dados adicionais (preencher com dados do usuário ou placeholders) ─────
   const nome = dadosAdicionais?.nome || '____________________';
@@ -318,9 +357,9 @@ export function getConteudoModelo(
   // ── Switch por modelo ─────────────────────────────────────────────────────
 
   switch (modeloId) {
-
     // ── m1: Portaria de Instauração ──────────────────────────────────────────
-    case 'm1': return `
+    case 'm1':
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
         PORTARIA DE INSTAURAÇÃO REURB
       </h1>
@@ -356,7 +395,8 @@ export function getConteudoModelo(
       ${ASSINATURA}`;
 
     // ── m2: Notificação de Confrontantes ─────────────────────────────────────
-    case 'm2': return `
+    case 'm2':
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
         NOTIFICAÇÃO DE CONFRONTANTES
       </h1>
@@ -403,7 +443,8 @@ export function getConteudoModelo(
       ${ASSINATURA}`;
 
     // ── m3: Relatório Técnico Social ──────────────────────────────────────────
-    case 'm3': return `
+    case 'm3':
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
         RELATÓRIO TÉCNICO SOCIAL
       </h1>
@@ -459,7 +500,8 @@ export function getConteudoModelo(
       ${ASSINATURA}`;
 
     // ── m4: Auto de Demarcação Urbanística ───────────────────────────────────
-    case 'm4': return `
+    case 'm4':
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
         AUTO DE DEMARCAÇÃO URBANÍSTICA
       </h1>
@@ -505,7 +547,8 @@ export function getConteudoModelo(
       ${ASSINATURA}`;
 
     // ── m5: Título de Legitimação Fundiária ──────────────────────────────────
-    case 'm5': return `
+    case 'm5':
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
         TÍTULO DE LEGITIMAÇÃO FUNDIÁRIA
       </h1>
@@ -555,9 +598,10 @@ export function getConteudoModelo(
     // ── Caso padrão: template genérico para qualquer modelo futuro ───────────
     // Novos modelos adicionados ao MOCK_MODELS receberão automaticamente
     // este template como base, evitando erros.
-    default: return `
+    default:
+      return `
       <h1 style="text-align:center;font-size:15px;font-weight:700;letter-spacing:.06em;margin-bottom:4px;">
-        ${(MOCK_MODELS.find(m => m.id === modeloId)?.name || 'DOCUMENTO REURB').toUpperCase()}
+        ${(MOCK_MODELS.find((m) => m.id === modeloId)?.name || 'DOCUMENTO REURB').toUpperCase()}
       </h1>
       <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">
         Processo nº ${F(protocolo)} — ${secretaria}

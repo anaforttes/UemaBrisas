@@ -39,7 +39,7 @@ export interface SignatureEvent {
   documentHash: string;
   prevEventHash: string;
   eventHash: string;
-  payload?: any;
+  payload?: unknown;
 }
 
 export interface SignatureRecord {
@@ -74,18 +74,21 @@ const generateProtocol = () => {
 const generateHash = (data: string) => {
   let hash = 0;
   for (let i = 0; i < data.length; i++) {
-    hash = ((hash << 5) - hash) + data.charCodeAt(i);
+    hash = (hash << 5) - hash + data.charCodeAt(i);
     hash |= 0;
   }
   const a = Math.abs(hash).toString(16).padStart(8, '0').toUpperCase();
-  const b = Math.abs(hash * 31).toString(16).padStart(8, '0').toUpperCase();
+  const b = Math.abs(hash * 31)
+    .toString(16)
+    .padStart(8, '0')
+    .toUpperCase();
   return a + b;
 };
 
 const nowIso = () => new Date().toISOString();
 
 const randomId = () =>
-  (crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
 const readAll = (): Record<string, SignatureRecord> => {
   try {
@@ -100,9 +103,15 @@ const writeAll = (data: Record<string, SignatureRecord>) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 };
 
-const computeEventHash = (base: any) => generateHash(JSON.stringify(base));
+const computeEventHash = (base: unknown) => generateHash(JSON.stringify(base));
 
-function appendEvent(record: SignatureRecord, event: Omit<SignatureEvent, 'id' | 'timestamp' | 'prevEventHash' | 'eventHash' | 'protocol' | 'documentHash'>) {
+function appendEvent(
+  record: SignatureRecord,
+  event: Omit<
+    SignatureEvent,
+    'id' | 'timestamp' | 'prevEventHash' | 'eventHash' | 'protocol' | 'documentHash'
+  >
+) {
   const timestamp = nowIso();
   const last = record.events[record.events.length - 1];
   const prevEventHash = last?.eventHash ?? 'GENESIS';
@@ -135,8 +144,8 @@ function appendEvent(record: SignatureRecord, event: Omit<SignatureEvent, 'id' |
 }
 
 function updateOverallStatus(signers: Signer[]): SignatureStatus {
-  const signed = signers.filter(s => s.status === 'signed').length;
-  const rejected = signers.some(s => s.status === 'rejected');
+  const signed = signers.filter((s) => s.status === 'signed').length;
+  const rejected = signers.some((s) => s.status === 'rejected');
   if (rejected) return 'rejected';
   if (signed === 0) return 'pending';
   if (signed < signers.length) return 'partial';
@@ -144,7 +153,7 @@ function updateOverallStatus(signers: Signer[]): SignatureStatus {
 }
 
 function sleep(ms: number) {
-  return new Promise<void>(r => setTimeout(r, ms));
+  return new Promise<void>((r) => setTimeout(r, ms));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -158,7 +167,9 @@ export const assinaturaService = {
   async createSignature(input: CreateSignatureInput): Promise<SignatureRecord> {
     const protocol = generateProtocol();
     const createdAt = nowIso();
-    const documentHash = generateHash(`${input.documentTitle}|${input.documentContent}|${createdAt}`);
+    const documentHash = generateHash(
+      `${input.documentTitle}|${input.documentContent}|${createdAt}`
+    );
 
     const record: SignatureRecord = {
       protocol,
@@ -170,7 +181,7 @@ export const assinaturaService = {
       signers: input.signers
         .slice()
         .sort((a, b) => a.order - b.order)
-        .map(s => ({ ...s, status: 'pending' as const })),
+        .map((s) => ({ ...s, status: 'pending' as const })),
       events: [],
     };
 
@@ -210,7 +221,7 @@ export const assinaturaService = {
       actorName,
       ip: '187.xxx.xxx.xxx',
       userAgent: navigator.userAgent,
-      payload: { nextSignerId: record.signers.find(s => s.status === 'pending')?.id },
+      payload: { nextSignerId: record.signers.find((s) => s.status === 'pending')?.id },
     });
 
     db[protocol] = record;
@@ -223,16 +234,21 @@ export const assinaturaService = {
    * POST /api/signatures/:protocol/signers/:signerId/request
    * - backend chamaria a API ICP-Brasil e retornaria jobId
    */
-  async requestSignerSignature(protocol: string, signerId: string, pin: string, actorName?: string): Promise<SignatureRecord> {
+  async requestSignerSignature(
+    protocol: string,
+    signerId: string,
+    pin: string,
+    actorName?: string
+  ): Promise<SignatureRecord> {
     const db = readAll();
     const record = db[protocol];
     if (!record) throw new Error('Protocolo não encontrado.');
 
-    const signer = record.signers.find(s => s.id === signerId);
+    const signer = record.signers.find((s) => s.id === signerId);
     if (!signer) throw new Error('Assinante não encontrado.');
 
     // regra de ordem: só permite assinar o próximo pendente
-    const nextPending = record.signers.find(s => s.status === 'pending');
+    const nextPending = record.signers.find((s) => s.status === 'pending');
     if (nextPending?.id !== signerId) {
       appendEvent(record, {
         type: 'ERROR',
@@ -272,14 +288,9 @@ export const assinaturaService = {
     });
 
     const signedAt = nowIso();
-    const signatureHash = generateHash([
-      record.protocol,
-      record.documentHash,
-      signer.id,
-      signer.email,
-      pin,
-      signedAt,
-    ].join('|'));
+    const signatureHash = generateHash(
+      [record.protocol, record.documentHash, signer.id, signer.email, pin, signedAt].join('|')
+    );
 
     signer.status = 'signed';
     signer.signedAt = signedAt;
@@ -309,7 +320,7 @@ export const assinaturaService = {
         actorName: 'Sistema',
         ip: '187.xxx.xxx.xxx',
         userAgent: navigator.userAgent,
-        payload: { nextSignerId: record.signers.find(s => s.status === 'pending')?.id },
+        payload: { nextSignerId: record.signers.find((s) => s.status === 'pending')?.id },
       });
     }
 

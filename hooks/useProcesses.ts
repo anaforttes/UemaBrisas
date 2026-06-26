@@ -4,6 +4,24 @@ import { listarProcessos, deletarProcesso } from '../services/painelService';
 import { etapasService } from '../services/etapasService';
 import { REURBProcess } from '../types/index';
 
+interface JSZipFolder {
+  file(name: string, data: string, opts?: { base64?: boolean }): void;
+  folder(name: string): JSZipFolder | null;
+}
+interface JSZipInstance extends JSZipFolder {
+  generateAsync(opts: { type: string }): Promise<Blob>;
+}
+interface AnexoSalvo {
+  nome: string;
+  base64: string;
+}
+
+declare global {
+  interface Window {
+    JSZip?: new () => JSZipInstance;
+  }
+}
+
 export function useProcesses() {
   const [processes, setProcesses] = useState<REURBProcess[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +52,7 @@ export function useProcesses() {
   );
 
   const handleDownloadZip = useCallback(async (proc: REURBProcess) => {
-    if (!(window as any).JSZip) {
+    if (!window.JSZip) {
       await new Promise<void>((resolve) => {
         const script = document.createElement('script');
         script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
@@ -43,7 +61,7 @@ export function useProcesses() {
       });
     }
 
-    const JSZip = (window as any).JSZip;
+    const JSZip = window.JSZip!;
     const zip = new JSZip();
     const pasta = zip.folder(`processo_${proc.protocol || proc.id}`);
 
@@ -73,10 +91,10 @@ export function useProcesses() {
 
     const anexosSalvos = localStorage.getItem(`anexos_${proc.id}`);
     if (anexosSalvos) {
-      const anexos = JSON.parse(anexosSalvos);
+      const anexos: AnexoSalvo[] = JSON.parse(anexosSalvos);
       if (anexos.length > 0) {
         const pastaAnexos = pasta!.folder('anexos');
-        anexos.forEach((anexo: any) => {
+        anexos.forEach((anexo) => {
           const base64Data = anexo.base64.split(',')[1] || anexo.base64;
           pastaAnexos!.file(anexo.nome, base64Data, { base64: true });
         });

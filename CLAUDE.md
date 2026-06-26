@@ -1,6 +1,7 @@
 # CLAUDE.md — UemaBrisas / ReUrb Doc Flow
 
 ## Projeto
+
 Sistema de gestão documental para regularização fundiária urbana (REURB).
 Equipe: Andre, Carol, Keven, Leandro.
 
@@ -8,14 +9,14 @@ Equipe: Andre, Carol, Keven, Leandro.
 
 ## Stack
 
-| Camada | Tecnologia |
-|---|---|
-| Frontend | React 18 + Vite + TypeScript |
-| Editor | TipTap 3 |
-| Backend | Django + Django REST Framework |
-| Auth | JWT via `rest_framework_simplejwt` |
-| Banco | Neon PostgreSQL (`DATABASE_URL` no `.env`) |
-| Fallback banco | SQLite local (`backend/db.sqlite3`) |
+| Camada         | Tecnologia                                 |
+| -------------- | ------------------------------------------ |
+| Frontend       | React 18 + Vite + TypeScript               |
+| Editor         | TipTap 3                                   |
+| Backend        | Django + Django REST Framework             |
+| Auth           | JWT via `rest_framework_simplejwt`         |
+| Banco          | Neon PostgreSQL (`DATABASE_URL` no `.env`) |
+| Fallback banco | SQLite local (`backend/db.sqlite3`)        |
 
 ---
 
@@ -49,6 +50,7 @@ backend/
 ```
 
 **Padrão obrigatório por módulo:**
+
 - `views.py` — apenas lógica HTTP, sem regra de negócio
 - `serializadores.py` — validação de entrada
 - `servicos.py` — regras de negócio

@@ -1,17 +1,26 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { API_BASE, getToken } from '../shared/services/apiClient';
 
 type StatusUpdate = { id: number | string; status: 'Online' | 'Offline' };
-type UserUpdated  = Record<string, unknown> & { id: number | string };
+type UserUpdated = Record<string, unknown> & { id: number | string };
 
 interface Options {
   onStatusUpdate: (update: StatusUpdate) => void;
-  onSnapshot:     (updates: StatusUpdate[]) => void;
+  onSnapshot: (updates: StatusUpdate[]) => void;
   onUserUpdated?: (user: UserUpdated) => void;
   onUserRemoved?: (data: { id: number | string }) => void;
 }
 
-export function useStatusStream({ onStatusUpdate, onSnapshot, onUserUpdated, onUserRemoved }: Options) {
+export function useStatusStream({
+  onStatusUpdate,
+  onSnapshot,
+  onUserUpdated,
+  onUserRemoved,
+}: Options) {
+  // Mantém sempre os callbacks mais recentes sem recriar a conexão SSE a cada render.
+  const handlers = useRef({ onStatusUpdate, onSnapshot, onUserUpdated, onUserRemoved });
+  handlers.current = { onStatusUpdate, onSnapshot, onUserUpdated, onUserRemoved };
+
   useEffect(() => {
     let es: EventSource | null = null;
     let retryTimeout: ReturnType<typeof setTimeout>;
@@ -25,19 +34,35 @@ export function useStatusStream({ onStatusUpdate, onSnapshot, onUserUpdated, onU
       es = new EventSource(url);
 
       es.addEventListener('snapshot', (e: MessageEvent) => {
-        try { onSnapshot(JSON.parse(e.data)); } catch { /* */ }
+        try {
+          handlers.current.onSnapshot(JSON.parse(e.data));
+        } catch {
+          /* */
+        }
       });
 
       es.addEventListener('status_update', (e: MessageEvent) => {
-        try { onStatusUpdate(JSON.parse(e.data)); } catch { /* */ }
+        try {
+          handlers.current.onStatusUpdate(JSON.parse(e.data));
+        } catch {
+          /* */
+        }
       });
 
       es.addEventListener('user_updated', (e: MessageEvent) => {
-        try { if (onUserUpdated) onUserUpdated(JSON.parse(e.data)); } catch { /* */ }
+        try {
+          handlers.current.onUserUpdated?.(JSON.parse(e.data));
+        } catch {
+          /* */
+        }
       });
 
       es.addEventListener('user_removed', (e: MessageEvent) => {
-        try { if (onUserRemoved) onUserRemoved(JSON.parse(e.data)); } catch { /* */ }
+        try {
+          handlers.current.onUserRemoved?.(JSON.parse(e.data));
+        } catch {
+          /* */
+        }
       });
 
       es.onerror = () => {

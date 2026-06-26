@@ -284,7 +284,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
   const currentColor = (() => {
     try {
-      return (editor.getAttributes('textStyle') as any)?.color || '#000000';
+      return (editor.getAttributes('textStyle') as { color?: string })?.color || '#000000';
     } catch {
       return '#000000';
     }
@@ -374,7 +374,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
               e.preventDefault();
               const n = Math.max(6, parseInt(tamanhoFonte) - 1);
               setTamanhoFonte(String(n));
-              (editor.chain().focus() as any).setFontSize(`${n}pt`).run();
+              editor.chain().focus().setFontSize(`${n}pt`).run();
             }}
             disabled={d}
             className="w-5 h-7 flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-l border border-slate-200 border-r-0 disabled:opacity-30"
@@ -393,12 +393,12 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             onBlur={(e) => {
               const n = Math.max(6, Math.min(96, parseInt(e.target.value) || 12));
               setTamanhoFonte(String(n));
-              (editor.chain().focus() as any).setFontSize(`${n}pt`).run();
+              editor.chain().focus().setFontSize(`${n}pt`).run();
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 const n = Math.max(6, Math.min(96, parseInt(tamanhoFonte) || 12));
-                (editor.chain().focus() as any).setFontSize(`${n}pt`).run();
+                editor.chain().focus().setFontSize(`${n}pt`).run();
               }
             }}
             className="w-10 h-7 text-center text-xs border border-slate-200 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:opacity-40"
@@ -409,7 +409,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
               e.preventDefault();
               const n = Math.min(96, parseInt(tamanhoFonte) + 1);
               setTamanhoFonte(String(n));
-              (editor.chain().focus() as any).setFontSize(`${n}pt`).run();
+              editor.chain().focus().setFontSize(`${n}pt`).run();
             }}
             disabled={d}
             className="w-5 h-7 flex items-center justify-center text-slate-500 hover:bg-slate-100 rounded-r border border-slate-200 border-l-0 disabled:opacity-30"
@@ -501,7 +501,7 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
         {/* Cor do texto + Destaque */}
         <ColorPicker
           cores={CORES_TEXTO}
-          onSelect={(cor) => (editor.chain().focus() as any).setColor(cor).run()}
+          onSelect={(cor) => editor.chain().focus().setColor(cor).run()}
           label="Cor do texto"
           currentColor={currentColor}
         />

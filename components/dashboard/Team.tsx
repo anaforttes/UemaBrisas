@@ -125,6 +125,16 @@ interface Convite {
   usado: boolean;
 }
 
+interface ConviteAPI {
+  id: string | number;
+  token: string;
+  permissao: 'visualizar' | 'editar';
+  criado_em: string;
+  expira_em: string;
+  criado_por: string;
+  usado: boolean;
+}
+
 const formatarData = (iso: string) =>
   new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
@@ -137,8 +147,8 @@ async function apiListarConvites(): Promise<Convite[]> {
     headers: { Authorization: `Bearer ${getToken() ?? ''}` },
   });
   if (!resp.ok) return [];
-  const data = await resp.json();
-  return data.map((c: any) => ({
+  const data: ConviteAPI[] = await resp.json();
+  return data.map((c) => ({
     id: c.id,
     token: c.token,
     link: conviteLink(c.token),

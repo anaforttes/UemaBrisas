@@ -18,7 +18,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ProcessoMeu, obterProcesso } from '../../services/painelService';
+import { obterProcesso } from '../../services/painelService';
 import { REURBProcess, ProcessStatus } from '../../types/index';
 import { ProcessTable } from './ProcessTable';
 import { NewProcessModal } from './NewProcessModal';

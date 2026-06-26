@@ -1,5 +1,6 @@
 import {
   User,
+  UserRole,
   REURBProcess,
   REURBEtapa,
   REURBDocument,
@@ -8,11 +9,20 @@ import {
   ProcessStatus,
   ETAPAS_PADRAO,
 } from '../types/index';
+
+interface DjangoUser {
+  id: number | string;
+  name: string;
+  email: string;
+  role: UserRole;
+  last_access: string | null;
+  is_superuser: boolean;
+  is_staff: boolean;
+}
 import { MOCK_PROCESSES } from '../constants/index';
 import { API_BASE, getToken } from '../shared/services/apiClient';
 
 export { ProcessStatus, MOCK_PROCESSES };
-
 
 // ─── Classe principal ─────────────────────────────────────────────────────────
 
@@ -37,7 +47,7 @@ class SQLDatabase {
       try {
         const response = await fetch(`${API_BASE}/api/autenticacao/usuarios/`, {
           headers: {
-            'Authorization': `Bearer ${getToken() ?? ''}`,
+            Authorization: `Bearer ${getToken() ?? ''}`,
             'Content-Type': 'application/json',
           },
         });
@@ -48,22 +58,33 @@ class SQLDatabase {
 
         const data = await response.json();
 
-        return data.map((cu: any) => ({
-          id: cu.id,
+        return (data as DjangoUser[]).map((cu) => ({
+          id: String(cu.id),
           name: cu.name,
           email: cu.email,
           role: cu.role,
-          status: 'Offline',
-          lastLogin: cu.last_access,
+          status: 'Offline' as const,
+          lastLogin: cu.last_access ?? '',
           avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cu.name)}`,
-          quota: { used: 0, limit: 10000 },
+          quota: {
+            used: 0,
+            limit: 10000,
+            resetAt: new Date(Date.now() + 86400000).toISOString(),
+          },
           flags: {
             superusuario: cu.is_superuser,
             adminMunicipio: cu.is_staff,
             profissionalInterno: true,
             usuarioExterno: false,
           },
-          permissions: {},
+          permissions: {
+            visualizar: false,
+            editor: false,
+            comentar: false,
+            aprovar: false,
+            assinar: false,
+            exportar: false,
+          },
         }));
       } catch (error) {
         console.error('Erro ao buscar usuários do Django:', error);
@@ -94,7 +115,7 @@ class SQLDatabase {
         name: data.name,
         email: data.email,
         password: data.password,
-        role: (data.role as any) || 'Técnico',
+        role: (data.role as UserRole) || 'Técnico',
         avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(data.name)}`,
         status: 'Offline',
         lastLogin: new Date().toISOString(),
@@ -190,8 +211,7 @@ class SQLDatabase {
     insert: (process: Partial<REURBProcess>): REURBProcess => {
       const processes = this.getStorage<REURBProcess>('processes');
       const year = new Date().getFullYear();
-      const count =
-        processes.filter((p) => p.protocol?.endsWith(`-${year}`)).length + 1;
+      const count = processes.filter((p) => p.protocol?.endsWith(`-${year}`)).length + 1;
       const protocol = `${String(count).padStart(4, '0')}-${year}`;
 
       const newProcess: REURBProcess = {
@@ -272,9 +292,7 @@ class SQLDatabase {
   etapas = {
     findByProcessId: (processId: string): REURBEtapa[] => {
       const etapas = this.getStorage<REURBEtapa>('etapas');
-      return etapas
-        .filter((e) => e.processId === processId)
-        .sort((a, b) => a.numero - b.numero);
+      return etapas.filter((e) => e.processId === processId).sort((a, b) => a.numero - b.numero);
     },
 
     criarEtapasPadrao: (processId: string): REURBEtapa[] => {

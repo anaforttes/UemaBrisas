@@ -131,8 +131,8 @@ const ModalPerfil: React.FC<ModalPerfilProps> = ({
       };
       const atualizado = await controleAdminService.updateUsuario(perfil.user.id, payload);
       onSaved(atualizado);
-    } catch (err: any) {
-      setError(err.message || 'Falha ao salvar perfil de acesso.');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Falha ao salvar perfil de acesso.');
     } finally {
       setSaving(false);
     }
@@ -347,8 +347,10 @@ export const ControleAdmin: React.FC = () => {
           modulo: permissao.modulo,
         }))
       );
-    } catch (err: any) {
-      setError(err.message || 'Nao foi possivel carregar o controle administrativo.');
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error ? err.message : 'Nao foi possivel carregar o controle administrativo.'
+      );
     } finally {
       setLoading(false);
     }

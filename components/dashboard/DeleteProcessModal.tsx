@@ -9,7 +9,12 @@ interface DeleteProcessModalProps {
   onCancel: () => void;
 }
 
-export const DeleteProcessModal: React.FC<DeleteProcessModalProps> = ({ target, deletando, onConfirm, onCancel }) => (
+export const DeleteProcessModal: React.FC<DeleteProcessModalProps> = ({
+  target,
+  deletando,
+  onConfirm,
+  onCancel,
+}) => (
   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
       <div className="flex flex-col items-center gap-4 text-center">
@@ -20,8 +25,8 @@ export const DeleteProcessModal: React.FC<DeleteProcessModalProps> = ({ target, 
           <h3 className="text-lg font-black text-slate-800">Excluir processo</h3>
           <p className="mt-1 text-sm text-slate-500">
             Tem certeza que deseja excluir o processo de{' '}
-            <span className="font-semibold text-slate-700">{target.applicant}</span>?
-            Esta ação não pode ser desfeita.
+            <span className="font-semibold text-slate-700">{target.applicant}</span>? Esta ação não
+            pode ser desfeita.
           </p>
         </div>
         <div className="flex w-full gap-3">

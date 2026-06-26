@@ -8,13 +8,13 @@ export interface DadosGeo {
   municipio: string;
   estado: string;
   capturadoEm: string; // ISO string
-  precisao: number;    // metros
+  precisao: number; // metros
 }
 
 export interface ResultadoGeo {
   status: 'ok' | 'divergencia' | 'erro' | 'negado';
-  dadosTecnico: DadosGeo | null;  // onde está o técnico agora
-  municipioProcesso: string;       // município esperado pelo processo
+  dadosTecnico: DadosGeo | null; // onde está o técnico agora
+  municipioProcesso: string; // município esperado pelo processo
   divergencia: boolean;
   mensagem: string;
 }
@@ -30,7 +30,10 @@ const TIMEOUT_GPS = 10_000;
 // ─── Função auxiliar: geocodificação reversa ──────────────────────────────────
 // Recebe lat/lng e retorna município + estado via OpenStreetMap
 
-async function geocodificarReverso(lat: number, lng: number): Promise<{ municipio: string; estado: string }> {
+async function geocodificarReverso(
+  lat: number,
+  lng: number
+): Promise<{ municipio: string; estado: string }> {
   const params = new URLSearchParams({
     lat: String(lat),
     lon: String(lng),
@@ -55,11 +58,7 @@ async function geocodificarReverso(lat: number, lng: number): Promise<{ municipi
 
   // Nominatim pode retornar o município em campos diferentes dependendo da área
   const municipio =
-    endereco.city ||
-    endereco.town ||
-    endereco.village ||
-    endereco.county ||
-    'Desconhecido';
+    endereco.city || endereco.town || endereco.village || endereco.county || 'Desconhecido';
 
   // Estado abreviado (ex: "Ceará" → "CE") via campo state_code quando disponível
   const estado = endereco.state_code?.toUpperCase() || endereco.state || 'Desconhecido';
@@ -92,103 +91,103 @@ export function useGeolocalizacao() {
    *
    * @param municipioEsperado - Nome do município cadastrado no processo
    */
-  const capturarEValidar = useCallback(
-    async (municipioEsperado: string): Promise<ResultadoGeo> => {
-      setCarregando(true);
-      setResultado(null);
+  const capturarEValidar = useCallback(async (municipioEsperado: string): Promise<ResultadoGeo> => {
+    setCarregando(true);
+    setResultado(null);
 
-      // 1. Verificar se o navegador suporta geolocalização
-      if (!navigator.geolocation) {
-        const res: ResultadoGeo = {
-          status: 'erro',
-          dadosTecnico: null,
-          municipioProcesso: municipioEsperado,
-          divergencia: false,
-          mensagem: 'Este dispositivo não suporta geolocalização.',
-        };
-        setResultado(res);
-        setCarregando(false);
-        return res;
+    // 1. Verificar se o navegador suporta geolocalização
+    if (!navigator.geolocation) {
+      const res: ResultadoGeo = {
+        status: 'erro',
+        dadosTecnico: null,
+        municipioProcesso: municipioEsperado,
+        divergencia: false,
+        mensagem: 'Este dispositivo não suporta geolocalização.',
+      };
+      setResultado(res);
+      setCarregando(false);
+      return res;
+    }
+
+    try {
+      // 2. Capturar GPS do dispositivo
+      const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true, // usa GPS quando disponível
+          timeout: TIMEOUT_GPS,
+          maximumAge: 0, // nunca usar cache — sempre captura nova
+        });
+      });
+
+      const { latitude, longitude, accuracy } = posicao.coords;
+      const capturadoEm = new Date().toISOString();
+
+      // 3. Geocodificação reversa: coordenadas → município
+      const { municipio, estado } = await geocodificarReverso(latitude, longitude);
+
+      const dadosTecnico: DadosGeo = {
+        latitude,
+        longitude,
+        municipio,
+        estado,
+        capturadoEm,
+        precisao: Math.round(accuracy),
+      };
+
+      // 4. Validar se o técnico está no município correto
+      const divergencia = !municipiosIguais(municipio, municipioEsperado);
+
+      const res: ResultadoGeo = {
+        status: divergencia ? 'divergencia' : 'ok',
+        dadosTecnico,
+        municipioProcesso: municipioEsperado,
+        divergencia,
+        mensagem: divergencia
+          ? `⚠️ Divergência detectada: você está em ${municipio}/${estado}, mas o processo é de ${municipioEsperado}. A divergência será registrada no documento.`
+          : `✓ Localização confirmada em ${municipio}/${estado}.`,
+      };
+
+      setResultado(res);
+      setCarregando(false);
+      return res;
+    } catch (erro: unknown) {
+      // Tratamento específico para cada tipo de erro de geolocalização
+      let mensagem = 'Não foi possível capturar a localização.';
+
+      if (erro instanceof GeolocationPositionError) {
+        switch (erro.code) {
+          case GeolocationPositionError.PERMISSION_DENIED:
+            mensagem =
+              'Permissão de localização negada. Habilite o GPS nas configurações do navegador.';
+            break;
+          case GeolocationPositionError.POSITION_UNAVAILABLE:
+            mensagem = 'Localização indisponível. Verifique se o GPS está ativo.';
+            break;
+          case GeolocationPositionError.TIMEOUT:
+            mensagem = 'Tempo limite excedido ao capturar localização. Tente novamente.';
+            break;
+        }
+      } else if (erro instanceof Error && erro.message) {
+        mensagem = `Erro ao consultar localização: ${erro.message}`;
       }
 
-      try {
-        // 2. Capturar GPS do dispositivo
-        const posicao = await new Promise<GeolocationPosition>((resolve, reject) => {
-          navigator.geolocation.getCurrentPosition(resolve, reject, {
-            enableHighAccuracy: true,   // usa GPS quando disponível
-            timeout: TIMEOUT_GPS,
-            maximumAge: 0,              // nunca usar cache — sempre captura nova
-          });
-        });
-
-        const { latitude, longitude, accuracy } = posicao.coords;
-        const capturadoEm = new Date().toISOString();
-
-        // 3. Geocodificação reversa: coordenadas → município
-        const { municipio, estado } = await geocodificarReverso(latitude, longitude);
-
-        const dadosTecnico: DadosGeo = {
-          latitude,
-          longitude,
-          municipio,
-          estado,
-          capturadoEm,
-          precisao: Math.round(accuracy),
-        };
-
-        // 4. Validar se o técnico está no município correto
-        const divergencia = !municipiosIguais(municipio, municipioEsperado);
-
-        const res: ResultadoGeo = {
-          status: divergencia ? 'divergencia' : 'ok',
-          dadosTecnico,
-          municipioProcesso: municipioEsperado,
-          divergencia,
-          mensagem: divergencia
-            ? `⚠️ Divergência detectada: você está em ${municipio}/${estado}, mas o processo é de ${municipioEsperado}. A divergência será registrada no documento.`
-            : `✓ Localização confirmada em ${municipio}/${estado}.`,
-        };
-
-        setResultado(res);
-        setCarregando(false);
-        return res;
-      } catch (erro: any) {
-        // Tratamento específico para cada tipo de erro de geolocalização
-        let mensagem = 'Não foi possível capturar a localização.';
-
-        if (erro instanceof GeolocationPositionError) {
-          switch (erro.code) {
-            case GeolocationPositionError.PERMISSION_DENIED:
-              mensagem = 'Permissão de localização negada. Habilite o GPS nas configurações do navegador.';
-              break;
-            case GeolocationPositionError.POSITION_UNAVAILABLE:
-              mensagem = 'Localização indisponível. Verifique se o GPS está ativo.';
-              break;
-            case GeolocationPositionError.TIMEOUT:
-              mensagem = 'Tempo limite excedido ao capturar localização. Tente novamente.';
-              break;
-          }
-        } else if (erro.message) {
-          mensagem = `Erro ao consultar localização: ${erro.message}`;
-        }
-
-        const res: ResultadoGeo = {
-          status: erro instanceof GeolocationPositionError && erro.code === GeolocationPositionError.PERMISSION_DENIED
+      const res: ResultadoGeo = {
+        status:
+          erro instanceof GeolocationPositionError &&
+          erro.code === GeolocationPositionError.PERMISSION_DENIED
             ? 'negado'
             : 'erro',
-          dadosTecnico: null,
-          municipioProcesso: municipioEsperado,
-          divergencia: false,
-          mensagem,
-        };
+        dadosTecnico: null,
+        municipioProcesso: municipioEsperado,
+        divergencia: false,
+        mensagem,
+      };
 
-        setResultado(res);
-        setCarregando(false);
-        return res;
-      }
-    },
-    []
-  );
+      setResultado(res);
+      setCarregando(false);
+      return res;
+    }
+  }, []);
 
   // Limpa o resultado (ex: ao fechar um modal)
   const limpar = useCallback(() => {
@@ -201,7 +200,11 @@ export function useGeolocalizacao() {
 // ─── Utilitário exportado: gera o bloco HTML de geolocalização ────────────────
 // Inserido no documento pelo Editor ao abrir com dados de geo
 
-export function gerarBlocoGeoHTML(dados: DadosGeo, divergencia: boolean, municipioEsperado: string): string {
+export function gerarBlocoGeoHTML(
+  dados: DadosGeo,
+  divergencia: boolean,
+  municipioEsperado: string
+): string {
   const dataFormatada = new Date(dados.capturadoEm).toLocaleString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
@@ -213,8 +216,8 @@ export function gerarBlocoGeoHTML(dados: DadosGeo, divergencia: boolean, municip
 
   const corBorda = divergencia ? '#f59e0b' : '#10b981';
   const corFundo = divergencia ? '#fffbeb' : '#f0fdf4';
-  const icone    = divergencia ? '⚠️' : '📍';
-  const titulo   = divergencia
+  const icone = divergencia ? '⚠️' : '📍';
+  const titulo = divergencia
     ? `Registro de Localização — DIVERGÊNCIA DETECTADA`
     : `Registro de Localização — Confirmado`;
 

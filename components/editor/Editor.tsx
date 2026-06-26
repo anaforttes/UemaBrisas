@@ -2,8 +2,29 @@ import { REURBProcess } from '../../types/index';
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 // ─── TipTap ───────────────────────────────────────────────────────────────────
-import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
-import { Node, mergeAttributes } from '@tiptap/core';
+import {
+  useEditor,
+  EditorContent,
+  NodeViewWrapper,
+  ReactNodeViewRenderer,
+  type NodeViewProps,
+} from '@tiptap/react';
+import { Node, mergeAttributes, type CommandProps } from '@tiptap/core';
+
+interface ImageAttrs {
+  src: string;
+  alt?: string;
+  width?: string;
+  align?: 'left' | 'center' | 'right';
+}
+
+declare module '@tiptap/core' {
+  interface Commands<ReturnType> {
+    image: {
+      setImage: (options: ImageAttrs) => ReturnType;
+    };
+  }
+}
 import StarterKit from '@tiptap/starter-kit';
 import FontSize from './extensions/FontSize';
 import { Underline } from '@tiptap/extension-underline';
@@ -37,7 +58,6 @@ import {
 
 // ─── Serviços e tipos ─────────────────────────────────────────────────────────
 import { User } from '../../types/index';
-import { dbService } from '../../services/databaseService';
 import { documentoService, DocDetalhe, ConflictError } from '../../services/documentoService';
 import { exportarDOCX } from '../../services/exportService';
 import { SignatureModal } from './SignatureModal';
@@ -68,7 +88,7 @@ const PAGE_CONTENT_H = 832; // A4 content area in px: 1056 - 64(hdr) - 64(ftr) -
 
 // ─── Componente React da Imagem ───────────────────────────────────────────────
 
-const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor }) => {
+const ImageNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, selected, editor }) => {
   const { src, alt, width, align } = node.attrs;
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -96,26 +116,26 @@ const ImageNodeView: React.FC<any> = ({ node, updateAttributes, selected, editor
     userSelect: 'none',
   };
 
-  const alcas = [
+  const alcas: { pos: string; style: React.CSSProperties }[] = [
     { pos: 'nw', style: { top: -5, left: -5, cursor: 'nw-resize' } },
     {
       pos: 'n',
-      style: { top: -5, left: '50%' as any, transform: 'translateX(-50%)', cursor: 'n-resize' },
+      style: { top: -5, left: '50%', transform: 'translateX(-50%)', cursor: 'n-resize' },
     },
     { pos: 'ne', style: { top: -5, right: -5, cursor: 'ne-resize' } },
     {
       pos: 'e',
-      style: { top: '50%' as any, right: -5, transform: 'translateY(-50%)', cursor: 'e-resize' },
+      style: { top: '50%', right: -5, transform: 'translateY(-50%)', cursor: 'e-resize' },
     },
     { pos: 'se', style: { bottom: -5, right: -5, cursor: 'se-resize' } },
     {
       pos: 's',
-      style: { bottom: -5, left: '50%' as any, transform: 'translateX(-50%)', cursor: 's-resize' },
+      style: { bottom: -5, left: '50%', transform: 'translateX(-50%)', cursor: 's-resize' },
     },
     { pos: 'sw', style: { bottom: -5, left: -5, cursor: 'sw-resize' } },
     {
       pos: 'w',
-      style: { top: '50%' as any, left: -5, transform: 'translateY(-50%)', cursor: 'w-resize' },
+      style: { top: '50%', left: -5, transform: 'translateY(-50%)', cursor: 'w-resize' },
     },
   ];
 
@@ -307,10 +327,10 @@ const ImagemCustomizada = Node.create({
   addCommands() {
     return {
       setImage:
-        (options: Record<string, any>) =>
-        ({ commands }: any) =>
+        (options: ImageAttrs) =>
+        ({ commands }: CommandProps) =>
           commands.insertContent({ type: this.name, attrs: options }),
-    } as any;
+    };
   },
 });
 
@@ -1025,8 +1045,8 @@ window.print();
     try {
       await exportarDOCX(tituloLocal, editor.getHTML());
       registrarEvento('exportacao', 'DOCX');
-    } catch (e: any) {
-      console.error('Erro DOCX:', e?.message);
+    } catch (e: unknown) {
+      console.error('Erro DOCX:', e instanceof Error ? e.message : e);
     } finally {
       setExportando(false);
     }

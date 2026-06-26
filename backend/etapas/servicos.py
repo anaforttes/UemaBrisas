@@ -1,5 +1,15 @@
 from django.utils import timezone
+
+from processos.eventos import registrar
 from .models import Etapa
+
+LABEL_STATUS = {
+    'pendente':     'Pendente',
+    'em_andamento': 'Em andamento',
+    'concluida':    'Concluída',
+    'bloqueada':    'Bloqueada',
+    'cancelada':    'Cancelada',
+}
 
 ETAPAS_PADRAO = [
     {'numero': 1,  'nome': 'Abertura / Protocolo',           'eixo': 'Geral',     'depende_de': []},
@@ -43,3 +53,56 @@ def atualizar_progresso(processo):
     concluidas = processo.etapas.filter(status='concluida').count()
     processo.progress = round((concluidas / total) * 100)
     processo.save(update_fields=['progress'])
+
+
+def listar_etapas(processo):
+    return processo.etapas.select_related('responsavel').all()
+
+
+def protocolar_processo(processo, usuario):
+    """Protocola o processo e cria as etapas padrão. Retorna (etapas, criado)."""
+    if processo.protocolado:
+        return listar_etapas(processo), False
+
+    processo.protocolado = True
+    processo.status = 'Em Andamento'
+    processo.save(update_fields=['protocolado', 'status'])
+
+    registrar(processo, 'processo_protocolado', 'Processo protocolado — etapas criadas.', usuario)
+
+    return criar_etapas_padrao(processo), True
+
+
+def atualizar_etapa(etapa, dados, usuario):
+    processo = etapa.processo
+
+    novo_status = dados.get('status')
+    if novo_status and novo_status != etapa.status:
+        status_anterior = etapa.status
+        etapa.status = novo_status
+        if novo_status == 'em_andamento' and not etapa.data_inicio:
+            etapa.data_inicio = timezone.now().date()
+        if novo_status == 'concluida':
+            etapa.data_conclusao = timezone.now().date()
+        atualizar_progresso(processo)
+
+        registrar(
+            processo,
+            'etapa_status',
+            f'Etapa "{etapa.nome}": {LABEL_STATUS.get(status_anterior, status_anterior)} → {LABEL_STATUS.get(novo_status, novo_status)}',
+            usuario,
+            {'etapa': etapa.nome, 'de': status_anterior, 'para': novo_status,
+             'parecer': dados.get('observacoes', '')},
+        )
+
+    if 'observacoes' in dados:
+        etapa.observacoes = dados['observacoes']
+
+    if 'responsavel_id' in dados:
+        etapa.responsavel_id = dados['responsavel_id']
+
+    if 'prazo' in dados:
+        etapa.prazo = dados['prazo'] or None
+
+    etapa.save()
+    return etapa

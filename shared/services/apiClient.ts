@@ -76,8 +76,8 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const erro = await res.json().catch(() => ({}));
     throw new Error(
       (erro as Record<string, string>).detail ??
-      (erro as Record<string, string>).message ??
-      `Erro ${res.status}`
+        (erro as Record<string, string>).message ??
+        `Erro ${res.status}`
     );
   }
 

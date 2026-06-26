@@ -1,4 +1,6 @@
 import logging
+import secrets
+from datetime import timedelta
 from html import escape
 
 logger = logging.getLogger(__name__)
@@ -13,7 +15,7 @@ from google.oauth2 import id_token
 from rest_framework.exceptions import AuthenticationFailed, ValidationError
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.utils import timezone
-from .models import CustomUser
+from .models import CustomUser, ConviteEquipe, PerfilTemplate
 
 
 def _montar_email_recuperacao_texto(nome_exibicao: str, link_recuperacao: str) -> str:
@@ -261,10 +263,103 @@ def criar_usuario(email: str, password: str, name: str, role: str = 'Atendente')
         email=email,
         name=name,
         password=password,
-        role='Atendente',
+        role=role,
         is_active=False,
     )
 
     return {
         "mensagem": "Solicitação enviada com sucesso. Aguarde a aprovação do administrador.",
     }
+
+
+# ─── Status / presença ────────────────────────────────────────────────────────
+
+def obter_usuario_por_token(raw_token: str):
+    """Retorna o CustomUser a partir de um access token cru, ou None se inválido."""
+    from rest_framework_simplejwt.tokens import AccessToken
+    from rest_framework_simplejwt.exceptions import TokenError
+
+    if not raw_token:
+        return None
+    try:
+        token = AccessToken(raw_token)
+        return CustomUser.objects.get(pk=token['user_id'])
+    except (TokenError, CustomUser.DoesNotExist, Exception):
+        return None
+
+
+def marcar_online(usuario) -> None:
+    usuario.last_access = timezone.now()
+    usuario.save(update_fields=['last_access'])
+
+
+def snapshot_status_usuarios() -> list[dict]:
+    return [
+        {'id': u.id, 'status': 'Online' if u.is_online else 'Offline'}
+        for u in CustomUser.objects.all().order_by('name')
+    ]
+
+
+# ─── Gestão de usuários ───────────────────────────────────────────────────────
+
+def listar_usuarios():
+    return CustomUser.objects.all().order_by('name')
+
+
+def obter_usuario(pk):
+    return CustomUser.objects.filter(pk=pk).first()
+
+
+def remover_usuario(usuario) -> None:
+    usuario.delete()
+
+
+# ─── Convites de equipe ───────────────────────────────────────────────────────
+
+def listar_convites_equipe(usuario):
+    return ConviteEquipe.objects.filter(
+        criado_por=usuario,
+        usado=False,
+        expira_em__gt=timezone.now(),
+    )
+
+
+def criar_convite_equipe(usuario, permissao: str, dias: int) -> ConviteEquipe:
+    return ConviteEquipe.objects.create(
+        token=secrets.token_urlsafe(32),
+        permissao=permissao,
+        criado_por=usuario,
+        expira_em=timezone.now() + timedelta(days=dias),
+    )
+
+
+def cancelar_convite_equipe(token: str, usuario) -> bool:
+    convite = ConviteEquipe.objects.filter(token=token, criado_por=usuario).first()
+    if not convite:
+        return False
+    convite.usado = True
+    convite.save(update_fields=['usado'])
+    return True
+
+
+# ─── Perfis de template ───────────────────────────────────────────────────────
+
+def listar_perfis_template(usuario):
+    return PerfilTemplate.objects.filter(usuario=usuario)[:15]
+
+
+def salvar_perfil_template(usuario, nome: str, dados) -> PerfilTemplate:
+    # limita a 15 perfis por usuário — remove o mais antigo se necessário
+    if PerfilTemplate.objects.filter(usuario=usuario).count() >= 15:
+        mais_antigo = PerfilTemplate.objects.filter(usuario=usuario).order_by('atualizado_em').first()
+        if mais_antigo:
+            mais_antigo.delete()
+    return PerfilTemplate.objects.create(usuario=usuario, nome_perfil=nome, dados=dados)
+
+
+def remover_perfil_template(pk, usuario) -> bool:
+    perfil = PerfilTemplate.objects.filter(pk=pk, usuario=usuario).first()
+    if not perfil:
+        return False
+    perfil.delete()
+    return True

@@ -3,83 +3,32 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from django.utils import timezone
 
 from processos.models import Processo
-from processos.eventos import registrar
 from .models import Etapa
 from .serializadores import EtapaSerializer
-from .servicos import criar_etapas_padrao, atualizar_progresso
-
-LABEL_STATUS = {
-    'pendente':     'Pendente',
-    'em_andamento': 'Em andamento',
-    'concluida':    'Concluída',
-    'bloqueada':    'Bloqueada',
-    'cancelada':    'Cancelada',
-}
+from .servicos import listar_etapas, protocolar_processo, atualizar_etapa
 
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def listar_etapas(request, processo_pk):
+def listar_etapas_view(request, processo_pk):
     processo = get_object_or_404(Processo, pk=processo_pk)
-    etapas   = processo.etapas.select_related('responsavel').all()
-    return Response(EtapaSerializer(etapas, many=True).data)
+    return Response(EtapaSerializer(listar_etapas(processo), many=True).data)
 
 
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def protocolar(request, processo_pk):
     processo = get_object_or_404(Processo, pk=processo_pk)
-
-    if processo.protocolado:
-        etapas = processo.etapas.select_related('responsavel').all()
-        return Response(EtapaSerializer(etapas, many=True).data)
-
-    processo.protocolado = True
-    processo.status      = 'Em Andamento'
-    processo.save(update_fields=['protocolado', 'status'])
-
-    registrar(processo, 'processo_protocolado', 'Processo protocolado — etapas criadas.', request.user)
-
-    etapas = criar_etapas_padrao(processo)
-    return Response(EtapaSerializer(etapas, many=True).data, status=status.HTTP_201_CREATED)
+    etapas, criado = protocolar_processo(processo, request.user)
+    http_status = status.HTTP_201_CREATED if criado else status.HTTP_200_OK
+    return Response(EtapaSerializer(etapas, many=True).data, status=http_status)
 
 
 @api_view(['PATCH'])
 @permission_classes([IsAuthenticated])
-def atualizar_etapa(request, pk):
+def atualizar_etapa_view(request, pk):
     etapa = get_object_or_404(Etapa.objects.select_related('processo', 'responsavel'), pk=pk)
-    processo = etapa.processo
-
-    novo_status = request.data.get('status')
-    if novo_status and novo_status != etapa.status:
-        status_anterior = etapa.status
-        etapa.status = novo_status
-        if novo_status == 'em_andamento' and not etapa.data_inicio:
-            etapa.data_inicio = timezone.now().date()
-        if novo_status == 'concluida':
-            etapa.data_conclusao = timezone.now().date()
-        atualizar_progresso(processo)
-
-        registrar(
-            processo,
-            'etapa_status',
-            f'Etapa "{etapa.nome}": {LABEL_STATUS.get(status_anterior, status_anterior)} → {LABEL_STATUS.get(novo_status, novo_status)}',
-            request.user,
-            {'etapa': etapa.nome, 'de': status_anterior, 'para': novo_status,
-             'parecer': request.data.get('observacoes', '')},
-        )
-
-    if 'observacoes' in request.data:
-        etapa.observacoes = request.data['observacoes']
-
-    if 'responsavel_id' in request.data:
-        etapa.responsavel_id = request.data['responsavel_id']
-
-    if 'prazo' in request.data:
-        etapa.prazo = request.data['prazo'] or None
-
-    etapa.save()
+    etapa = atualizar_etapa(etapa, request.data, request.user)
     return Response(EtapaSerializer(etapa).data)

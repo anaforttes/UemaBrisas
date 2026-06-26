@@ -132,8 +132,8 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
         estado: data.uf || '',
       }));
       setCepStatus('found');
-    } catch (e: any) {
-      if (e.name !== 'AbortError') setCepStatus('error');
+    } catch (e: unknown) {
+      if ((e as { name?: string })?.name !== 'AbortError') setCepStatus('error');
     }
   };
 
@@ -206,8 +206,8 @@ export const NewProcessModal: React.FC<NewProcessModalProps> = ({
       limpar();
       onSuccess();
       onClose();
-    } catch (err: any) {
-      setErro(err?.message ?? 'Erro ao criar processo. Tente novamente.');
+    } catch (err: unknown) {
+      setErro(err instanceof Error ? err.message : 'Erro ao criar processo. Tente novamente.');
     } finally {
       setLoading(false);
     }
