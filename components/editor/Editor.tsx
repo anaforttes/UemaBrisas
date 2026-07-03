@@ -67,6 +67,39 @@ const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}
 
 const PAGE_CONTENT_H = 832; // A4 content area in px: 1056 - 64(hdr) - 64(ftr) - 96(pad)
 
+const renderCellHeight = (height?: string | null) =>
+  height
+    ? {
+        'data-row-height': height,
+        style: `height: ${height}; min-height: ${height};`,
+      }
+    : {};
+
+const tableCellHeightAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-row-height') || element.style.height || null,
+  renderHTML: (attributes: { height?: string | null }) => renderCellHeight(attributes.height),
+};
+
+const TableCellEditavel = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      height: tableCellHeightAttribute,
+    };
+  },
+});
+
+const TableHeaderEditavel = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      height: tableCellHeightAttribute,
+    };
+  },
+});
+
 const montarRegistroAssinatura = (doc: DocDetalhe): SignatureRecord | null => {
   const assinaturas = doc.assinaturas ?? [];
   const assinadas = assinaturas.filter((item) => item.status === 'assinado' && item.protocolo);
@@ -696,10 +729,16 @@ const Editor: React.FC<EditorProps> = ({
       TextStyle,
       FontSize,
       ImagemCustomizada,
-      Table.configure({ resizable: true }),
+      Table.configure({
+        resizable: true,
+        cellMinWidth: 48,
+        handleWidth: 6,
+        lastColumnResizable: true,
+        allowTableNodeSelection: true,
+      }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeaderEditavel,
+      TableCellEditavel,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { class: 'text-blue-600 underline cursor-pointer' },
@@ -939,8 +978,8 @@ const Editor: React.FC<EditorProps> = ({
     if (!editor) return;
     editor.chain().focus().insertContent(texto).run();
   };
-  const inserirTabela = () => {
-    editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run();
+  const inserirTabela = (rows = 3, cols = 3) => {
+    editor?.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).fixTables().run();
   };
   const inserirImagem = () => {
     const input = document.createElement('input');
@@ -1231,11 +1270,14 @@ const Editor: React.FC<EditorProps> = ({
           float: left; color: #adb5bd; pointer-events: none; height: 0;
         }
         /* ── Tabelas ──────────────────────────────────────────────── */
-        .ProseMirror table { border-collapse: collapse; width: 100%; margin: 12px 0; }
-        .ProseMirror td, .ProseMirror th { border: 1px solid #cbd5e1; padding: 6px 10px; min-width: 60px; position: relative; vertical-align: top; }
+        .ProseMirror .tableWrapper { overflow-x: auto; margin: 12px 0; padding-bottom: 2px; }
+        .ProseMirror table { border-collapse: collapse; table-layout: fixed; width: 100%; margin: 0; }
+        .ProseMirror td, .ProseMirror th { border: 1px solid #cbd5e1; padding: 6px 10px; min-width: 48px; position: relative; vertical-align: top; }
+        .ProseMirror td > *, .ProseMirror th > * { margin-top: 0; margin-bottom: 0; }
         .ProseMirror th { background: #f1f5f9; font-weight: 700; }
-        .ProseMirror .selectedCell { background: #dbeafe; }
-        .ProseMirror .column-resize-handle { position: absolute; right: -2px; top: 0; bottom: 0; width: 4px; background: #3b82f6; cursor: col-resize; z-index: 10; }
+        .ProseMirror .selectedCell::after { content: ''; position: absolute; inset: 0; background: rgba(37, 99, 235, 0.16); pointer-events: none; z-index: 1; }
+        .ProseMirror .column-resize-handle { position: absolute; right: -3px; top: 0; bottom: 0; width: 6px; background: #2563eb; cursor: col-resize; z-index: 10; opacity: .75; }
+        .ProseMirror.resize-cursor { cursor: col-resize; }
         /* ── Elementos ────────────────────────────────────────────── */
         .ProseMirror blockquote { border-left: 4px solid #3b82f6; padding-left: 16px; color: #475569; font-style: italic; margin: 12px 0; }
         .ProseMirror code { background: #f1f5f9; border-radius: 4px; padding: 2px 6px; font-family: monospace; font-size: 0.9em; }
