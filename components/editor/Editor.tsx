@@ -32,6 +32,7 @@ import {
   Shield,
   CheckCheck,
   ChevronDown,
+  Search,
   Users,
   AlertTriangle,
 } from 'lucide-react';
@@ -67,19 +68,78 @@ const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}
 
 const PAGE_CONTENT_H = 832; // A4 content area in px: 1056 - 64(hdr) - 64(ftr) - 96(pad)
 
-const renderCellHeight = (height?: string | null) =>
-  height
-    ? {
-        'data-row-height': height,
-        style: `height: ${height}; min-height: ${height};`,
-      }
-    : {};
+const renderCellStyle = (attributes: {
+  height?: string | null;
+  backgroundColor?: string | null;
+  borderColor?: string | null;
+  borderWidth?: string | null;
+  borderStyle?: string | null;
+}) => {
+  const styles: string[] = [];
+  const data: Record<string, string> = {};
+
+  if (attributes.height) {
+    data['data-row-height'] = attributes.height;
+    styles.push(`height: ${attributes.height}`, `min-height: ${attributes.height}`);
+  }
+  if (attributes.backgroundColor) {
+    data['data-cell-bg'] = attributes.backgroundColor;
+    styles.push(`background-color: ${attributes.backgroundColor}`);
+  }
+  if (attributes.borderColor) {
+    data['data-border-color'] = attributes.borderColor;
+    styles.push(`border-color: ${attributes.borderColor}`);
+  }
+  if (attributes.borderWidth) {
+    data['data-border-width'] = attributes.borderWidth;
+    styles.push(`border-width: ${attributes.borderWidth}`);
+  }
+  if (attributes.borderStyle) {
+    data['data-border-style'] = attributes.borderStyle;
+    styles.push(`border-style: ${attributes.borderStyle}`);
+  }
+
+  return styles.length ? { ...data, style: styles.join('; ') } : data;
+};
 
 const tableCellHeightAttribute = {
   default: null,
   parseHTML: (element: HTMLElement) =>
     element.getAttribute('data-row-height') || element.style.height || null,
-  renderHTML: (attributes: { height?: string | null }) => renderCellHeight(attributes.height),
+  renderHTML: (attributes: { height?: string | null }) =>
+    renderCellStyle({ height: attributes.height }),
+};
+
+const tableCellBackgroundAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-cell-bg') || element.style.backgroundColor || null,
+  renderHTML: (attributes: { backgroundColor?: string | null }) =>
+    renderCellStyle({ backgroundColor: attributes.backgroundColor }),
+};
+
+const tableCellBorderColorAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-border-color') || element.style.borderColor || null,
+  renderHTML: (attributes: { borderColor?: string | null }) =>
+    renderCellStyle({ borderColor: attributes.borderColor }),
+};
+
+const tableCellBorderWidthAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-border-width') || element.style.borderWidth || null,
+  renderHTML: (attributes: { borderWidth?: string | null }) =>
+    renderCellStyle({ borderWidth: attributes.borderWidth }),
+};
+
+const tableCellBorderStyleAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-border-style') || element.style.borderStyle || null,
+  renderHTML: (attributes: { borderStyle?: string | null }) =>
+    renderCellStyle({ borderStyle: attributes.borderStyle }),
 };
 
 const TableCellEditavel = TableCell.extend({
@@ -87,6 +147,10 @@ const TableCellEditavel = TableCell.extend({
     return {
       ...this.parent?.(),
       height: tableCellHeightAttribute,
+      backgroundColor: tableCellBackgroundAttribute,
+      borderColor: tableCellBorderColorAttribute,
+      borderWidth: tableCellBorderWidthAttribute,
+      borderStyle: tableCellBorderStyleAttribute,
     };
   },
 });
@@ -96,6 +160,10 @@ const TableHeaderEditavel = TableHeader.extend({
     return {
       ...this.parent?.(),
       height: tableCellHeightAttribute,
+      backgroundColor: tableCellBackgroundAttribute,
+      borderColor: tableCellBorderColorAttribute,
+      borderWidth: tableCellBorderWidthAttribute,
+      borderStyle: tableCellBorderStyleAttribute,
     };
   },
 });
@@ -654,6 +722,10 @@ const Editor: React.FC<EditorProps> = ({
   const [fonteFamilia, setFonteFamilia] = useState('Times New Roman');
   const [espacamento, setEspacamento] = useState('1.5');
   const [alturaConteudo, setAlturaConteudo] = useState(0);
+  const [mostrarBusca, setMostrarBusca] = useState(false);
+  const [termoBusca, setTermoBusca] = useState('');
+  const [termoSubstituir, setTermoSubstituir] = useState('');
+  const [resultadoBusca, setResultadoBusca] = useState('');
 
   // ── Colaboração backend ───────────────────────────────────────────────────
   const [docBackend, setDocBackend] = useState<DocDetalhe | null>(null);
@@ -978,6 +1050,101 @@ const Editor: React.FC<EditorProps> = ({
     if (!editor) return;
     editor.chain().focus().insertContent(texto).run();
   };
+
+  const localizarProximaOcorrencia = useCallback(
+    (termo = termoBusca) => {
+      if (!editor || !termo.trim()) {
+        setResultadoBusca('');
+        return;
+      }
+
+      const consulta = termo.trim().toLocaleLowerCase('pt-BR');
+      const inicio = editor.state.selection.to;
+      let primeira: { from: number; to: number } | null = null;
+      let proxima: { from: number; to: number } | null = null;
+      let total = 0;
+      let indice = 0;
+
+      editor.state.doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return true;
+        const texto = node.text.toLocaleLowerCase('pt-BR');
+        let offset = texto.indexOf(consulta);
+        while (offset !== -1) {
+          const match = { from: pos + offset, to: pos + offset + termo.trim().length };
+          total += 1;
+          if (!primeira) primeira = match;
+          if (!proxima && match.from >= inicio) {
+            proxima = match;
+            indice = total;
+          }
+          offset = texto.indexOf(consulta, offset + consulta.length);
+        }
+        return true;
+      });
+
+      const alvo = proxima ?? primeira;
+      if (!alvo) {
+        setResultadoBusca('Nenhum resultado');
+        return;
+      }
+
+      editor.chain().focus().setTextSelection(alvo).run();
+      setResultadoBusca(`${proxima ? indice : 1} de ${total}`);
+    },
+    [editor, termoBusca]
+  );
+
+  const substituirOcorrenciaAtual = () => {
+    if (!editor || !termoBusca.trim()) return;
+    const { from, to, empty } = editor.state.selection;
+    const selecionado = editor.state.doc.textBetween(from, to);
+
+    if (
+      empty ||
+      selecionado.toLocaleLowerCase('pt-BR') !== termoBusca.trim().toLocaleLowerCase('pt-BR')
+    ) {
+      localizarProximaOcorrencia();
+      return;
+    }
+
+    editor.chain().focus().insertContent(termoSubstituir).run();
+    setTimeout(() => localizarProximaOcorrencia(), 0);
+  };
+
+  const substituirTodasOcorrencias = () => {
+    if (!editor || !termoBusca.trim()) return;
+    const consulta = termoBusca.trim();
+    const consultaLower = consulta.toLocaleLowerCase('pt-BR');
+    const matches: Array<{ from: number; to: number }> = [];
+
+    editor.state.doc.descendants((node, pos) => {
+      if (!node.isText || !node.text) return true;
+      const texto = node.text.toLocaleLowerCase('pt-BR');
+      let offset = texto.indexOf(consultaLower);
+      while (offset !== -1) {
+        matches.push({ from: pos + offset, to: pos + offset + consulta.length });
+        offset = texto.indexOf(consultaLower, offset + consultaLower.length);
+      }
+      return true;
+    });
+
+    if (!matches.length) {
+      setResultadoBusca('Nenhum resultado');
+      return;
+    }
+
+    let tr = editor.state.tr;
+    matches
+      .slice()
+      .reverse()
+      .forEach((match) => {
+        tr = tr.insertText(termoSubstituir, match.from, match.to);
+      });
+    editor.view.dispatch(tr);
+    editor.view.focus();
+    setResultadoBusca(`${matches.length} substituição${matches.length > 1 ? 'ões' : ''}`);
+  };
+
   const inserirTabela = (rows = 3, cols = 3) => {
     editor?.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).fixTables().run();
   };
@@ -1556,6 +1723,18 @@ const Editor: React.FC<EditorProps> = ({
                 </div>
               )}
             </div>
+            <button
+              onClick={() => setMostrarBusca((v) => !v)}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                mostrarBusca
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-slate-50 text-slate-600 hover:bg-slate-100'
+              }`}
+              title="Localizar e substituir"
+            >
+              <Search size={14} />
+              Buscar
+            </button>
             <div className="relative" ref={refMenuExport}>
               <button
                 onClick={() => setMostrarMenuExportar((v) => !v)}
@@ -1592,6 +1771,67 @@ const Editor: React.FC<EditorProps> = ({
             </button>
           </div>
         </div>
+
+        {mostrarBusca && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-slate-200 bg-slate-50 px-4 py-2">
+            <div className="flex min-w-[220px] flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-white px-2 py-1.5">
+              <Search size={14} className="text-slate-400" />
+              <input
+                value={termoBusca}
+                onChange={(e) => {
+                  setTermoBusca(e.target.value);
+                  setResultadoBusca('');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') localizarProximaOcorrencia(e.currentTarget.value);
+                }}
+                className="min-w-0 flex-1 bg-transparent text-xs text-slate-700 outline-none"
+                placeholder="Localizar no documento"
+                autoFocus
+              />
+              <span className="whitespace-nowrap text-[10px] font-semibold text-slate-400">
+                {resultadoBusca}
+              </span>
+            </div>
+            <input
+              value={termoSubstituir}
+              onChange={(e) => setTermoSubstituir(e.target.value)}
+              className="h-8 min-w-[180px] rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-700 outline-none focus:border-blue-300"
+              placeholder="Substituir por"
+              disabled={somenteLeitura}
+            />
+            <button
+              onClick={() => localizarProximaOcorrencia()}
+              className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-bold text-slate-600 hover:bg-slate-100"
+            >
+              Próxima
+            </button>
+            <button
+              onClick={substituirOcorrenciaAtual}
+              disabled={somenteLeitura}
+              className="h-8 rounded-lg border border-blue-100 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:opacity-40"
+            >
+              Substituir
+            </button>
+            <button
+              onClick={substituirTodasOcorrencias}
+              disabled={somenteLeitura}
+              className="h-8 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-40"
+            >
+              Substituir tudo
+            </button>
+            <button
+              onClick={() => {
+                setMostrarBusca(false);
+                setResultadoBusca('');
+              }}
+              className="ml-auto flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              title="Fechar busca"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
 
         {/* TOOLBAR */}
         <EditorToolbar

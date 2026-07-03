@@ -31,6 +31,8 @@ import {
   Code,
   SquarePlus,
   Trash2,
+  PaintBucket,
+  Grid2X2,
 } from 'lucide-react';
 import type { SignatureRecord } from '../../services/assinaturaService';
 
@@ -76,6 +78,234 @@ const BotaoToolbar: React.FC<{
 const Sep = () => <div className="w-px h-5 bg-slate-200 mx-0.5" />;
 
 const clampTableSize = (value: number) => Math.max(1, Math.min(20, value || 1));
+
+const CORES_CELULA = [
+  '#ffffff',
+  '#f8fafc',
+  '#f1f5f9',
+  '#fee2e2',
+  '#ffedd5',
+  '#fef3c7',
+  '#dcfce7',
+  '#dbeafe',
+  '#ede9fe',
+  '#fce7f3',
+];
+
+const CORES_BORDA = [
+  '#cbd5e1',
+  '#64748b',
+  '#0f172a',
+  '#dc2626',
+  '#ea580c',
+  '#16a34a',
+  '#2563eb',
+  '#7c3aed',
+];
+
+const CellColorPicker: React.FC<{ editor: Editor; disabled?: boolean }> = ({
+  editor,
+  disabled,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const currentColor =
+    ((editor.getAttributes('tableCell') as any)?.backgroundColor as string) ||
+    ((editor.getAttributes('tableHeader') as any)?.backgroundColor as string) ||
+    '#ffffff';
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+        title="Cor de fundo da célula"
+        disabled={disabled}
+        className={`flex h-7 items-center gap-1 rounded-md px-1.5 text-emerald-600 transition-all ${
+          disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-slate-100'
+        }`}
+      >
+        <PaintBucket size={14} />
+        <span
+          className="h-3 w-3 rounded-sm border border-slate-200"
+          style={{ backgroundColor: currentColor }}
+        />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-8 z-50 w-40 rounded-xl border border-slate-100 bg-white p-2 shadow-xl">
+          <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Fundo da célula
+          </p>
+          <div className="grid grid-cols-5 gap-1.5">
+            {CORES_CELULA.map((cor) => (
+              <button
+                key={cor}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  editor.chain().focus().setCellAttribute('backgroundColor', cor).run();
+                  setOpen(false);
+                }}
+                title={cor}
+                className="h-5 w-5 rounded-sm border border-slate-200 transition-transform hover:scale-110"
+                style={{ backgroundColor: cor }}
+              />
+            ))}
+          </div>
+          <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500">
+            Cor personalizada
+            <input
+              type="color"
+              value={currentColor}
+              onChange={(e) =>
+                editor.chain().focus().setCellAttribute('backgroundColor', e.target.value).run()
+              }
+              className="h-6 w-8 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+            />
+          </label>
+          <button
+            onMouseDown={(e) => {
+              e.preventDefault();
+              editor.chain().focus().setCellAttribute('backgroundColor', null).run();
+              setOpen(false);
+            }}
+            className="mt-2 w-full rounded-md px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+          >
+            Remover cor
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CellBorderPicker: React.FC<{ editor: Editor; disabled?: boolean }> = ({
+  editor,
+  disabled,
+}) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const currentColor =
+    ((editor.getAttributes('tableCell') as any)?.borderColor as string) ||
+    ((editor.getAttributes('tableHeader') as any)?.borderColor as string) ||
+    '#cbd5e1';
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const aplicarBorda = (attrs: Record<string, string | null>) => {
+    let chain = editor.chain().focus();
+    Object.entries(attrs).forEach(([key, value]) => {
+      chain = chain.setCellAttribute(key, value);
+    });
+    chain.run();
+  };
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onMouseDown={(e) => {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+        title="Bordas da célula"
+        disabled={disabled}
+        className={`flex h-7 items-center gap-1 rounded-md px-1.5 text-slate-600 transition-all ${
+          disabled ? 'cursor-not-allowed opacity-40' : 'cursor-pointer hover:bg-slate-100'
+        }`}
+      >
+        <Grid2X2 size={14} />
+        <span className="h-3 w-3 rounded-sm border-2" style={{ borderColor: currentColor }} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-8 z-50 w-52 rounded-xl border border-slate-100 bg-white p-2 shadow-xl">
+          <p className="mb-1.5 text-[9px] font-black uppercase tracking-widest text-slate-400">
+            Bordas da célula
+          </p>
+          <div className="grid grid-cols-8 gap-1.5">
+            {CORES_BORDA.map((cor) => (
+              <button
+                key={cor}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  aplicarBorda({ borderColor: cor, borderStyle: 'solid' });
+                  setOpen(false);
+                }}
+                title={cor}
+                className="h-5 w-5 rounded-sm border border-slate-200 transition-transform hover:scale-110"
+                style={{ backgroundColor: cor }}
+              />
+            ))}
+          </div>
+          <label className="mt-2 flex items-center justify-between gap-2 rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500">
+            Cor personalizada
+            <input
+              type="color"
+              value={currentColor}
+              onChange={(e) => aplicarBorda({ borderColor: e.target.value, borderStyle: 'solid' })}
+              className="h-6 w-8 cursor-pointer rounded border border-slate-200 bg-white p-0.5"
+            />
+          </label>
+          <div className="mt-2 grid grid-cols-3 gap-1">
+            {[
+              ['Fina', '1px'],
+              ['Média', '2px'],
+              ['Grossa', '3px'],
+            ].map(([label, width]) => (
+              <button
+                key={width}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  aplicarBorda({ borderWidth: width, borderStyle: 'solid' });
+                  setOpen(false);
+                }}
+                className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-1 grid grid-cols-2 gap-1">
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                aplicarBorda({ borderStyle: 'dashed' });
+                setOpen(false);
+              }}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              Tracejada
+            </button>
+            <button
+              onMouseDown={(e) => {
+                e.preventDefault();
+                aplicarBorda({ borderColor: null, borderWidth: null, borderStyle: null });
+                setOpen(false);
+              }}
+              className="rounded-md border border-slate-200 px-2 py-1 text-[10px] font-semibold text-rose-500 hover:bg-rose-50"
+            >
+              Redefinir
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const EditorToolbar: React.FC<EditorToolbarProps> = ({
   editor,
@@ -420,6 +650,8 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             <span className="px-1 text-[9px] font-black uppercase tracking-wide text-emerald-700">
               Tabela
             </span>
+            <CellColorPicker editor={editor} disabled={somenteLeitura} />
+            <CellBorderPicker editor={editor} disabled={somenteLeitura} />
             <BotaoToolbar
               onClick={() => editor.chain().focus().mergeCells().run()}
               title="Mesclar celulas"
