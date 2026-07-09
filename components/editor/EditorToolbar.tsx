@@ -329,6 +329,10 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   const [colunasTabela, setColunasTabela] = useState(3);
   const refInserirTabela = useRef<HTMLDivElement>(null);
   const emTabela = editor.isActive('table');
+  const atributosCelula = {
+    ...(editor.getAttributes('tableCell') as any),
+    ...(editor.getAttributes('tableHeader') as any),
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -347,6 +351,17 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
     setColunasTabela(colunas);
     inserirTabela(linhas, colunas);
     setMostrarInserirTabela(false);
+  };
+
+  const mesclarECentralizarCelula = () => {
+    editor
+      .chain()
+      .focus()
+      .mergeCells()
+      .setCellAttribute('textAlign', 'center')
+      .setCellAttribute('verticalAlign', 'middle')
+      .setTextAlign('center')
+      .run();
   };
 
   return (
@@ -652,9 +667,63 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
             </span>
             <CellColorPicker editor={editor} disabled={somenteLeitura} />
             <CellBorderPicker editor={editor} disabled={somenteLeitura} />
+            <select
+              value={atributosCelula.textAlign || 'auto'}
+              onChange={(e) => {
+                const align = e.target.value === 'auto' ? null : e.target.value;
+                editor.chain().focus().setCellAttribute('textAlign', align).run();
+                if (align)
+                  editor
+                    .chain()
+                    .focus()
+                    .setTextAlign(align as any)
+                    .run();
+              }}
+              disabled={somenteLeitura}
+              title="Alinhamento horizontal da celula"
+              className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-400 focus:outline-none w-24"
+            >
+              <option value="auto">Largura auto</option>
+              <option value="left">Esquerda</option>
+              <option value="center">Centro</option>
+              <option value="right">Direita</option>
+            </select>
+            <select
+              value={atributosCelula.verticalAlign || 'top'}
+              onChange={(e) =>
+                editor.chain().focus().setCellAttribute('verticalAlign', e.target.value).run()
+              }
+              disabled={somenteLeitura}
+              title="Alinhamento vertical da celula"
+              className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-400 focus:outline-none w-24"
+            >
+              <option value="top">Topo</option>
+              <option value="middle">Meio</option>
+              <option value="bottom">Base</option>
+            </select>
+            <select
+              value={atributosCelula.writingMode || 'horizontal'}
+              onChange={(e) =>
+                editor
+                  .chain()
+                  .focus()
+                  .setCellAttribute(
+                    'writingMode',
+                    e.target.value === 'horizontal' ? null : e.target.value
+                  )
+                  .run()
+              }
+              disabled={somenteLeitura}
+              title="Orientacao do texto da celula"
+              className="text-xs border border-slate-200 rounded-md px-1.5 py-1 text-slate-600 focus:ring-1 focus:ring-emerald-400 focus:outline-none w-28"
+            >
+              <option value="horizontal">Horizontal</option>
+              <option value="vertical-rl">Vertical</option>
+              <option value="vertical-lr">Vertical invertido</option>
+            </select>
             <BotaoToolbar
-              onClick={() => editor.chain().focus().mergeCells().run()}
-              title="Mesclar celulas"
+              onClick={mesclarECentralizarCelula}
+              title="Mesclar e centralizar celulas"
               disabled={somenteLeitura || !editor.can().mergeCells()}
               className="text-emerald-600"
             >

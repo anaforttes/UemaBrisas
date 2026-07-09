@@ -74,6 +74,9 @@ const renderCellStyle = (attributes: {
   borderColor?: string | null;
   borderWidth?: string | null;
   borderStyle?: string | null;
+  textAlign?: string | null;
+  verticalAlign?: string | null;
+  writingMode?: string | null;
 }) => {
   const styles: string[] = [];
   const data: Record<string, string> = {};
@@ -97,6 +100,19 @@ const renderCellStyle = (attributes: {
   if (attributes.borderStyle) {
     data['data-border-style'] = attributes.borderStyle;
     styles.push(`border-style: ${attributes.borderStyle}`);
+  }
+  if (attributes.textAlign) {
+    data['data-cell-align'] = attributes.textAlign;
+    styles.push(`text-align: ${attributes.textAlign}`);
+  }
+  if (attributes.verticalAlign) {
+    data['data-cell-valign'] = attributes.verticalAlign;
+    styles.push(`vertical-align: ${attributes.verticalAlign}`);
+  }
+  if (attributes.writingMode) {
+    data['data-writing-mode'] = attributes.writingMode;
+    styles.push(`writing-mode: ${attributes.writingMode}`);
+    styles.push('text-orientation: mixed');
   }
 
   return styles.length ? { ...data, style: styles.join('; ') } : data;
@@ -142,6 +158,30 @@ const tableCellBorderStyleAttribute = {
     renderCellStyle({ borderStyle: attributes.borderStyle }),
 };
 
+const tableCellTextAlignAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-cell-align') || element.style.textAlign || null,
+  renderHTML: (attributes: { textAlign?: string | null }) =>
+    renderCellStyle({ textAlign: attributes.textAlign }),
+};
+
+const tableCellVerticalAlignAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-cell-valign') || element.style.verticalAlign || null,
+  renderHTML: (attributes: { verticalAlign?: string | null }) =>
+    renderCellStyle({ verticalAlign: attributes.verticalAlign }),
+};
+
+const tableCellWritingModeAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-writing-mode') || element.style.writingMode || null,
+  renderHTML: (attributes: { writingMode?: string | null }) =>
+    renderCellStyle({ writingMode: attributes.writingMode }),
+};
+
 const TableCellEditavel = TableCell.extend({
   addAttributes() {
     return {
@@ -151,6 +191,9 @@ const TableCellEditavel = TableCell.extend({
       borderColor: tableCellBorderColorAttribute,
       borderWidth: tableCellBorderWidthAttribute,
       borderStyle: tableCellBorderStyleAttribute,
+      textAlign: tableCellTextAlignAttribute,
+      verticalAlign: tableCellVerticalAlignAttribute,
+      writingMode: tableCellWritingModeAttribute,
     };
   },
 });
@@ -164,6 +207,9 @@ const TableHeaderEditavel = TableHeader.extend({
       borderColor: tableCellBorderColorAttribute,
       borderWidth: tableCellBorderWidthAttribute,
       borderStyle: tableCellBorderStyleAttribute,
+      textAlign: tableCellTextAlignAttribute,
+      verticalAlign: tableCellVerticalAlignAttribute,
+      writingMode: tableCellWritingModeAttribute,
     };
   },
 });
