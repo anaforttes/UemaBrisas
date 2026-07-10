@@ -413,8 +413,8 @@ python manage.py test
 
 ## Equipe
 
-Andre · Carol · Keven · Leandro
-
+Andre · Carol · Keven · Leandro · Isabel
+ 
 ---
 
 _Desenvolvido para a gestão pública de regularização fundiária urbana — Lei Federal 13.465/2017._
