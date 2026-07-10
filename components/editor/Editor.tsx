@@ -62,6 +62,7 @@ import { documentoService, DocDetalhe, ConflictError } from '../../services/docu
 import { exportarDOCX } from '../../services/exportService';
 import { SignatureModal } from './SignatureModal';
 import type { SignatureRecord } from '../../services/assinaturaService';
+import { buildSignatureVerificationUrl } from '../../services/signatureVerificationService';
 import PainelComentarios from './PainelComentarios';
 import PainelColaboradores from './PainelColaboradores';
 import HistoricoVersoes, { Versao, EventoAuditoria } from './components/HistoricoVersoes';
@@ -85,6 +86,119 @@ type AbaAtiva = 'comentarios' | 'historico' | 'participantes';
 const gerarId = () => `v-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 const PAGE_CONTENT_H = 832; // A4 content area in px: 1056 - 64(hdr) - 64(ftr) - 96(pad)
+
+// ─── Reconstrói o registro de assinatura a partir do documento do backend ─────
+const montarRegistroAssinatura = (doc: DocDetalhe): SignatureRecord | null => {
+  const assinaturas = doc.assinaturas ?? [];
+  const assinadas = assinaturas.filter((item) => item.status === 'assinado' && item.protocolo);
+  const primeiraAssinada = assinadas[0];
+  const protocolo = primeiraAssinada?.protocolo;
+  if (!protocolo || !primeiraAssinada) return null;
+
+  const ordenadas = assinaturas.slice().sort((a, b) => a.ordem - b.ordem);
+  const todasAssinadas =
+    ordenadas.length > 0 && ordenadas.every((item) => item.status === 'assinado');
+
+  return {
+    protocol: protocolo,
+    documentTitle: doc.titulo,
+    createdAt: primeiraAssinada.assinado_em ?? doc.atualizado_em,
+    status: todasAssinadas ? 'completed' : 'partial',
+    documentHash: primeiraAssinada.hash_assinatura,
+    qrCodeData: buildSignatureVerificationUrl(protocolo),
+    events: [],
+    signers: ordenadas.map((item) => ({
+      id: item.usuario ? String(item.usuario.id) : `assinante-${item.ordem}`,
+      name: item.usuario?.name ?? item.nome_certificado ?? 'Assinante',
+      email: item.usuario?.email ?? '',
+      role: item.usuario?.role ?? 'Signatario',
+      order: item.ordem,
+      status:
+        item.status === 'assinado'
+          ? 'signed'
+          : item.status === 'rejeitado'
+            ? 'rejected'
+            : 'pending',
+      signedAt: item.assinado_em ?? undefined,
+      signatureHash: item.hash_assinatura,
+      certificateCN: item.nome_certificado || item.usuario?.name,
+      certificateCPF: item.cpf_certificado,
+      certificateIssuer: item.ac_emissora || 'Sistema REURB',
+    })),
+  };
+};
+
+// ─── Atributos customizados de célula (alinhamento e orientação) ─────────────
+const renderCellStyle = (attributes: {
+  textAlign?: string | null;
+  verticalAlign?: string | null;
+  writingMode?: string | null;
+}) => {
+  const styles: string[] = [];
+  const data: Record<string, string> = {};
+
+  if (attributes.textAlign) {
+    data['data-cell-align'] = attributes.textAlign;
+    styles.push(`text-align: ${attributes.textAlign}`);
+  }
+  if (attributes.verticalAlign) {
+    data['data-cell-valign'] = attributes.verticalAlign;
+    styles.push(`vertical-align: ${attributes.verticalAlign}`);
+  }
+  if (attributes.writingMode) {
+    data['data-writing-mode'] = attributes.writingMode;
+    styles.push(`writing-mode: ${attributes.writingMode}`);
+    styles.push('text-orientation: mixed');
+  }
+
+  return styles.length ? { ...data, style: styles.join('; ') } : data;
+};
+
+const tableCellTextAlignAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-cell-align') || element.style.textAlign || null,
+  renderHTML: (attributes: { textAlign?: string | null }) =>
+    renderCellStyle({ textAlign: attributes.textAlign }),
+};
+
+const tableCellVerticalAlignAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-cell-valign') || element.style.verticalAlign || null,
+  renderHTML: (attributes: { verticalAlign?: string | null }) =>
+    renderCellStyle({ verticalAlign: attributes.verticalAlign }),
+};
+
+const tableCellWritingModeAttribute = {
+  default: null,
+  parseHTML: (element: HTMLElement) =>
+    element.getAttribute('data-writing-mode') || element.style.writingMode || null,
+  renderHTML: (attributes: { writingMode?: string | null }) =>
+    renderCellStyle({ writingMode: attributes.writingMode }),
+};
+
+const TableCellEditavel = TableCell.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      textAlign: tableCellTextAlignAttribute,
+      verticalAlign: tableCellVerticalAlignAttribute,
+      writingMode: tableCellWritingModeAttribute,
+    };
+  },
+});
+
+const TableHeaderEditavel = TableHeader.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      textAlign: tableCellTextAlignAttribute,
+      verticalAlign: tableCellVerticalAlignAttribute,
+      writingMode: tableCellWritingModeAttribute,
+    };
+  },
+});
 
 // ─── Componente React da Imagem ───────────────────────────────────────────────
 
@@ -524,6 +638,18 @@ const Editor: React.FC<EditorProps> = ({
       )
     : true;
 
+  // Elegibilidade para assinar: se já existe lista de signatários, só quem está
+  // nela pode assinar; sem lista definida, quem edita pode iniciar o fluxo.
+  const assinaturasDoc = docBackend?.assinaturas ?? [];
+  const listaSignatariosDefinida = assinaturasDoc.length > 0;
+  const minhaAssinatura = assinaturasDoc.find(
+    (a) => a.usuario && String(a.usuario.id) === String(currentUser?.id)
+  );
+  const souSignatario = !!minhaAssinatura;
+  const jaAssinei = minhaAssinatura?.status === 'assinado';
+  const podeAssinar = listaSignatariosDefinida ? souSignatario && !jaAssinei : ehEditor;
+  const mostrarBotaoAssinar = podeAssinar || souSignatario;
+
   type StatusAutoSave = 'idle' | 'salvando' | 'salvo';
   const [statusAutoSave, setStatusAutoSave] = useState<StatusAutoSave>('idle');
   const [ultimoSalvoEm, setUltimoSalvoEm] = useState<string | null>(null);
@@ -570,8 +696,8 @@ const Editor: React.FC<EditorProps> = ({
       ImagemCustomizada,
       Table.configure({ resizable: true }),
       TableRow,
-      TableHeader,
-      TableCell,
+      TableHeaderEditavel,
+      TableCellEditavel,
       Link.configure({
         openOnClick: false,
         HTMLAttributes: { class: 'text-blue-600 underline cursor-pointer' },
@@ -666,6 +792,10 @@ const Editor: React.FC<EditorProps> = ({
         if (!cancelado) {
           setDocBackend(doc);
           docBackendRef.current = doc;
+
+          // Reflete assinaturas já existentes: evita reabrir o fluxo num doc assinado
+          const registroExistente = montarRegistroAssinatura(doc);
+          if (registroExistente) setRegistroAssinatura(registroExistente);
 
           // Carrega histórico de versões do backend
           try {
@@ -1250,11 +1380,10 @@ window.print();
             throw new Error('Não foi possível identificar o assinante atual.');
           }
 
+          // Só define a lista de signatários se ainda não existir nenhuma —
+          // caso contrário preserva a lista já definida (evita apagar signatários).
           const assinaturasExistentes = docBackendRef.current.assinaturas ?? [];
-          const jaTemAssinaturaConcluida = assinaturasExistentes.some(
-            (assinatura) => assinatura.status === 'assinado'
-          );
-          if (!jaTemAssinaturaConcluida) {
+          if (assinaturasExistentes.length === 0) {
             const signatarios = record.signers
               .map((signer) => ({ usuario_id: Number(signer.id), ordem: signer.order }))
               .filter((signer) => Number.isFinite(signer.usuario_id));
@@ -1431,6 +1560,7 @@ window.print();
           inserirLink={inserirLink}
           registroAssinatura={registroAssinatura}
           documentoFinalizado={documentoFinalizado}
+          mostrarBotaoAssinar={mostrarBotaoAssinar}
           onAbrirModalAssinatura={() => setMostrarModalAssinatura(true)}
           onFinalizarFluxo={handleFinalizarFluxo}
         />

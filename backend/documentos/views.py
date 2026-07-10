@@ -22,7 +22,7 @@ from .servicos import (
     criar_documento, salvar_versao, adicionar_colaborador,
     iniciar_assinaturas, registrar_assinatura, listar_assinaturas_pendentes,
     gerar_convite, aceitar_convite, registrar_auditoria, atualizar_presenca,
-    _pode_editar, _pode_ver,
+    _pode_editar, _pode_ver, ordenar_canonico,
 )
 from notificacoes.servicos import criar_notificacao
 
@@ -49,7 +49,7 @@ class DocumentoListView(APIView):
         processo_id = request.query_params.get('processo_id', '')
         if doc_ref:
             docs = Documento.objects.filter(doc_ref=doc_ref)
-            docs = [d for d in docs if _pode_ver(request, d)]
+            docs = ordenar_canonico([d for d in docs if _pode_ver(request, d)])
         elif processo_id:
             docs = Documento.objects.filter(processo_id=processo_id)
             docs = [d for d in docs if _pode_ver(request, d)]

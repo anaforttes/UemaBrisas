@@ -10,6 +10,25 @@ from .models import (
 )
 from controleadmin.servicos import usuario_possui_permissao_codigo
 
+# Prioridade de status para escolher a cópia "canônica" entre doc_ref duplicados.
+_PRIORIDADE_STATUS = {'Draft': 0, 'Review': 1, 'Approved': 2, 'Signed': 3, 'Finalizado': 4}
+
+
+def _chave_canonica(doc: 'Documento'):
+    """Ordena preferindo o documento mais completo: mais assinaturas,
+    status mais avançado e, por fim, o mais recente."""
+    return (
+        doc.assinaturas.count(),
+        _PRIORIDADE_STATUS.get(doc.status, 0),
+        doc.atualizado_em,
+    )
+
+
+def ordenar_canonico(docs):
+    """Recebe uma lista de Documento e retorna a mais canônica primeiro."""
+    return sorted(docs, key=_chave_canonica, reverse=True)
+
+
 def _pode_editar(request, doc):
     user = request.user
     # Superusuário edita tudo
@@ -67,6 +86,18 @@ def atualizar_presenca(doc: Documento, usuario: CustomUser, cursor_pos: int = No
 
 
 def criar_documento(user, data: dict) -> Documento:
+    # Evita duplicar: se já existe documento com este doc_ref que o usuário
+    # criou ou colabora, reaproveita a cópia canônica em vez de criar outra.
+    doc_ref = (data.get('doc_ref') or '').strip()
+    if doc_ref:
+        existentes = [
+            d for d in Documento.objects.filter(doc_ref=doc_ref)
+            if d.criado_por_id == user.id
+            or d.colaboradores.filter(usuario=user).exists()
+        ]
+        if existentes:
+            return ordenar_canonico(existentes)[0]
+
     doc = Documento.objects.create(
         doc_ref=data.get('doc_ref', ''),
         titulo=data.get('titulo', 'Sem título'),

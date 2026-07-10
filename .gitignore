@@ -12,4 +12,6 @@ __pycache__/
 venv/
 db.sqlite3
 
+backup_docs_duplicados_*.json
+
 .claude/settings.local.json

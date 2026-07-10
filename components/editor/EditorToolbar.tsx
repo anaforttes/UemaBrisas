@@ -42,6 +42,7 @@ interface EditorToolbarProps {
   inserirLink: () => void;
   registroAssinatura: SignatureRecord | null;
   documentoFinalizado: boolean;
+  mostrarBotaoAssinar?: boolean;
   onAbrirModalAssinatura: () => void;
   onFinalizarFluxo: () => void;
 }
@@ -277,10 +278,27 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
   inserirLink,
   registroAssinatura,
   documentoFinalizado,
+  mostrarBotaoAssinar = true,
   onAbrirModalAssinatura,
   onFinalizarFluxo,
 }) => {
   const d = somenteLeitura;
+
+  const atributosCelula = {
+    ...(editor.getAttributes('tableCell') as any),
+    ...(editor.getAttributes('tableHeader') as any),
+  };
+
+  const mesclarECentralizarCelula = () => {
+    editor
+      .chain()
+      .focus()
+      .mergeCells()
+      .setCellAttribute('textAlign', 'center')
+      .setCellAttribute('verticalAlign', 'middle')
+      .setTextAlign('center')
+      .run();
+  };
 
   const currentColor = (() => {
     try {
@@ -439,14 +457,16 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
 
         {/* Ações do documento (direita) */}
         <div className="flex items-center gap-2 ml-auto">
-          <button
-            onClick={onAbrirModalAssinatura}
-            disabled={!!registroAssinatura || documentoFinalizado}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold disabled:opacity-50 shadow-sm shadow-blue-200"
-          >
-            <FileCheck size={13} />
-            {registroAssinatura ? '✓ Assinado' : 'Assinar'}
-          </button>
+          {mostrarBotaoAssinar && (
+            <button
+              onClick={onAbrirModalAssinatura}
+              disabled={!!registroAssinatura || documentoFinalizado}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-bold disabled:opacity-50 shadow-sm shadow-blue-200"
+            >
+              <FileCheck size={13} />
+              {registroAssinatura ? '✓ Assinado' : 'Assinar'}
+            </button>
+          )}
           <button
             onClick={onFinalizarFluxo}
             disabled={documentoFinalizado}
@@ -648,9 +668,58 @@ const EditorToolbar: React.FC<EditorToolbarProps> = ({
           <>
             <Sep />
             <div className="flex items-center gap-0.5">
+              <SelectCtrl
+                value={atributosCelula.textAlign || 'auto'}
+                onChange={(v) => {
+                  const align = v === 'auto' ? null : v;
+                  editor.chain().focus().setCellAttribute('textAlign', align).run();
+                  if (align)
+                    editor
+                      .chain()
+                      .focus()
+                      .setTextAlign(align as any)
+                      .run();
+                }}
+                disabled={d}
+                title="Alinhamento horizontal da célula"
+                className="w-20"
+              >
+                <option value="auto">Auto</option>
+                <option value="left">Esquerda</option>
+                <option value="center">Centro</option>
+                <option value="right">Direita</option>
+              </SelectCtrl>
+              <SelectCtrl
+                value={atributosCelula.verticalAlign || 'top'}
+                onChange={(v) => editor.chain().focus().setCellAttribute('verticalAlign', v).run()}
+                disabled={d}
+                title="Alinhamento vertical da célula"
+                className="w-20"
+              >
+                <option value="top">Topo</option>
+                <option value="middle">Meio</option>
+                <option value="bottom">Base</option>
+              </SelectCtrl>
+              <SelectCtrl
+                value={atributosCelula.writingMode || 'horizontal'}
+                onChange={(v) =>
+                  editor
+                    .chain()
+                    .focus()
+                    .setCellAttribute('writingMode', v === 'horizontal' ? null : v)
+                    .run()
+                }
+                disabled={d}
+                title="Orientação do texto da célula"
+                className="w-24"
+              >
+                <option value="horizontal">Horizontal</option>
+                <option value="vertical-rl">Vertical</option>
+                <option value="vertical-lr">Vertical invertido</option>
+              </SelectCtrl>
               <Btn
-                onClick={() => editor.chain().focus().mergeCells().run()}
-                title="Mesclar células"
+                onClick={mesclarECentralizarCelula}
+                title="Mesclar e centralizar células"
                 disabled={d || !editor.can().mergeCells()}
                 className="text-teal-600"
               >

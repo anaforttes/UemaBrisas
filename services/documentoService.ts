@@ -152,7 +152,7 @@ export const documentoService = {
     }
     const data = await res.json();
     if (res.status === 409) return data as ConflictError;
-    if (!res.ok) throw new Error(data.detail ?? data.message ?? `Erro ${res.status}`);
+    if (!res.ok) throw new Error(data.erro ?? data.detail ?? data.message ?? `Erro ${res.status}`);
     return data as { versao: DocVersao; documento: DocDetalhe };
   },
 
