@@ -419,6 +419,8 @@ Andre · Carol · Keven · Leandro · Isabel
 
 Abaixo o documento da apresentação , 15/07/2026
 [Reubodocs (1).pptx](https://github.com/user-attachments/files/30069210/Reubodocs.1.pptx)
-https://canva.link/0isqx4yttjaaffz
 
+-
+https://canva.link/0isqx4yttjaaffz
+---
 _Desenvolvido para a gestão pública de regularização fundiária urbana — Lei Federal 13.465/2017._
